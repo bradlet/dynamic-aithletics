@@ -45,7 +45,7 @@ Dynamic AIthletics/
   Dynamic_AIthleticsApp.swift  App entry point
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture documentation and [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for an in-depth data model reference.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture documentation, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for an in-depth data model reference, and [docs/RELEASING.md](docs/RELEASING.md) for App Store publishing instructions.
 
 ## Building
 
