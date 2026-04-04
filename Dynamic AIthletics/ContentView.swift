@@ -2,60 +2,43 @@
 //  ContentView.swift
 //  Dynamic AIthletics
 //
-//  Created by Bradley on 4/4/26.
+//  Root view containing the three-tab navigation structure.
+//  Reads the unit configuration and injects it into the environment.
 //
 
 import SwiftUI
 import SwiftData
 
+/// The root view that provides tab-based navigation across the app's main sections.
 struct ContentView: View {
+    @Query private var configurations: [AppConfiguration]
     @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+
+    /// Reactively reads the metric preference without fetching in body.
+    private var useMetric: Bool { configurations.first?.useMetricUnits ?? false }
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
-            }
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    EditButton()
-                }
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
+        TabView {
+            AerobicTrainingView()
+                .tabItem { Label("Training", systemImage: "figure.run") }
+            StrengthTrainingView()
+                .tabItem { Label("Strength", systemImage: "dumbbell") }
+            HistoryView()
+                .tabItem { Label("History", systemImage: "clock") }
         }
+        .environment(\.useMetricUnits, useMetric)
+        .onAppear { ensureConfigurationExists() }
     }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
-        }
-    }
-
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+    /// Creates the singleton AppConfiguration if it doesn't exist yet.
+    private func ensureConfigurationExists() {
+        if configurations.isEmpty {
+            modelContext.insert(AppConfiguration())
         }
     }
 }
 
 #Preview {
     ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+        .modelContainer(ModelContainerFactory.makePreviewContainer())
 }

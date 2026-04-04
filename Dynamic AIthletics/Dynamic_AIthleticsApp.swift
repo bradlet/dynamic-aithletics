@@ -2,7 +2,8 @@
 //  Dynamic_AIthleticsApp.swift
 //  Dynamic AIthletics
 //
-//  Created by Bradley on 4/4/26.
+//  App entry point. Configures the SwiftData model container
+//  and injects it into the view hierarchy.
 //
 
 import SwiftUI
@@ -10,18 +11,7 @@ import SwiftData
 
 @main
 struct Dynamic_AIthleticsApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    var sharedModelContainer: ModelContainer = ModelContainerFactory.makeContainer()
 
     var body: some Scene {
         WindowGroup {
