@@ -45,7 +45,7 @@ Dynamic AIthletics/
   Dynamic_AIthleticsApp.swift  App entry point
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture documentation.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture documentation and [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for an in-depth data model reference.
 
 ## Building
 
@@ -70,3 +70,7 @@ xcodebuild test -scheme "Dynamic AIthletics" \
 ## Distance Units
 
 All distances are stored internally in miles. A central `AppConfiguration` model controls display units (miles or kilometers), propagated via a SwiftUI `EnvironmentKey`. To switch to metric, update `AppConfiguration.useMetricUnits` — all views react automatically.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE) with the [Commons Clause](https://commonsclause.com/) condition. You are free to view, fork, modify, and contribute to the source code, but you may not sell the software or any product substantially derived from it. See the [LICENSE](LICENSE) file for full terms.
