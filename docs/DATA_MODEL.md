@@ -23,9 +23,9 @@ Dynamic AIthletics uses **SwiftData**, Apple's ORM framework built on top of Cor
 │ distanceMiles: Double    │       │ distanceMiles: Double    │
 │ notes: String            │       │ notes: String            │
 │ scheduledDate: Date      │       │ date: Date               │
-│ isRepeating: Bool        │       │ sourceExercise: Exercise? │
-│ workouts: [Workout]      │       └─────────────────────────┘
-└─────────────────────────┘
+│ isRepeating: Bool        │       │ feltRating: Int (0–10)   │
+│ workouts: [Workout]      │       │ sourceExercise: Exercise? │
+└─────────────────────────┘       └─────────────────────────┘
                                    ┌─────────────────────────┐
                                    │    AppConfiguration      │
                                    │─────────────────────────│
@@ -87,11 +87,18 @@ A Workout represents a **completed exercise session** — the user actually ran,
 | `distanceMiles` | `Double` | `0.0` | Actual distance in miles. Same storage convention as Exercise. |
 | `notes` | `String` | `""` | Post-workout notes (e.g. "felt great", "knee pain at mile 2"). |
 | `date` | `Date` | `Date()` | When the workout was performed. Unlike Exercise, this **preserves the full timestamp** (not normalized to midnight) so the app can display time-of-day. |
+| `feltRating` | `Int` | `0` | Subjective Rate of Perceived Exertion on a 1–10 scale recorded after the session (1 = brutal, 10 = amazing). A value of `0` means the user did not record a rating. Feeds the on-device AI Coach's training-load assessment — see [AI Coach Input](#ai-coach-input) below. |
 | `sourceExercise` | `Exercise?` | `nil` | Optional back-reference to the planned exercise this workout was recorded from. `nil` if the workout was logged independently. |
 
 **Factory method: `Workout.draft(from:)`**
 
-Creates a new Workout pre-filled from an Exercise template. This is the entry point when a user taps "Record Workout" on a planned exercise. The draft copies `name`, `type`, `durationSeconds`, and `distanceMiles` from the exercise, sets `sourceExercise` to establish the relationship, and leaves `notes` empty (the user provides fresh notes for each workout). The user can edit every field before saving.
+Creates a new Workout pre-filled from an Exercise template. This is the entry point when a user taps "Record Workout" on a planned exercise. The draft copies `name`, `type`, `durationSeconds`, and `distanceMiles` from the exercise, sets `sourceExercise` to establish the relationship, and leaves `notes` empty and `feltRating` at `0` (the user provides fresh notes and a rating for each workout). The user can edit every field before saving.
+
+#### AI Coach Input
+
+The `feltRating` field is the primary input that lets the on-device AI Coach distinguish between *planned* workload and *experienced* workload. Two athletes can run the same 5-mile tempo at the same pace and have very different felt ratings — the coach uses the RPE signal together with distance, duration, and session type to assess whether the athlete is absorbing their training or accumulating fatigue.
+
+When the coach serializes recent workouts into its prompt (see `Services/AICoach/AICoachPromptBuilder.swift`), a workout with `feltRating == 0` simply omits the RPE line — the model is explicitly told these sessions are unrated rather than assuming a default. See [docs/adrs/1-use-lightweight-onboard-llm.md](adrs/1-use-lightweight-onboard-llm.md) for the broader architectural decision.
 
 ---
 

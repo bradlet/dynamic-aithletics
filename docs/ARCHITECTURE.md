@@ -10,6 +10,8 @@ Dynamic AIthletics uses a flat-layered architecture with SwiftUI + SwiftData. Th
 Models/       @Model classes, enums (data layer)
 Config/       ModelContainer setup, environment keys (infrastructure)
 Extensions/   Date arithmetic, formatting (utilities)
+Services/     Protocol-based service layer (AI coach)
+Resources/    Bundled non-code assets (ML model weights)
 Views/        SwiftUI views grouped by tab (presentation)
 ```
 
@@ -28,6 +30,7 @@ A recorded instance of completing an exercise.
 - `date` preserves full timestamp (not normalized) for time-of-day display
 - Optional `sourceExercise` back-reference to the plan it was recorded from
 - `Workout.draft(from:)` factory creates a pre-filled workout from an exercise template
+- `feltRating: Int` — subjective Rate of Perceived Exertion (1–10), `0` when unrated. Feeds the AI coach's training-load assessment.
 
 ### AppConfiguration
 Singleton preferences stored in SwiftData for CloudKit sync.
@@ -64,6 +67,22 @@ Exercises can be marked as `isRepeating: Bool`. A repeating exercise serves as a
 ### CloudKit sync
 Configured via `ModelConfiguration(cloudKitDatabase: .automatic)` in `ModelContainerFactory`. All model properties have default values for CloudKit compatibility. The CloudKit container ID must be registered in the Apple Developer portal and match the entitlements file.
 
+### AI Coach service layer
+The on-device coaching feature lives behind a protocol, `AICoachService`, so the rest of the app never imports MLX or any specific runtime directly.
+
+**Protocol and environment injection.** `Services/AICoach/AICoachService.swift` defines `suggestAdaptations(_:)` and `streamSuggestion(_:)`. The service is exposed via `@Environment(\.aiCoach)` (`Config/AICoachEnvironment.swift`). The default environment value is `StubAICoachService`, so SwiftUI previews and unit tests never accidentally load real model weights. The app root (`Dynamic_AIthleticsApp.swift`) replaces the default with an `MLXAICoachService` instance at launch.
+
+**Implementations.**
+- `StubAICoachService` — returns a deterministic canned response and streams it in small chunks with artificial delay. Used by previews and tests.
+- `MLXAICoachService` — production implementation backed by Gemma 4 E2B via MLX-Swift. The actual MLX calls are gated behind `#if canImport(MLXLLM)` so the file compiles even before the SPM dependency is added, throwing `AICoachError.notImplemented` until the dependency and bundled model are in place.
+
+**Prompt construction.** `AICoachPromptBuilder` is a stateless namespace enum that turns a `CoachingRequest` (recent workouts + upcoming exercises + unit preference) into a prompt string. It reuses `Double.formattedDistance(metric:)` and the cached `lineDateFormatter` and skips RPE lines when `feltRating == 0`.
+
+**Request ownership.** The top-level `AerobicTrainingView` assembles the `CoachingRequest` from its own `@Query` data (last 4 weeks of workouts, next 2 weeks of exercises) in keeping with the project's "only top-level views hold queries" rule.
+
+### Model bundling
+The Gemma 4 E2B 4-bit MLX weights live under `Resources/Models/gemma-4-e2b-it-mlx-4bit/` as a **folder reference** (blue folder in Xcode) so the directory structure is preserved at runtime — MLX-Swift's loaders require a directory containing safetensors + tokenizer files. This inflates the app binary by ~1.5 GB, an intentional trade-off documented in `docs/adrs/1-use-lightweight-onboard-llm.md`.
+
 ## Data Flow
 
 ### Adding an exercise
@@ -91,13 +110,24 @@ concrete Exercise inserted into modelContext → callback receives concrete inst
 sheet opens with concrete exercise → @Query fires → UI shows new concrete + hides virtual
 ```
 
+### Requesting AI coaching suggestions
+```
+User taps "Ask Coach" in AerobicTrainingView → buildCoachRequest() reads recent workouts
+(last 4 weeks) and upcoming exercises (next 2 weeks) from @Query →
+CoachingRequest assembled → AICoachSheet presented → on .task, calls
+coach.streamSuggestion(request) → AICoachPromptBuilder serializes request to prompt →
+MLXAICoachService (or StubAICoachService in previews) generates response token by token →
+AICoachSheet appends chunks to responseText → UI updates live
+```
+
 ## Testing
 
 Unit tests cover:
-- **Models**: persistence, relationships, factory methods, date normalization, repeat flag
+- **Models**: persistence, relationships, factory methods, date normalization, repeat flag, felt-rating default and persistence
 - **Extensions**: date arithmetic (week boundaries, month boundaries, same-day/week/month checks), distance formatting, duration formatting
 - **Types**: ExerciseType codable round-trip, identifiable conformance
 - **Drag items**: ExerciseDragItem codable round-trip
 - **Repeat**: isRepeating default value, init parameter, persistence, day-of-week matching
+- **AI Coach**: prompt builder formatting (RPE inclusion, notes handling, unit respect, ordering, empty inputs), `StubAICoachService` response and streaming
 
-Tests use `ModelContainerFactory.makePreviewContainer()` for isolated in-memory SwiftData contexts.
+Tests use `ModelContainerFactory.makePreviewContainer()` for isolated in-memory SwiftData contexts. The MLX-backed coach is never exercised in unit tests — all coach tests run against `StubAICoachService`.

@@ -1,0 +1,3 @@
+# Don't track heavy resources in VCS -- download before bundling
+Dynamic AIthletics/Resources/
+

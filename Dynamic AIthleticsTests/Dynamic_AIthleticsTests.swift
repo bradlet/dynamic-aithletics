@@ -432,3 +432,260 @@ struct ExerciseRepeatTests {
         #expect(fetched.first?.isRepeating == false)
     }
 }
+
+// MARK: - Workout Felt Rating Tests
+
+struct WorkoutFeltRatingTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = ModelContainerFactory.makePreviewContainer()
+        return ModelContext(container)
+    }
+
+    @Test func feltRatingDefaultsToZero() {
+        let workout = Workout(
+            name: "Easy",
+            type: .easyRun,
+            durationSeconds: 1800,
+            distanceMiles: 3.0
+        )
+        #expect(workout.feltRating == 0)
+    }
+
+    @Test func feltRatingCanBeSetExplicitly() {
+        let workout = Workout(
+            name: "Tempo",
+            type: .tempoRun,
+            durationSeconds: 2400,
+            distanceMiles: 5.0,
+            feltRating: 8
+        )
+        #expect(workout.feltRating == 8)
+    }
+
+    @Test func feltRatingPersistsThroughSwiftData() throws {
+        let context = try makeContext()
+        let workout = Workout(
+            name: "Interval",
+            type: .intervalRun,
+            durationSeconds: 2700,
+            distanceMiles: 4.0,
+            feltRating: 9
+        )
+        context.insert(workout)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Workout>())
+        #expect(fetched.first?.feltRating == 9)
+    }
+
+    @Test func draftFromExerciseStartsUnrated() {
+        let exercise = Exercise(
+            name: "Long Run",
+            type: .longRun,
+            durationSeconds: 3600,
+            distanceMiles: 8.0,
+            scheduledDate: Date()
+        )
+        let draft = Workout.draft(from: exercise)
+        #expect(draft.feltRating == 0)
+    }
+}
+
+// MARK: - AI Coach Prompt Builder Tests
+
+struct AICoachPromptBuilderTests {
+
+    /// Helper to build a workout at a specific date for deterministic prompt output.
+    private func makeWorkout(
+        date: Date,
+        type: ExerciseType = .easyRun,
+        distanceMiles: Double = 4.0,
+        durationSeconds: Int = 2100,
+        feltRating: Int = 0,
+        notes: String = ""
+    ) -> Workout {
+        Workout(
+            name: "Test",
+            type: type,
+            durationSeconds: durationSeconds,
+            distanceMiles: distanceMiles,
+            notes: notes,
+            date: date,
+            feltRating: feltRating
+        )
+    }
+
+    private func makeExercise(
+        date: Date,
+        type: ExerciseType = .run,
+        distanceMiles: Double = 5.0,
+        durationSeconds: Int = 2400
+    ) -> Exercise {
+        Exercise(
+            name: "Planned",
+            type: type,
+            durationSeconds: durationSeconds,
+            distanceMiles: distanceMiles,
+            scheduledDate: date
+        )
+    }
+
+    @Test func promptIncludesEveryRecentWorkout() {
+        let w1 = makeWorkout(date: Date(timeIntervalSince1970: 1_800_000_000), feltRating: 3)
+        let w2 = makeWorkout(date: Date(timeIntervalSince1970: 1_800_100_000), feltRating: 7)
+        let request = CoachingRequest(
+            recentWorkouts: [w1, w2],
+            upcomingExercises: [],
+            useMetricUnits: false
+        )
+        let prompt = AICoachPromptBuilder.buildPrompt(for: request)
+        #expect(prompt.contains("RPE 3/10"))
+        #expect(prompt.contains("RPE 7/10"))
+        #expect(prompt.contains("Recent training (2 workouts)"))
+    }
+
+    @Test func promptOmitsRPEOnWorkoutLineWhenUnrated() {
+        // The system preamble legitimately mentions RPE; we only care that
+        // the rendered workout line itself carries no "RPE N/10" suffix.
+        let unrated = makeWorkout(date: Date(), feltRating: 0)
+        let rated = makeWorkout(date: Date(), feltRating: 6)
+        let unratedLine = AICoachPromptBuilder.workoutLine(unrated, metric: false)
+        let ratedLine = AICoachPromptBuilder.workoutLine(rated, metric: false)
+        #expect(!unratedLine.contains("RPE"))
+        #expect(ratedLine.contains("RPE 6/10"))
+    }
+
+    @Test func promptIncludesNotesWhenPresent() {
+        let workout = makeWorkout(date: Date(), notes: "legs felt heavy")
+        let line = AICoachPromptBuilder.workoutLine(workout, metric: false)
+        #expect(line.contains("\"legs felt heavy\""))
+    }
+
+    @Test func promptOmitsNotesWhenBlank() {
+        let workout = makeWorkout(date: Date(), notes: "   ")
+        let line = AICoachPromptBuilder.workoutLine(workout, metric: false)
+        #expect(!line.contains("\""))
+    }
+
+    @Test func promptRespectsMetricUnits() {
+        let workout = makeWorkout(date: Date(), distanceMiles: 5.0)
+        let imperial = AICoachPromptBuilder.workoutLine(workout, metric: false)
+        let metric = AICoachPromptBuilder.workoutLine(workout, metric: true)
+        #expect(imperial.contains("mi"))
+        #expect(metric.contains("km"))
+    }
+
+    @Test func promptIncludesUpcomingExercisesInOrder() {
+        let earlier = makeExercise(date: Date(timeIntervalSince1970: 1_800_000_000))
+        let later = makeExercise(date: Date(timeIntervalSince1970: 1_800_200_000))
+        let request = CoachingRequest(
+            recentWorkouts: [],
+            upcomingExercises: [earlier, later],
+            useMetricUnits: false
+        )
+        let prompt = AICoachPromptBuilder.buildPrompt(for: request)
+        #expect(prompt.contains("Upcoming plan (2 scheduled)"))
+        let earlierIdx = prompt.range(of: "1_800_000_000")?.lowerBound // not present — use date strings
+        _ = earlierIdx
+        // Both lines present, earlier appears before later in the string
+        let earlierString = prompt.range(of: AICoachPromptBuilder.exerciseLine(earlier, metric: false))
+        let laterString = prompt.range(of: AICoachPromptBuilder.exerciseLine(later, metric: false))
+        #expect(earlierString != nil)
+        #expect(laterString != nil)
+        if let a = earlierString, let b = laterString {
+            #expect(a.lowerBound < b.lowerBound)
+        }
+    }
+
+    @Test func promptHandlesEmptyInputs() {
+        let request = CoachingRequest(
+            recentWorkouts: [],
+            upcomingExercises: [],
+            useMetricUnits: false
+        )
+        let prompt = AICoachPromptBuilder.buildPrompt(for: request)
+        #expect(prompt.contains("(no workouts recorded"))
+        #expect(prompt.contains("(no upcoming exercises"))
+    }
+
+    @Test func promptContainsSystemPreamble() {
+        let request = CoachingRequest(
+            recentWorkouts: [],
+            upcomingExercises: [],
+            useMetricUnits: false
+        )
+        let prompt = AICoachPromptBuilder.buildPrompt(for: request)
+        #expect(prompt.contains("experienced competitive running coach"))
+    }
+
+    @Test func workoutLineIncludesDateAndType() {
+        // 2026-04-06 is a Monday — verifies date format and type name in the line.
+        let date = ISO8601DateFormatter().date(from: "2026-04-06T12:00:00Z")!
+        let workout = makeWorkout(date: date, type: .tempoRun)
+        let line = AICoachPromptBuilder.workoutLine(workout, metric: false)
+        #expect(line.hasPrefix("- 2026-04-06"))
+        #expect(line.contains(ExerciseType.tempoRun.rawValue))
+    }
+
+    @Test func exerciseLineIncludesDateAndType() {
+        // Verifies line structure, type name, and distance unit for a planned exercise.
+        // Uses noon UTC to avoid midnight-UTC timezone ambiguity across locales.
+        let date = ISO8601DateFormatter().date(from: "2026-04-07T12:00:00Z")!
+        let exercise = makeExercise(date: date, type: .longRun, distanceMiles: 10.0)
+        let line = AICoachPromptBuilder.exerciseLine(exercise, metric: false)
+        #expect(line.hasPrefix("- "))
+        #expect(line.contains(ExerciseType.longRun.rawValue))
+        #expect(line.contains("mi"))
+    }
+
+    @Test func exerciseLineRespectsMetricUnits() {
+        // exerciseLine must honour the same metric flag as workoutLine.
+        let exercise = makeExercise(date: Date(), distanceMiles: 5.0)
+        let imperial = AICoachPromptBuilder.exerciseLine(exercise, metric: false)
+        let metric = AICoachPromptBuilder.exerciseLine(exercise, metric: true)
+        #expect(imperial.contains("mi"))
+        #expect(metric.contains("km"))
+    }
+
+    @Test func promptEndsWithCoachingQuestion() {
+        // The closing question must always be present so the model knows what to answer.
+        let request = CoachingRequest(
+            recentWorkouts: [],
+            upcomingExercises: [],
+            useMetricUnits: false
+        )
+        let prompt = AICoachPromptBuilder.buildPrompt(for: request)
+        #expect(prompt.contains("what should change about the upcoming plan"))
+    }
+}
+
+// MARK: - Stub AI Coach Service Tests
+
+struct StubAICoachServiceTests {
+
+    @Test func stubReturnsNonEmptyNarrative() async throws {
+        let service = StubAICoachService()
+        let request = CoachingRequest(
+            recentWorkouts: [],
+            upcomingExercises: [],
+            useMetricUnits: false
+        )
+        let response = try await service.suggestAdaptations(request)
+        #expect(!response.narrative.isEmpty)
+    }
+
+    @Test func stubStreamsAllChunks() async throws {
+        let service = StubAICoachService(narrative: "hello coach")
+        let request = CoachingRequest(
+            recentWorkouts: [],
+            upcomingExercises: [],
+            useMetricUnits: false
+        )
+        var assembled = ""
+        for try await chunk in service.streamSuggestion(request) {
+            assembled += chunk
+        }
+        #expect(assembled == "hello coach")
+    }
+}

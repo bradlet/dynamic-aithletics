@@ -26,6 +26,7 @@ struct RecordWorkoutSheet: View {
     @State private var distance = 0.0
     @State private var notes = ""
     @State private var workoutDate = Date()
+    @State private var feltRating = 0
 
     /// Whether the form has enough data to save.
     private var canSave: Bool {
@@ -40,6 +41,7 @@ struct RecordWorkoutSheet: View {
                 distanceSection
                 dateSection
                 notesSection
+                feltRatingSection
             }
             .navigationTitle("Record Workout")
             .navigationBarTitleDisplayMode(.inline)
@@ -122,6 +124,13 @@ struct RecordWorkoutSheet: View {
         }
     }
 
+    /// Subjective 1–10 effort rating that feeds the AI coach's load assessment.
+    private var feltRatingSection: some View {
+        Section("How did it feel?") {
+            FeltRatingPicker(value: $feltRating)
+        }
+    }
+
     // MARK: - Actions
 
     /// Pre-fills form fields from the source exercise template.
@@ -148,6 +157,7 @@ struct RecordWorkoutSheet: View {
             distanceMiles: distanceMiles,
             notes: notes,
             date: workoutDate,
+            feltRating: feltRating,
             sourceExercise: exercise
         )
         modelContext.insert(workout)

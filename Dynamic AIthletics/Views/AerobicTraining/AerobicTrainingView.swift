@@ -27,6 +27,8 @@ struct AerobicTrainingView: View {
     @State private var recordingExercise: Exercise?
     /// The exercise selected for editing.
     @State private var editingExercise: Exercise?
+    /// The request passed to the AI coach sheet when the user taps "Ask Coach".
+    @State private var coachRequest: CoachingRequest?
 
     /// Exercises scheduled within the currently displayed week, including virtual repeating exercises.
     private var weekExercises: [Exercise] {
@@ -108,7 +110,44 @@ struct AerobicTrainingView: View {
             .sheet(item: $editingExercise) { exercise in
                 AddExerciseSheet(exercise: exercise, defaultDate: exercise.scheduledDate)
             }
+            .sheet(item: $coachRequest) { request in
+                AICoachSheet(request: request)
+            }
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        coachRequest = buildCoachRequest()
+                    } label: {
+                        Label("Ask Coach", systemImage: "sparkles")
+                    }
+                }
+            }
         }
+    }
+
+    /// Assembles a `CoachingRequest` from the last 4 weeks of workouts and
+    /// the next 2 weeks of scheduled exercises. Called from the "Ask Coach"
+    /// toolbar button; the query-owning top-level view is the right place to
+    /// read SwiftData per the project's "no ViewModels" convention.
+    private func buildCoachRequest() -> CoachingRequest {
+        let now = Date()
+        let calendar = Calendar.current
+        let fourWeeksAgo = calendar.date(byAdding: .weekOfYear, value: -4, to: now) ?? now
+        let twoWeeksAhead = calendar.date(byAdding: .weekOfYear, value: 2, to: now) ?? now
+
+        let recent = allWorkouts
+            .filter { $0.date >= fourWeeksAgo && $0.date <= now }
+            .sorted { $0.date < $1.date }
+
+        let upcoming = allExercises
+            .filter { $0.scheduledDate >= now.startOfDay && $0.scheduledDate <= twoWeeksAhead }
+            .sorted { $0.scheduledDate < $1.scheduledDate }
+
+        return CoachingRequest(
+            recentWorkouts: recent,
+            upcomingExercises: upcoming,
+            useMetricUnits: useMetricUnits
+        )
     }
 
     /// Header showing week navigation and mileage stats.

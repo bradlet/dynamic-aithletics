@@ -19,6 +19,16 @@ xcodebuild test -scheme "Dynamic AIthletics" -destination 'platform=iOS Simulato
 - **Week start**: Monday always (hardcoded in `Date+Week.swift` via `mondayCalendar`).
 - **CloudKit**: All model properties must have default values for CloudKit compatibility.
 
+## Testing Requirements
+
+**Every new feature must ship with unit tests. This is non-negotiable.**
+
+- New model fields → test default value, explicit set, and SwiftData persistence.
+- New service/logic types → test all public methods and edge cases (empty inputs, boundary values).
+- New prompt/serialization logic → test each output field, metric/imperial variants, omission conditions.
+- Tests live in `Dynamic AIthleticsTests/Dynamic_AIthleticsTests.swift`, grouped by `struct` with a `// MARK:` header.
+- Do not ship a feature without at least one test per public method.
+
 ## Conventions
 - Swift Testing framework (not XCTest) — use `@Test`, `#expect()`, `import Testing`
 - Header doc comments on all public/internal functions

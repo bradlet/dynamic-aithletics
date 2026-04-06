@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		1C8168FF2F83FE0700E33EF9 /* RELEASING.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168FB2F83FE0700E33EF9 /* RELEASING.md */; };
+		1C8169002F83FE0700E33EF9 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168FD2F83FE0700E33EF9 /* LICENSE */; };
+		1C8169012F83FE0700E33EF9 /* ARCHITECTURE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168F92F83FE0700E33EF9 /* ARCHITECTURE.md */; };
+		1C8169022F83FE0700E33EF9 /* README.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168FE2F83FE0700E33EF9 /* README.md */; };
+		1C8169032F83FE0700E33EF9 /* DATA_MODEL.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168FA2F83FE0700E33EF9 /* DATA_MODEL.md */; };
+		1C8169042F83FE0700E33EF9 /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168F82F83FE0700E33EF9 /* CLAUDE.md */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		1C1476E32F817B6900DCF85D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,6 +36,12 @@
 		1C1476D12F817B6800DCF85D /* Dynamic AIthletics.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Dynamic AIthletics.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C1476E22F817B6900DCF85D /* Dynamic AIthleticsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Dynamic AIthleticsTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C1476EC2F817B6900DCF85D /* Dynamic AIthleticsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Dynamic AIthleticsUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C8168F82F83FE0700E33EF9 /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
+		1C8168F92F83FE0700E33EF9 /* ARCHITECTURE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ARCHITECTURE.md; sourceTree = "<group>"; };
+		1C8168FA2F83FE0700E33EF9 /* DATA_MODEL.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = DATA_MODEL.md; sourceTree = "<group>"; };
+		1C8168FB2F83FE0700E33EF9 /* RELEASING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = RELEASING.md; sourceTree = "<group>"; };
+		1C8168FD2F83FE0700E33EF9 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
+		1C8168FE2F83FE0700E33EF9 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -88,6 +103,10 @@
 		1C1476C82F817B6800DCF85D = {
 			isa = PBXGroup;
 			children = (
+				1C8168F82F83FE0700E33EF9 /* CLAUDE.md */,
+				1C8168FC2F83FE0700E33EF9 /* docs */,
+				1C8168FD2F83FE0700E33EF9 /* LICENSE */,
+				1C8168FE2F83FE0700E33EF9 /* README.md */,
 				1C1476D32F817B6800DCF85D /* Dynamic AIthletics */,
 				1C1476E52F817B6900DCF85D /* Dynamic AIthleticsTests */,
 				1C1476EF2F817B6900DCF85D /* Dynamic AIthleticsUITests */,
@@ -103,6 +122,16 @@
 				1C1476EC2F817B6900DCF85D /* Dynamic AIthleticsUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		1C8168FC2F83FE0700E33EF9 /* docs */ = {
+			isa = PBXGroup;
+			children = (
+				1C8168F92F83FE0700E33EF9 /* ARCHITECTURE.md */,
+				1C8168FA2F83FE0700E33EF9 /* DATA_MODEL.md */,
+				1C8168FB2F83FE0700E33EF9 /* RELEASING.md */,
+			);
+			path = docs;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -225,6 +254,12 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1C8168FF2F83FE0700E33EF9 /* RELEASING.md in Resources */,
+				1C8169002F83FE0700E33EF9 /* LICENSE in Resources */,
+				1C8169012F83FE0700E33EF9 /* ARCHITECTURE.md in Resources */,
+				1C8169022F83FE0700E33EF9 /* README.md in Resources */,
+				1C8169032F83FE0700E33EF9 /* DATA_MODEL.md in Resources */,
+				1C8169042F83FE0700E33EF9 /* CLAUDE.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

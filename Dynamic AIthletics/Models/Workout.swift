@@ -26,6 +26,10 @@ final class Workout {
     var notes: String = ""
     /// The date and time the workout was performed.
     var date: Date = Date()
+    /// User's subjective Rate of Perceived Exertion after completing the workout
+    /// on a 1–10 scale. A value of `0` means the user did not record a rating.
+    /// Feeds the on-device AI Coach's training-load assessment.
+    var feltRating: Int = 0
 
     /// The exercise template this workout was recorded from, if any.
     var sourceExercise: Exercise?
@@ -38,6 +42,7 @@ final class Workout {
     ///   - distanceMiles: Actual distance in miles.
     ///   - notes: Optional notes.
     ///   - date: When the workout was performed.
+    ///   - feltRating: Subjective 1–10 effort rating. `0` means not recorded.
     ///   - sourceExercise: The planned exercise this was recorded from, if any.
     init(
         name: String,
@@ -46,6 +51,7 @@ final class Workout {
         distanceMiles: Double,
         notes: String = "",
         date: Date = Date(),
+        feltRating: Int = 0,
         sourceExercise: Exercise? = nil
     ) {
         self.id = UUID()
@@ -55,6 +61,7 @@ final class Workout {
         self.distanceMiles = distanceMiles
         self.notes = notes
         self.date = date
+        self.feltRating = feltRating
         self.sourceExercise = sourceExercise
     }
 
