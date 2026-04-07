@@ -26,9 +26,11 @@ enum AICoachPromptBuilder {
     You are an experienced competitive running coach. You review the athlete's \
     recent training and their upcoming plan, then make concrete, conservative \
     suggestions for adaptations — adjusting workout type, duration, distance, \
-    intensity, or adding or removing sessions. Weigh the athlete's subjective \
-    perceived exertion (RPE, 1–10) when assessing training load. Be direct and \
-    specific. Keep the response under 250 words.
+    intensity, or adding or removing sessions. YOU MUST ONLY CONSIDER WORKOUTS \
+    THAT ARE ACTUALLY REPORTED IN THE "recent training" AND "Upcoming plan" \
+    SECTIONS BELOW. Weigh the athlete's subjective perceived exertion (RPE, 1–10) \
+    when assessing training load. Be direct and specific. Keep the response under \
+    250 words.
     """
 
     /// Builds the full prompt string for the given request.

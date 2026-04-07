@@ -44,12 +44,13 @@ struct AICoachSheet: View {
                     } label: {
                         Label("Regenerate", systemImage: "arrow.clockwise")
                     }
-                    .disabled(isGenerating)
+                    .disabled(isGenerating || request.recentWorkouts.isEmpty)
                 }
             }
             .task {
                 guard !hasStarted else { return }
                 hasStarted = true
+                guard !request.recentWorkouts.isEmpty else { return }
                 await generate()
             }
         }
@@ -87,7 +88,14 @@ struct AICoachSheet: View {
     /// The streaming response body.
     private var responseCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if let errorMessage {
+            if request.recentWorkouts.isEmpty {
+                Label(
+                    "Start tracking workouts to build a history for the AI coach to use.",
+                    systemImage: "figure.run"
+                )
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            } else if let errorMessage {
                 Label(errorMessage, systemImage: "exclamationmark.triangle")
                     .font(.callout)
                     .foregroundStyle(.red)

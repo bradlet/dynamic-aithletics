@@ -45,6 +45,17 @@ Our initial research pointed at Google's **LiteRT-LM** framework, which is the c
 - **Community-maintained 4-bit MLX quants of Gemma 4 E2B already exist** (`unsloth/gemma-4-E2B-it-UD-MLX-4bit`), meaning we can use the same target model we originally planned for, just via a different runtime.
 - **Actively used** by several Swift iOS LLM projects, with a well-documented integration path via Swift Package Manager.
 
+### Model weights vs. the runtime
+
+The files in `Resources/Models/gemma-4-e2b-it-mlx-4bit/` are pure **data** — the numbers that define what the model knows. They are inert on their own. The **MLX-Swift runtime** (`MLXLLM` SPM package) is the separate piece of code that:
+
+- Loads those weight files into GPU/ANE memory
+- Runs the tokenizer (text → token IDs and back)
+- Executes the neural-network forward pass (matrix math on Metal)
+- Implements the autoregressive sampling loop (picking the next token, one at a time)
+
+It is the same relationship as an `.mp4` video file and a video decoder: you can have the file locally all you want, but without a decoder that understands the format, it is just bytes. Both the weights and the runtime are required; they ship via different mechanisms (bundled resource vs. SPM dependency) because they have different sizes, update cadences, and ownership models.
+
 ### Why bundle the weights in the app binary
 
 - **Avoids CDN infrastructure.** A download-on-first-launch model would require hosting ~1.5 GB of weights on a CDN (Cloudflare R2, S3, or similar), plus logic for resumable downloads, integrity checks, and cache management. For a one-time-payment app this is complexity we'd rather not maintain.

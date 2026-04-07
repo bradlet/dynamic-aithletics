@@ -4,27 +4,16 @@
 //
 //  Production AI coach backed by Gemma 4 E2B running on-device via MLX-Swift.
 //
-//  NOTE: This file is a scaffold. It conditionally compiles the real MLX
-//  implementation only when the `MLXLLM` module is available. Until the
-//  MLX-Swift Swift Package is added to the project and the Gemma 4 E2B
-//  MLX weights are bundled under `Resources/Models/gemma-4-e2b-it-mlx-4bit/`,
-//  this service throws `AICoachError.notImplemented` on every call.
-//
-//  To activate the real implementation:
-//    1. In Xcode: File → Add Package Dependencies → paste the MLX-Swift
-//       examples URL and add the `MLXLLM` / `MLXLLMCommon` products.
-//    2. Bundle the model directory as a folder reference (blue folder) in
-//       Copy Bundle Resources.
-//    3. Fill in the `#if canImport(MLXLLM)` branch below against the
-//       package's current public API (the surface is still evolving, so
-//       check the README at the time of wiring).
-//
+//  The real implementation compiles when the `MLXLLM` module is available
+//  (mlx-swift-examples SPM package, ≥ 2.0.0). The #else branches throw
+//  AICoachError.notImplemented so the app stays launchable on simulators
+//  or CI hosts where the package has not yet resolved.
 
 import Foundation
 
 #if canImport(MLXLLM)
 import MLXLLM
-import MLXLLMCommon
+import MLXLMCommon
 #endif
 
 /// Coaching service backed by a local Gemma 4 E2B model loaded via MLX-Swift.
@@ -98,44 +87,44 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
         return url
     }
 
-    /// Runs synchronous generation to completion and returns the full text.
-    ///
-    /// The exact MLX-Swift API surface continues to evolve, so this wrapper
-    /// is intentionally left as a TODO to be filled in against the version
-    /// pinned when the SPM dependency is added.
+    /// Loads the model container and runs generation to completion.
     private func generate(prompt: String) async throws -> String {
-        // TODO: Replace with real MLXLLM calls once the package is added.
-        // Sketch (pseudo-API, adjust to the pinned version):
-        //
-        //   let modelURL = try modelDirectoryURL()
-        //   let container = try await LLMModelFactory.shared.loadContainer(
-        //       configuration: .init(directory: modelURL)
-        //   )
-        //   let parameters = GenerateParameters(
-        //       temperature: temperature, maxTokens: maxTokens
-        //   )
-        //   let result = try await container.perform { context in
-        //       try MLXLMCommon.generate(
-        //           input: context.processor.prepare(input: .init(prompt: prompt)),
-        //           parameters: parameters,
-        //           context: context
-        //       )
-        //   }
-        //   return result.output
-        throw AICoachError.notImplemented(message:
-            "MLX generate() not yet wired up — fill in against pinned MLXLLM API."
-        )
+        let modelURL = try modelDirectoryURL()
+        let config = ModelConfiguration(directory: modelURL)
+        let container = try await LLMModelFactory.shared.loadContainer(configuration: config)
+        let parameters = GenerateParameters(temperature: temperature, maxTokens: maxTokens)
+        return try await container.perform { context in
+            let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
+            let result = try MLXLMCommon.generate(
+                input: input,
+                parameters: parameters,
+                context: context
+            ) { _ in .more }
+            return result.output
+        }
     }
 
-    /// Streaming variant — yields incremental chunks to `onChunk`.
+    /// Streaming variant — yields decoded token chunks to `onChunk` as they are generated.
     private func generateStreaming(
         prompt: String,
-        onChunk: @escaping (String) -> Void
+        onChunk: @escaping @Sendable (String) -> Void
     ) async throws {
-        // TODO: Replace with real MLXLLM streaming calls once the package is added.
-        throw AICoachError.notImplemented(message:
-            "MLX streaming not yet wired up — fill in against pinned MLXLLM API."
-        )
+        let modelURL = try modelDirectoryURL()
+        let config = ModelConfiguration(directory: modelURL)
+        let container = try await LLMModelFactory.shared.loadContainer(configuration: config)
+        let parameters = GenerateParameters(temperature: temperature, maxTokens: maxTokens)
+        try await container.perform { context in
+            let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
+            _ = try MLXLMCommon.generate(
+                input: input,
+                parameters: parameters,
+                context: context
+            ) { tokens in
+                let text = context.tokenizer.decode(tokens: tokens)
+                onChunk(text)
+                return .more
+            }
+        }
     }
 
     #endif
