@@ -1,10 +1,10 @@
 # Data Model Reference
 
-This document provides a detailed reference for the Dynamic AIthletics data model. It is written for senior engineers who may not have direct experience with Swift or SwiftData and need to understand the persistence layer, relationships, and design rationale.
+This document provides a detailed reference for the Hybrid AIthletics data model. It is written for senior engineers who may not have direct experience with Swift or SwiftData and need to understand the persistence layer, relationships, and design rationale.
 
 ## Technology Overview
 
-Dynamic AIthletics uses **SwiftData**, Apple's ORM framework built on top of Core Data. If you're coming from other ecosystems:
+Hybrid AIthletics uses **SwiftData**, Apple's ORM framework built on top of Core Data. If you're coming from other ecosystems:
 
 - SwiftData is analogous to **SQLAlchemy** (Python), **ActiveRecord** (Ruby), or **Entity Framework** (.NET). It maps Swift classes to persistent storage (SQLite under the hood) and handles schema creation, migrations, and object lifecycle.
 - The `@Model` macro (similar to a decorator/annotation) marks a class as a persistent entity. SwiftData inspects the class's properties at compile time and generates the necessary storage schema.

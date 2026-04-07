@@ -6,7 +6,7 @@ Accepted — 2026-04-06
 
 ## Context
 
-Dynamic AIthletics ships as a **one-time-payment** iOS app (branded "Hybrid AIthletics"). The product vision includes an AI running coach that reviews the user's recent workouts — including a subjective 1–10 "how it felt" rating — and suggests adaptations to their upcoming two weeks of training.
+Hybrid AIthletics ships as a **one-time-payment** iOS app (branded "Hybrid AIthletics"). The product vision includes an AI running coach that reviews the user's recent workouts — including a subjective 1–10 "how it felt" rating — and suggests adaptations to their upcoming two weeks of training.
 
 A one-time-payment revenue model fundamentally constrains how we can deliver AI features:
 

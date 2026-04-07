@@ -1,4 +1,4 @@
-# Dynamic AIthletics
+# Hybrid AIthletics
 
 An iOS exercise tracking application built with SwiftUI, SwiftData, and CloudKit. Designed for runners and endurance athletes to plan weekly training routines, record completed workouts, and track mileage over time.
 
@@ -41,7 +41,7 @@ An iOS exercise tracking application built with SwiftUI, SwiftData, and CloudKit
 ## Project Layout
 
 ```
-Dynamic AIthletics/
+Hybrid AIthletics/
   Models/           SwiftData @Model classes and ExerciseType enum
   Config/           ModelContainer factory, environment keys (units, aiCoach)
   Extensions/       Date arithmetic, distance formatting
@@ -54,14 +54,14 @@ Dynamic AIthletics/
     Strength/         Placeholder view
     History/          Summary stats, monthly calendar, workout list
   ContentView.swift   Root TabView
-  Dynamic_AIthleticsApp.swift  App entry point (injects AICoachService)
+  Hybrid_AIthleticsApp.swift  App entry point (injects AICoachService)
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture documentation, [docs/DATA_MODEL.md](docs/DATA_MODEL.md) for an in-depth data model reference, [docs/adrs/](docs/adrs/) for architectural decision records, [docs/MOBILE_TESTING.md](docs/MOBILE_TESTING.md) for testing on a physical iPhone, and [docs/RELEASING.md](docs/RELEASING.md) for App Store publishing instructions.
 
 ## Building
 
-Open `Dynamic AIthletics.xcodeproj` in Xcode 15+ and build for an iOS 17+ simulator or device.
+Open `Hybrid AIthletics.xcodeproj` in Xcode 15+ and build for an iOS 17+ simulator or device.
 
 ### AI Model Weights
 
@@ -80,13 +80,13 @@ The AI Coach feature requires the Gemma 4 E2B MLX weights to be present in the p
 2. Download the model weights (requires a free Hugging Face account — run `hf auth login` first):
    ```bash
    hf download unsloth/gemma-4-E2B-it-UD-MLX-4bit \
-     --local-dir "Dynamic AIthletics/Resources/Models/gemma-4-e2b-it-mlx-4bit"
+     --local-dir "Hybrid AIthletics/Resources/Models/gemma-4-e2b-it-mlx-4bit"
    ```
    This places all safetensors, tokenizer, and config files inside the expected directory.
 
 3. In Xcode, add the directory as a **folder reference** (blue folder icon, not yellow group):
    - Right-click `Resources/Models` in the Xcode navigator
-   - **Add Files to "Dynamic AIthletics"…**
+   - **Add Files to "Hybrid AIthletics"…**
    - Select `gemma-4-e2b-it-mlx-4bit/`, check **"Create folder references"**, and confirm
    - Verify it appears as a blue folder under `Resources/Models`
 
@@ -95,7 +95,7 @@ The AI Coach feature requires the Gemma 4 E2B MLX weights to be present in the p
 **To re-download** (e.g. after wiping your local copy or when a new checkpoint is released):
 ```bash
 hf download unsloth/gemma-4-E2B-it-UD-MLX-4bit \
-  --local-dir "Dynamic AIthletics/Resources/Models/gemma-4-e2b-it-mlx-4bit"
+  --local-dir "Hybrid AIthletics/Resources/Models/gemma-4-e2b-it-mlx-4bit"
 ```
 The CLI is incremental — it skips files that already exist and have matching checksums.
 
@@ -104,7 +104,7 @@ The CLI is incremental — it skips files that already exist and have matching c
 ### CloudKit Setup
 
 CloudKit sync is configured but requires a container ID registered in the Apple Developer portal. Update the container identifier in:
-1. `Dynamic_AIthletics.entitlements` — `icloud-container-identifiers` array
+1. `Hybrid_AIthletics.entitlements` — `icloud-container-identifiers` array
 2. Apple Developer portal — register the iCloud container
 
 ## Running Tests
@@ -112,9 +112,9 @@ CloudKit sync is configured but requires a container ID registered in the Apple 
 Tests use the Swift Testing framework. Run from Xcode (Cmd+U) or via:
 
 ```bash
-xcodebuild test -scheme "Dynamic AIthletics" \
+xcodebuild test -scheme "Hybrid AIthletics" \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-  -only-testing:"Dynamic AIthleticsTests"
+  -only-testing:"Hybrid AIthleticsTests"
 ```
 
 ## Distance Units

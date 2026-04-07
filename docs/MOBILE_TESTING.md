@@ -1,6 +1,6 @@
 # Mobile Testing on iPhone
 
-A guide for installing and testing Dynamic AIthletics on a physical iPhone for real-world testing and personal use.
+A guide for installing and testing Hybrid AIthletics on a physical iPhone for real-world testing and personal use.
 
 ## Prerequisites
 
@@ -26,8 +26,8 @@ Before you can run the app on your iPhone, you'll need:
 
 Code signing proves the app came from you. Xcode can manage this automatically:
 
-1. Open the Dynamic AIthletics project in Xcode
-2. Select the **Dynamic AIthletics** target in the project navigator
+1. Open the Hybrid AIthletics project in Xcode
+2. Select the **Hybrid AIthletics** target in the project navigator
 3. Go to the **Signing & Capabilities** tab
 4. Check **Automatically manage signing**
 5. Select your **Team** from the dropdown (your Apple ID account)
@@ -36,7 +36,7 @@ Code signing proves the app came from you. Xcode can manage this automatically:
 If you see errors:
 - Make sure your Apple ID is listed in **Settings > Accounts**
 - Try clicking **Download Manual Profiles** if automatic management fails
-- Ensure your bundle identifier is unique (e.g., `com.yourname.DynamicAIthletics`)
+- Ensure your bundle identifier is unique (e.g., `com.yourname.HybridAIthletics`)
 
 ### 3. Connect Your iPhone
 
@@ -85,7 +85,7 @@ Alternatively, build from the terminal:
 
 ```bash
 xcodebuild \
-  -scheme "Dynamic AIthletics" \
+  -scheme "Hybrid AIthletics" \
   -destination 'platform=iOS,name=iPhone 17 Pro' \
   -configuration Debug \
   build-for-testing
@@ -167,7 +167,7 @@ Once the app is running on your device, you can inspect CloudKit data and local 
 
 ### CloudKit sync not working
 - Ensure you're signed in to iCloud on your iPhone (**Settings > [Your Name] > iCloud**)
-- Verify the CloudKit container ID in `Dynamic_AIthletics.entitlements` matches your registered container in the Apple Developer portal
+- Verify the CloudKit container ID in `Hybrid_AIthletics.entitlements` matches your registered container in the Apple Developer portal
 - Check network connectivity
 
 ## Uninstalling the App
