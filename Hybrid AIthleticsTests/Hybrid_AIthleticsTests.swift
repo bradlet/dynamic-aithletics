@@ -648,6 +648,17 @@ struct AICoachPromptBuilderTests {
         #expect(metric.contains("km"))
     }
 
+    @Test func promptIncludesBulletPointFormatInstruction() {
+        let request = CoachingRequest(
+            recentWorkouts: [],
+            upcomingExercises: [],
+            useMetricUnits: false
+        )
+        let prompt = AICoachPromptBuilder.buildPrompt(for: request)
+        #expect(prompt.contains("3–5 bullet points"))
+        #expect(prompt.contains("Do not repeat yourself"))
+    }
+
     @Test func promptEndsWithCoachingQuestion() {
         // The closing question must always be present so the model knows what to answer.
         let request = CoachingRequest(

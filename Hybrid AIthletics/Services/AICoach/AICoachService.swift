@@ -30,10 +30,29 @@ protocol AICoachService: Sendable {
     /// Whether the model weights are already cached on disk.
     /// Returns `true` by default (stubs and test doubles always "have" their model).
     var isModelCached: Bool { get }
+
+    /// Whether the model is loaded into memory and ready for generation.
+    /// Returns `true` by default (stubs are always ready).
+    var isModelReady: Bool { get }
+
+    /// Downloads and loads the model into memory without running generation.
+    /// Call this to pre-warm the model so that `isModelReady` becomes `true`.
+    func loadModel() async throws
+
+    /// Optional callback invoked with download fraction (0.0–1.0) during
+    /// first-time model weight download. Views should set this before
+    /// triggering `loadModel()` to show a progress bar.
+    var onDownloadProgress: (@Sendable (Double) -> Void)? { get set }
 }
 
 extension AICoachService {
     var isModelCached: Bool { true }
+    var isModelReady: Bool { true }
+    func loadModel() async throws { }
+    var onDownloadProgress: (@Sendable (Double) -> Void)? {
+        get { nil }
+        set { }
+    }
 }
 
 /// Errors that can be surfaced by an `AICoachService` implementation.
