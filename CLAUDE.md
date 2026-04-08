@@ -18,6 +18,9 @@ xcodebuild test -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator
 - **Distance storage**: Always miles internally. Display conversion via `Double.formattedDistance(metric:)`. Unit preference via `@Environment(\.useMetricUnits)`.
 - **Week start**: Monday always (hardcoded in `Date+Week.swift` via `mondayCalendar`).
 - **CloudKit**: All model properties must have default values for CloudKit compatibility.
+- **AI Coach service layer**: `AICoachService` protocol with two implementations — `MLXAICoachService` (production, Gemma 3 4B via MLX-Swift) and `StubAICoachService` (previews/tests). Injected via `@Environment(\.aiCoach)`. Default environment value is the stub so previews never load real models.
+- **AI model delivery**: Gemma 3 4B QAT 4-bit weights are **not bundled** — they download from Hugging Face on first use via `ModelConfiguration(id:)` and are cached locally for offline access.
+- **Conditional compilation**: All MLX-specific code is gated behind `#if canImport(MLXLLM)`. The `#else` branches throw `AICoachError.notImplemented` so the app compiles on simulators/CI without the SPM dependency resolved.
 
 ## Testing Requirements
 
@@ -38,12 +41,18 @@ xcodebuild test -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator
 ## File Layout
 ```
 Models/          Data models and enums
-Config/          ModelContainer, environment keys
+Config/          ModelContainer, environment keys (units, aiCoach)
 Extensions/      Date+Week, Double+Distance
+Services/
+  AICoach/       Protocol, MLX implementation, stub, prompt builder
 Views/           Grouped by tab: AerobicTraining/, Strength/, History/
 ```
 
 ## Key Files
 - `Config/ModelContainerFactory.swift` — single place for container/CloudKit config
+- `Config/AICoachEnvironment.swift` — `@Environment(\.aiCoach)` key; default is `StubAICoachService`
 - `Extensions/Date+Week.swift` — all calendar arithmetic
 - `Models/ExerciseType.swift` — exercise type enum with icons and colors
+- `Services/AICoach/AICoachService.swift` — protocol + `AICoachError` enum
+- `Services/AICoach/MLXAICoachService.swift` — production coach; swap model via `modelID` constant
+- `Services/AICoach/AICoachPromptBuilder.swift` — stateless prompt serialization (model-agnostic)

@@ -100,11 +100,20 @@ struct AICoachSheet: View {
                     .font(.callout)
                     .foregroundStyle(.red)
             } else if responseText.isEmpty && isGenerating {
-                HStack(spacing: 10) {
-                    ProgressView()
-                    Text("Warming up coach…")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text(coach.isModelCached
+                             ? "Warming up coach…"
+                             : "Downloading AI coach…")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    if !coach.isModelCached {
+                        Text("~2 GB download — this only happens once.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
                 }
             } else {
                 Text(responseText.isEmpty ? " " : responseText)

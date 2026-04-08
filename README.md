@@ -13,11 +13,11 @@ An iOS exercise tracking application built with SwiftUI, SwiftData, and CloudKit
 - **Exercise types**: Run, Long Run, Tempo Run, Interval Run, Easy Run, Recovery Run, Walk, Bike, Swim, Hike, Elliptical, Other
 
 ### AI Coach
-- **On-device running coach** powered by Google's Gemma 4 E2B running locally via [MLX-Swift](https://github.com/ml-explore/mlx-swift-examples)
+- **On-device running coach** powered by Google's Gemma 3 4B running locally via [MLX-Swift](https://github.com/ml-explore/mlx-swift-examples)
 - Reviews the last four weeks of recorded workouts — including a new **"How did it feel?" (1–10 RPE)** rating — and the next two weeks of scheduled exercises
 - Suggests concrete adaptations: workout type, duration, distance, intensity, additions, or removals
-- **Fully offline**, no API calls, no subscription — aligned with the one-time-payment business model
-- Model weights are bundled in the app binary (Gemma 4 E2B 4-bit MLX quant, ~1.5 GB)
+- **Fully offline** after initial model download, no API calls, no subscription — aligned with the one-time-payment business model
+- Model weights (~2 GB) are downloaded from Hugging Face on first use and cached locally for offline access
 
 ### Strength Training (Tab 2)
 - Placeholder — weekly strength training calendar coming in a future release
@@ -34,7 +34,7 @@ An iOS exercise tracking application built with SwiftUI, SwiftData, and CloudKit
 | UI | SwiftUI |
 | Data | SwiftData |
 | Sync | CloudKit (automatic via SwiftData) |
-| On-device LLM | MLX-Swift + Gemma 4 E2B (4-bit MLX quant, Apache 2.0) |
+| On-device LLM | MLX-Swift + Gemma 3 4B QAT (4-bit, Apache 2.0, downloaded on first use) |
 | Testing | Swift Testing framework |
 | Min iOS | 17.0 |
 
@@ -46,9 +46,7 @@ Hybrid AIthletics/
   Config/           ModelContainer factory, environment keys (units, aiCoach)
   Extensions/       Date arithmetic, distance formatting
   Services/
-    AICoach/        Protocol-based on-device coach (MLX + Gemma 4 E2B)
-  Resources/
-    Models/         Bundled Gemma 4 E2B MLX weights (see docs/adrs/1-...)
+    AICoach/        Protocol-based on-device coach (MLX + Gemma 3 4B)
   Views/
     AerobicTraining/  Weekly calendar, exercise cards, add/record sheets, AI coach sheet
     Strength/         Placeholder view
@@ -63,43 +61,11 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for architecture documentation,
 
 Open `Hybrid AIthletics.xcodeproj` in Xcode 15+ and build for an iOS 17+ simulator or device.
 
-### AI Model Weights
+### AI Coach Model
 
-The AI Coach feature requires the Gemma 4 E2B MLX weights to be present in the project before building. The weights are **not checked into the repository** (they are ~1.5 GB). You must download them from Hugging Face and add them to Xcode as a folder reference.
+The AI coach model (~2 GB, Gemma 3 4B QAT 4-bit) downloads automatically from Hugging Face on first use and is cached locally for offline access. No manual setup is required — the MLXLLM framework handles downloading and caching transparently.
 
-**Model page:** [huggingface.co/unsloth/gemma-4-E2B-it-UD-MLX-4bit](https://huggingface.co/unsloth/gemma-4-E2B-it-UD-MLX-4bit)
-
-**Download steps:**
-
-1. Install the Hugging Face CLI if you don't have it:
-   ```bash
-   pip install huggingface_hub
-   ```
-   This provides the `hf` CLI command.
-
-2. Download the model weights (requires a free Hugging Face account — run `hf auth login` first):
-   ```bash
-   hf download unsloth/gemma-4-E2B-it-UD-MLX-4bit \
-     --local-dir "Hybrid AIthletics/Resources/Models/gemma-4-e2b-it-mlx-4bit"
-   ```
-   This places all safetensors, tokenizer, and config files inside the expected directory.
-
-3. In Xcode, add the directory as a **folder reference** (blue folder icon, not yellow group):
-   - Right-click `Resources/Models` in the Xcode navigator
-   - **Add Files to "Hybrid AIthletics"…**
-   - Select `gemma-4-e2b-it-mlx-4bit/`, check **"Create folder references"**, and confirm
-   - Verify it appears as a blue folder under `Resources/Models`
-
-4. Confirm the folder is listed under **Build Phases → Copy Bundle Resources**.
-
-**To re-download** (e.g. after wiping your local copy or when a new checkpoint is released):
-```bash
-hf download unsloth/gemma-4-E2B-it-UD-MLX-4bit \
-  --local-dir "Hybrid AIthletics/Resources/Models/gemma-4-e2b-it-mlx-4bit"
-```
-The CLI is incremental — it skips files that already exist and have matching checksums.
-
-> **Note:** The app compiles and runs without the weights present. `MLXAICoachService` throws `AICoachError.notImplemented` when the model directory is missing. All unit tests use `StubAICoachService` and do not require the weights.
+> **Note:** The app compiles, runs, and passes all tests without any model present. All unit tests use `StubAICoachService`.
 
 ### CloudKit Setup
 

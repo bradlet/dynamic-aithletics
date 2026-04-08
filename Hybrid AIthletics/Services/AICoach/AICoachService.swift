@@ -5,7 +5,7 @@
 //  Protocol abstraction over the on-device coaching model so that the
 //  rest of the app never directly depends on MLX (or any specific runtime).
 //  Implementations include StubAICoachService (used in previews and tests)
-//  and MLXAICoachService (production, backed by Gemma 4 E2B).
+//  and MLXAICoachService (production, backed by Gemma 3 4B).
 //
 
 import Foundation
@@ -26,6 +26,14 @@ protocol AICoachService: Sendable {
     /// - Parameter request: Recent workouts + upcoming exercises.
     /// - Returns: An async stream yielding incremental text fragments.
     func streamSuggestion(_ request: CoachingRequest) -> AsyncThrowingStream<String, Error>
+
+    /// Whether the model weights are already cached on disk.
+    /// Returns `true` by default (stubs and test doubles always "have" their model).
+    var isModelCached: Bool { get }
+}
+
+extension AICoachService {
+    var isModelCached: Bool { true }
 }
 
 /// Errors that can be surfaced by an `AICoachService` implementation.
@@ -34,6 +42,8 @@ enum AICoachError: Error, LocalizedError {
     case modelNotLoaded
     /// Generation failed for an implementation-specific reason.
     case generationFailed(underlying: Error)
+    /// The model download failed (e.g. no internet on first launch).
+    case downloadFailed(underlying: Error)
     /// The implementation has not yet been wired up (e.g. MLX dependency missing).
     case notImplemented(message: String)
 
@@ -43,6 +53,8 @@ enum AICoachError: Error, LocalizedError {
             return "The coaching model could not be loaded."
         case .generationFailed(let underlying):
             return "Coach generation failed: \(underlying.localizedDescription)"
+        case .downloadFailed:
+            return "Could not download the coaching model. Please check your internet connection and try again."
         case .notImplemented(let message):
             return message
         }

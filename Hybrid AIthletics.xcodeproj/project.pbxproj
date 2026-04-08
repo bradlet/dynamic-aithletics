@@ -7,13 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1C8168FF2F83FE0700E33EF9 /* RELEASING.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168FB2F83FE0700E33EF9 /* RELEASING.md */; };
-		1C8169002F83FE0700E33EF9 /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168FD2F83FE0700E33EF9 /* LICENSE */; };
-		1C8169012F83FE0700E33EF9 /* ARCHITECTURE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168F92F83FE0700E33EF9 /* ARCHITECTURE.md */; };
-		1C8169032F83FE0700E33EF9 /* DATA_MODEL.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168FA2F83FE0700E33EF9 /* DATA_MODEL.md */; };
 		1C8169042F83FE0700E33EF9 /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168F82F83FE0700E33EF9 /* CLAUDE.md */; };
-		1CD31F062F844FE300F2A1B5 /* MOBILE_TESTING.md in Resources */ = {isa = PBXBuildFile; fileRef = 1CD31F052F844FE300F2A1B5 /* MOBILE_TESTING.md */; };
-		1CD3225F2F84957D00F2A1B5 /* 1-use-lightweight-onboard-llm.md in Resources */ = {isa = PBXBuildFile; fileRef = 1CD3225D2F84957D00F2A1B5 /* 1-use-lightweight-onboard-llm.md */; };
 		1CD325422F849D6D00F2A1B5 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD325412F849D6D00F2A1B5 /* MLXLLM */; };
 		1CD325442F849D6D00F2A1B5 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD325432F849D6D00F2A1B5 /* MLXLMCommon */; };
 /* End PBXBuildFile section */
@@ -40,13 +34,7 @@
 		1C1476E22F817B6900DCF85D /* Hybrid AIthleticsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Hybrid AIthleticsTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C1476EC2F817B6900DCF85D /* Hybrid AIthleticsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "Hybrid AIthleticsUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1C8168F82F83FE0700E33EF9 /* CLAUDE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CLAUDE.md; sourceTree = "<group>"; };
-		1C8168F92F83FE0700E33EF9 /* ARCHITECTURE.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = ARCHITECTURE.md; sourceTree = "<group>"; };
-		1C8168FA2F83FE0700E33EF9 /* DATA_MODEL.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = DATA_MODEL.md; sourceTree = "<group>"; };
-		1C8168FB2F83FE0700E33EF9 /* RELEASING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = RELEASING.md; sourceTree = "<group>"; };
-		1C8168FD2F83FE0700E33EF9 /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		1C8168FE2F83FE0700E33EF9 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
-		1CD31F052F844FE300F2A1B5 /* MOBILE_TESTING.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = MOBILE_TESTING.md; sourceTree = "<group>"; };
-		1CD3225D2F84957D00F2A1B5 /* 1-use-lightweight-onboard-llm.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = "1-use-lightweight-onboard-llm.md"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -111,8 +99,6 @@
 			isa = PBXGroup;
 			children = (
 				1C8168F82F83FE0700E33EF9 /* CLAUDE.md */,
-				1C8168FC2F83FE0700E33EF9 /* docs */,
-				1C8168FD2F83FE0700E33EF9 /* LICENSE */,
 				1C8168FE2F83FE0700E33EF9 /* README.md */,
 				1C1476D32F817B6800DCF85D /* Hybrid AIthletics */,
 				1C1476E52F817B6900DCF85D /* Hybrid AIthleticsTests */,
@@ -129,26 +115,6 @@
 				1C1476EC2F817B6900DCF85D /* Hybrid AIthleticsUITests.xctest */,
 			);
 			name = Products;
-			sourceTree = "<group>";
-		};
-		1C8168FC2F83FE0700E33EF9 /* docs */ = {
-			isa = PBXGroup;
-			children = (
-				1CD3225E2F84957D00F2A1B5 /* adrs */,
-				1CD31F052F844FE300F2A1B5 /* MOBILE_TESTING.md */,
-				1C8168F92F83FE0700E33EF9 /* ARCHITECTURE.md */,
-				1C8168FA2F83FE0700E33EF9 /* DATA_MODEL.md */,
-				1C8168FB2F83FE0700E33EF9 /* RELEASING.md */,
-			);
-			path = docs;
-			sourceTree = "<group>";
-		};
-		1CD3225E2F84957D00F2A1B5 /* adrs */ = {
-			isa = PBXGroup;
-			children = (
-				1CD3225D2F84957D00F2A1B5 /* 1-use-lightweight-onboard-llm.md */,
-			);
-			path = adrs;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -276,12 +242,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				1C8168FF2F83FE0700E33EF9 /* RELEASING.md in Resources */,
-				1CD31F062F844FE300F2A1B5 /* MOBILE_TESTING.md in Resources */,
-				1CD3225F2F84957D00F2A1B5 /* 1-use-lightweight-onboard-llm.md in Resources */,
-				1C8169002F83FE0700E33EF9 /* LICENSE in Resources */,
-				1C8169012F83FE0700E33EF9 /* ARCHITECTURE.md in Resources */,
-				1C8169032F83FE0700E33EF9 /* DATA_MODEL.md in Resources */,
 				1C8169042F83FE0700E33EF9 /* CLAUDE.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

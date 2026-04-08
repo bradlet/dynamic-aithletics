@@ -2,37 +2,54 @@
 //  MLXAICoachService.swift
 //  Hybrid AIthletics
 //
-//  Production AI coach backed by Gemma 4 E2B running on-device via MLX-Swift.
+//  Production AI coach backed by Gemma 3 4B running on-device via MLX-Swift.
 //
-//  The real implementation compiles when the `MLXLLM` module is available
-//  (mlx-swift-examples SPM package, ≥ 2.0.0). The #else branches throw
-//  AICoachError.notImplemented so the app stays launchable on simulators
-//  or CI hosts where the package has not yet resolved.
+//  The model is downloaded from Hugging Face on first use and cached locally
+//  for offline access. The real implementation compiles when the `MLXLLM`
+//  module is available (mlx-swift-examples SPM package, >= 2.0.0). The #else
+//  branches throw AICoachError.notImplemented so the app stays launchable on
+//  simulators or CI hosts where the package has not yet resolved.
 
 import Foundation
 
 #if canImport(MLXLLM)
 import MLXLLM
 import MLXLMCommon
+import Tokenizers
 #endif
 
-/// Coaching service backed by a local Gemma 4 E2B model loaded via MLX-Swift.
+/// Coaching service backed by Gemma 3 4B downloaded from Hugging Face and run
+/// on-device via MLX-Swift.
 ///
-/// The underlying model is loaded lazily on the first call and cached for
-/// the lifetime of the service instance. Callers should typically create a
-/// single shared instance at the app root and inject it via the
-/// `@Environment(\.aiCoach)` key.
+/// The model is downloaded lazily on the first call and cached in the app's
+/// caches directory. Subsequent launches load the cached copy (works offline).
+/// Callers should create a single shared instance at the app root and inject
+/// it via `@Environment(\.aiCoach)`.
 final class MLXAICoachService: AICoachService, @unchecked Sendable {
 
-    /// Name of the model directory bundled under `Resources/Models/`.
-    static let modelDirectoryName = "gemma-4-e2b-it-mlx-4bit"
+    /// Hugging Face model ID — downloaded on first use, cached locally.
+    static let modelID = "mlx-community/gemma-3-4b-it-qat-4bit"
 
     /// Maximum tokens to generate per response.
     var maxTokens: Int = 512
     /// Sampling temperature.
     var temperature: Float = 0.7
 
-    init() {}
+    #if canImport(MLXLLM)
+    private let configuration = ModelConfiguration(id: MLXAICoachService.modelID)
+    #endif
+
+    /// Whether the model weights are already cached on disk.
+    var isModelCached: Bool {
+        #if canImport(MLXLLM)
+        let dir = configuration.modelDirectory()
+        return FileManager.default.fileExists(
+            atPath: dir.appendingPathComponent("config.json").path
+        )
+        #else
+        return false
+        #endif
+    }
 
     func suggestAdaptations(_ request: CoachingRequest) async throws -> CoachingResponse {
         #if canImport(MLXLLM)
@@ -75,31 +92,20 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
 
     #if canImport(MLXLLM)
 
-    /// Locates the bundled model directory inside the app's main bundle.
-    /// - Throws: `AICoachError.modelNotLoaded` when the directory is missing.
-    private func modelDirectoryURL() throws -> URL {
-        guard let url = Bundle.main.url(
-            forResource: Self.modelDirectoryName,
-            withExtension: nil
-        ) else {
-            throw AICoachError.modelNotLoaded
-        }
-        return url
-    }
-
-    /// Loads the model container and runs generation to completion.
+    /// Loads (or downloads) the model and runs generation to completion.
     private func generate(prompt: String) async throws -> String {
-        let modelURL = try modelDirectoryURL()
-        let config = ModelConfiguration(directory: modelURL)
-        let container = try await LLMModelFactory.shared.loadContainer(configuration: config)
-        let parameters = GenerateParameters(temperature: temperature, maxTokens: maxTokens)
+        let container = try await LLMModelFactory.shared.loadContainer(
+            configuration: configuration
+        )
+        let parameters = GenerateParameters(maxTokens: maxTokens, temperature: temperature)
         return try await container.perform { context in
             let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
             let result = try MLXLMCommon.generate(
                 input: input,
                 parameters: parameters,
-                context: context
-            ) { _ in .more }
+                context: context,
+                didGenerate: { (_: [Int]) in .more }
+            )
             return result.output
         }
     }
@@ -109,21 +115,22 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
         prompt: String,
         onChunk: @escaping @Sendable (String) -> Void
     ) async throws {
-        let modelURL = try modelDirectoryURL()
-        let config = ModelConfiguration(directory: modelURL)
-        let container = try await LLMModelFactory.shared.loadContainer(configuration: config)
-        let parameters = GenerateParameters(temperature: temperature, maxTokens: maxTokens)
+        let container = try await LLMModelFactory.shared.loadContainer(
+            configuration: configuration
+        )
+        let parameters = GenerateParameters(maxTokens: maxTokens, temperature: temperature)
         try await container.perform { context in
             let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
             _ = try MLXLMCommon.generate(
                 input: input,
                 parameters: parameters,
-                context: context
-            ) { tokens in
-                let text = context.tokenizer.decode(tokens: tokens)
-                onChunk(text)
-                return .more
-            }
+                context: context,
+                didGenerate: { (tokens: [Int]) in
+                    let text = context.tokenizer.decode(tokens: tokens)
+                    onChunk(text)
+                    return .more
+                }
+            )
         }
     }
 

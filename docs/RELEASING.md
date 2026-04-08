@@ -129,34 +129,7 @@ For your first version (1.0), you'll need:
 
 **Screenshot sizes reference:** [App Store Connect screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/screenshot-specifications)
 
-## Step 7: Verify AI Model Weights Are Present
-
-The Gemma 4 E2B MLX weights are bundled directly into the app binary — there is no CDN, no download-on-first-launch, and no separate delivery step. This was an intentional architectural decision (see `docs/adrs/1-use-lightweight-onboard-llm.md`): bundling keeps the app fully offline, avoids infrastructure, and lets free-tier users experience the AI Coach without a separate download gate.
-
-**What this means for releasing:**
-
-- The weights must be present in your local project **before you archive**. Xcode's **Copy Bundle Resources** build phase automatically copies the `gemma-4-e2b-it-mlx-4bit/` folder reference into the `.app` bundle at archive time.
-- The resulting `.ipa` will be approximately **1.5 GB larger** than it would be without the model. This is expected and within Apple's 4 GB app binary limit.
-- Apple imposes an **over-the-air cellular download warning** for apps above ~200 MB. Users downloading over cellular will see a prompt asking them to confirm before the download proceeds. This is unavoidable given the bundled weights and is not a rejection risk.
-
-**Before archiving, verify:**
-
-1. `Hybrid AIthletics/Resources/Models/gemma-4-e2b-it-mlx-4bit/` exists in your project and appears as a **blue folder** (folder reference) in the Xcode navigator — not a yellow group. If it's missing or yellow, re-follow the download steps in `README.md → Building → AI Model Weights`.
-2. The folder is listed under **Build Phases → Copy Bundle Resources** for the app target.
-3. Do a test build for a simulator first (`Cmd+B`) and confirm it succeeds — the weights don't affect compilation, only bundle size.
-
-**To re-download the weights** if your local copy was deleted or corrupted:
-
-```bash
-hf download unsloth/gemma-4-E2B-it-UD-MLX-4bit \
-  --local-dir "Hybrid AIthletics/Resources/Models/gemma-4-e2b-it-mlx-4bit"
-```
-
-Model page: [huggingface.co/unsloth/gemma-4-E2B-it-UD-MLX-4bit](https://huggingface.co/unsloth/gemma-4-E2B-it-UD-MLX-4bit)
-
-The CLI is incremental — it skips files that already match their checksums, so re-running is safe.
-
-## Step 8: Build and Archive the App
+## Step 7: Build and Archive the App
 
 An "archive" is Xcode's term for a release build packaged for distribution.
 
@@ -168,12 +141,14 @@ An "archive" is Xcode's term for a release build packaged for distribution.
 3. **Product** menu > **Archive**
 4. Xcode will compile a release build. When it finishes, the **Organizer** window opens automatically showing your archive.
 
+> **Note:** The AI coach model is not bundled in the binary — it downloads on first launch. The archive size will be significantly smaller than if the model were included.
+
 If the archive fails:
 - Make sure you selected a physical device target, not a simulator
 - Verify signing is configured correctly (Step 4)
 - Check for any build errors in the issue navigator
 
-## Step 9: Upload to App Store Connect
+## Step 8: Upload to App Store Connect
 
 From the Xcode Organizer (opened automatically after archiving, or via **Window > Organizer**):
 
@@ -214,7 +189,7 @@ xcrun altool --upload-app \
 
 **Reference:** [Distributing your app for beta testing and releases](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases)
 
-## Step 10: Submit for App Review
+## Step 9: Submit for App Review
 
 Once the build finishes processing in App Store Connect:
 
@@ -228,7 +203,7 @@ Once the build finishes processing in App Store Connect:
 5. Review all sections — App Store Connect will warn you if anything is missing
 6. Click **Submit for Review**
 
-## Step 11: Wait for Review
+## Step 10: Wait for Review
 
 Apple's review process typically takes **24-48 hours**, though it can be faster (same day) or slower (up to a week for first submissions or if issues arise).
 
@@ -252,7 +227,7 @@ You can reply to the reviewer in the Resolution Center to ask for clarification 
 
 **Reference:** [App Store Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 
-## Step 12: Post-Release
+## Step 11: Post-Release
 
 After your app is live:
 
@@ -264,7 +239,7 @@ After your app is live:
 
 1. Bump the version in Xcode (e.g. `1.0.0` → `1.1.0`)
 2. Increment the build number (e.g. `1` → `2`)
-3. Archive and upload (Steps 7-8)
+3. Archive and upload (Steps 7-8 above)
 4. In App Store Connect, create a new version, attach the build, fill in "What's New", and submit for review
 
 ## Quick Reference Links

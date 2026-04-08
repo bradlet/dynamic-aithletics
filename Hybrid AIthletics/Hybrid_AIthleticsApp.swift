@@ -13,11 +13,10 @@ import SwiftData
 struct Hybrid_AIthleticsApp: App {
     var sharedModelContainer: ModelContainer = ModelContainerFactory.makeContainer()
 
-    /// Shared on-device coach instance. Using MLX-backed service when the
-    /// MLX-Swift package + Gemma 4 E2B weights are present; otherwise this
-    /// throws `AICoachError.notImplemented` on invocation. Views fall back
-    /// to the default `StubAICoachService` via `@Environment(\.aiCoach)`
-    /// when this service is not injected.
+    /// Shared on-device coach instance. Uses MLX-Swift to download and run
+    /// Gemma 3 4B on-device. The model is downloaded from Hugging Face on
+    /// first use and cached locally for offline access. When the MLX-Swift
+    /// package is not available, invocations throw `AICoachError.notImplemented`.
     private let aiCoach: AICoachService = MLXAICoachService()
 
     var body: some Scene {

@@ -7,12 +7,11 @@ Hybrid AIthletics uses a flat-layered architecture with SwiftUI + SwiftData. The
 ## Layers
 
 ```
-Models/       @Model classes, enums (data layer)
-Config/       ModelContainer setup, environment keys (infrastructure)
-Extensions/   Date arithmetic, formatting (utilities)
-Services/     Protocol-based service layer (AI coach)
-Resources/    Bundled non-code assets (ML model weights)
-Views/        SwiftUI views grouped by tab (presentation)
+Models/                    @Model classes, enums (data layer)
+Config/                    ModelContainer setup, environment keys (infrastructure)
+Extensions/                Date arithmetic, formatting (utilities)
+Services/                  Protocol-based service layer (AI coach)
+Views/                     SwiftUI views grouped by tab (presentation)
 ```
 
 ## Data Models
@@ -74,14 +73,14 @@ The on-device coaching feature lives behind a protocol, `AICoachService`, so the
 
 **Implementations.**
 - `StubAICoachService` — returns a deterministic canned response and streams it in small chunks with artificial delay. Used by previews and tests.
-- `MLXAICoachService` — production implementation backed by Gemma 4 E2B via MLX-Swift. The actual MLX calls are gated behind `#if canImport(MLXLLM)` so the file compiles even before the SPM dependency is added, throwing `AICoachError.notImplemented` until the dependency and bundled model are in place.
+- `MLXAICoachService` — production implementation backed by Gemma 3 4B via MLX-Swift. The model is downloaded from Hugging Face on first use and cached locally. The actual MLX calls are gated behind `#if canImport(MLXLLM)` so the file compiles even before the SPM dependency is added, throwing `AICoachError.notImplemented` until the dependency is in place.
 
 **Prompt construction.** `AICoachPromptBuilder` is a stateless namespace enum that turns a `CoachingRequest` (recent workouts + upcoming exercises + unit preference) into a prompt string. It reuses `Double.formattedDistance(metric:)` and the cached `lineDateFormatter` and skips RPE lines when `feltRating == 0`.
 
 **Request ownership.** The top-level `AerobicTrainingView` assembles the `CoachingRequest` from its own `@Query` data (last 4 weeks of workouts, next 2 weeks of exercises) in keeping with the project's "only top-level views hold queries" rule.
 
-### Model bundling
-The Gemma 4 E2B 4-bit MLX weights live under `Resources/Models/gemma-4-e2b-it-mlx-4bit/` as a **folder reference** (blue folder in Xcode) so the directory structure is preserved at runtime — MLX-Swift's loaders require a directory containing safetensors + tokenizer files. This inflates the app binary by ~1.5 GB, an intentional trade-off documented in `docs/adrs/1-use-lightweight-onboard-llm.md`.
+### Model delivery
+The Gemma 3 4B QAT 4-bit model is **not bundled** in the app binary. Instead, `MLXAICoachService` uses `ModelConfiguration(id: "mlx-community/gemma-3-4b-it-qat-4bit")` to download the weights from Hugging Face on first use (~2 GB). MLXLLM caches the download in the app's caches directory for offline access on subsequent launches. This keeps the app binary small and eliminates the need for developers to manually download and configure model weights.
 
 ## Data Flow
 
