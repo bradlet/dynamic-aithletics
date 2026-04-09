@@ -1,8 +1,8 @@
 //
 //  AICoachPromptBuilder.swift
-//  Hybrid AIthletics
+//  AICoachCore
 //
-//  Pure function that turns a CoachingRequest into the prompt text sent to
+//  Pure functions that turn a CoachingRequest into the prompt text sent to
 //  the on-device LLM. Kept as a non-actor namespace enum so it is trivial
 //  to test without touching any runtime state.
 //
@@ -10,7 +10,7 @@
 import Foundation
 
 /// Stateless helpers for building the prompt passed to the AI coach.
-enum AICoachPromptBuilder {
+public enum AICoachPromptBuilder {
 
     /// Date formatter used for workout/exercise line prefixes. Cached per
     /// project convention (never allocate in computed properties).
@@ -25,7 +25,7 @@ enum AICoachPromptBuilder {
     ///
     /// Structured as explicit rules with a bullet-point output format to help
     /// the 4B model stay focused and avoid degenerate looping.
-    static let systemPreamble: String = """
+    public static let systemPreamble: String = """
     You are an experienced competitive running coach. Review the athlete's \
     recent training and upcoming plan, then give concrete, conservative \
     suggestions for adaptations — adjusting workout type, duration, distance, \
@@ -39,10 +39,27 @@ enum AICoachPromptBuilder {
     """
 
     /// Builds the full prompt string for the given request.
+    ///
+    /// Concatenates the system preamble and user content into a single string.
+    /// Prefer using `systemPreamble` and `buildUserContent(for:)` separately
+    /// when the model runtime supports distinct system/user message roles.
+    ///
     /// - Parameter request: The coaching request to serialize.
     /// - Returns: A prompt ready to be tokenized by the underlying model.
-    static func buildPrompt(for request: CoachingRequest) -> String {
-        var sections: [String] = [systemPreamble, ""]
+    public static func buildPrompt(for request: CoachingRequest) -> String {
+        systemPreamble + "\n\n" + buildUserContent(for: request)
+    }
+
+    /// Builds only the user-facing content (workout data + closing question),
+    /// without the system preamble.
+    ///
+    /// Use this alongside `systemPreamble` when the model runtime supports
+    /// separate system and user message roles (e.g. `UserInput(chat:)`).
+    ///
+    /// - Parameter request: The coaching request to serialize.
+    /// - Returns: The user content portion of the prompt.
+    public static func buildUserContent(for request: CoachingRequest) -> String {
+        var sections: [String] = []
 
         sections.append("Recent training (\(request.recentWorkouts.count) workouts):")
         if request.recentWorkouts.isEmpty {
@@ -75,7 +92,7 @@ enum AICoachPromptBuilder {
     // MARK: - Line formatters
 
     /// Formats a single completed workout as one prompt line.
-    static func workoutLine(_ workout: Workout, metric: Bool) -> String {
+    public static func workoutLine(_ workout: CoachWorkout, metric: Bool) -> String {
         let date = lineDateFormatter.string(from: workout.date)
         let distance = workout.distanceMiles.formattedDistance(metric: metric)
         let duration = workout.durationSeconds.formattedDuration
@@ -91,7 +108,7 @@ enum AICoachPromptBuilder {
     }
 
     /// Formats a single planned exercise as one prompt line.
-    static func exerciseLine(_ exercise: Exercise, metric: Bool) -> String {
+    public static func exerciseLine(_ exercise: CoachExercise, metric: Bool) -> String {
         let date = lineDateFormatter.string(from: exercise.scheduledDate)
         let distance = exercise.distanceMiles.formattedDistance(metric: metric)
         let duration = exercise.durationSeconds.formattedDuration

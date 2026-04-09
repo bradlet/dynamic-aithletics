@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import AICoachCore
 
 /// A service that produces coaching suggestions for an athlete's training plan.
 ///

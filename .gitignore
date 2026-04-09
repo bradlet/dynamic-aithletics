@@ -1,3 +1,6 @@
 # Don't track heavy resources in VCS -- download before bundling
 Hybrid AIthletics/Resources/
 
+# Swift Package Manager build artifacts
+.build/
+

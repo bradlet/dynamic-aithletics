@@ -11,6 +11,7 @@
 //  simulators or CI hosts where the package has not yet resolved.
 
 import Foundation
+import AICoachCore
 
 #if canImport(MLXLLM)
 import MLXLLM
@@ -32,39 +33,12 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
 
     // MARK: - Generation parameters
     //
-    // Tuned for Gemma 3 4B QAT 4-bit to produce concise, non-repetitive
-    // coaching responses:
-    //
-    //  temperature (0.4) — controls randomness. Lower values produce more
-    //      focused, deterministic output. 0.4 keeps the model tightly on-task,
-    //      reducing creative drift that leads to repetition in small models.
-    //      Raising towards 1.0 increases variety but risks incoherence.
-    //
-    //  topP (0.9) — nucleus sampling. Only tokens whose cumulative probability
-    //      mass is within the top 90% are considered. Tighter than the default
-    //      1.0 to aggressively trim low-probability tokens that cause garbage
-    //      output. Raising towards 1.0 allows more diverse but riskier tokens.
-    //
-    //  repetitionPenalty (1.5) — penalises tokens that have already appeared in
-    //      the recent context window. Values > 1.0 discourage the model from
-    //      repeating the same phrases. 1.5 is aggressive — needed for the 4-bit
-    //      quantized model which is prone to degenerate looping. Lower to 1.1
-    //      if output feels unnaturally varied.
-    //
-    //  repetitionContextSize (200) — how many recent tokens the penalty looks
-    //      back across. 200 tokens (~150 words) covers most of the expected
-    //      response, preventing both short-range word stutter and medium-range
-    //      sentence duplication.
-    //
-    //  extraEOSTokens (["<end_of_turn>"]) — Gemma 3 uses <end_of_turn> as its
-    //      chat-turn stop token. Without this, the framework doesn't recognise
-    //      the token and generation runs past the model's intended stopping
-    //      point, producing degenerate looping output.
+    // All generation parameters are centralized in AICoachCore.GenerationConfig
+    // so that the eval CLI and the live app use identical settings. Override
+    // `generationConfig` here only for temporary local experiments.
 
-    /// Maximum tokens to generate per response.
-    var maxTokens: Int = 400
-    /// Sampling temperature — see parameter documentation above.
-    var temperature: Float = 0.4
+    /// Generation parameters — reads from AICoachCore's single source of truth.
+    var generationConfig = GenerationConfig.production
 
     /// Optional callback invoked with download progress (0.0–1.0) during
     /// first-time model weight download. Set by the presenting view before
@@ -123,8 +97,7 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
 
     func suggestAdaptations(_ request: CoachingRequest) async throws -> CoachingResponse {
         #if canImport(MLXLLM)
-        let prompt = AICoachPromptBuilder.buildPrompt(for: request)
-        let text = try await generate(prompt: prompt)
+        let text = try await generate(request: request)
         return CoachingResponse(narrative: text)
         #else
         throw AICoachError.notImplemented(message:
@@ -136,11 +109,10 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
 
     func streamSuggestion(_ request: CoachingRequest) -> AsyncThrowingStream<String, Error> {
         #if canImport(MLXLLM)
-        let prompt = AICoachPromptBuilder.buildPrompt(for: request)
         return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    try await self.generateStreaming(prompt: prompt) { chunk in
+                    try await self.generateStreaming(request: request) { chunk in
                         continuation.yield(chunk)
                     }
                     continuation.finish()
@@ -169,15 +141,23 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
         return cachedContainer!
     }
 
-    /// Returns configured generation parameters.
+    /// Returns configured generation parameters from `GenerationConfig`.
     private func makeParameters() -> GenerateParameters {
         GenerateParameters(
-            maxTokens: maxTokens,
-            temperature: temperature,
-            topP: 0.9,
-            repetitionPenalty: 1.5,
-            repetitionContextSize: 200
+            maxTokens: generationConfig.maxTokens,
+            temperature: generationConfig.temperature,
+            topP: generationConfig.topP,
+            repetitionPenalty: generationConfig.repetitionPenalty,
+            repetitionContextSize: generationConfig.repetitionContextSize
         )
+    }
+
+    /// Builds a `UserInput` with proper system/user role separation.
+    private func makeUserInput(for request: CoachingRequest) -> UserInput {
+        UserInput(chat: [
+            .system(AICoachPromptBuilder.systemPreamble),
+            .user(AICoachPromptBuilder.buildUserContent(for: request)),
+        ])
     }
 
     /// Detects repetition in generated tokens. Returns `.stop` if a trigram
@@ -208,11 +188,12 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
     }
 
     /// Loads (or downloads) the model and runs generation to completion.
-    private func generate(prompt: String) async throws -> String {
+    private func generate(request: CoachingRequest) async throws -> String {
         let container = try await getContainer()
         let parameters = makeParameters()
-        return try await container.perform { [maxTokens] context in
-            let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
+        let userInput = makeUserInput(for: request)
+        return try await container.perform { [generationConfig] context in
+            let input = try await context.processor.prepare(input: userInput)
             var allTokens: [Int] = []
             let result = try MLXLMCommon.generate(
                 input: input,
@@ -220,7 +201,7 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
                 context: context,
                 didGenerate: { (tokens: [Int]) in
                     allTokens.append(contentsOf: tokens)
-                    if allTokens.count >= maxTokens { return .stop }
+                    if allTokens.count >= generationConfig.maxTokens { return .stop }
                     return MLXAICoachService.checkRepetition(allTokens: allTokens)
                 }
             )
@@ -230,13 +211,14 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
 
     /// Streaming variant — yields decoded token chunks to `onChunk` as they are generated.
     private func generateStreaming(
-        prompt: String,
+        request: CoachingRequest,
         onChunk: @escaping @Sendable (String) -> Void
     ) async throws {
         let container = try await getContainer()
         let parameters = makeParameters()
-        try await container.perform { [maxTokens] context in
-            let input = try await context.processor.prepare(input: UserInput(prompt: prompt))
+        let userInput = makeUserInput(for: request)
+        try await container.perform { [generationConfig] context in
+            let input = try await context.processor.prepare(input: userInput)
             var allTokens: [Int] = []
             _ = try MLXLMCommon.generate(
                 input: input,
@@ -246,7 +228,7 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
                     allTokens.append(contentsOf: tokens)
                     let text = context.tokenizer.decode(tokens: tokens)
                     onChunk(text)
-                    if allTokens.count >= maxTokens { return .stop }
+                    if allTokens.count >= generationConfig.maxTokens { return .stop }
                     return MLXAICoachService.checkRepetition(allTokens: allTokens)
                 }
             )

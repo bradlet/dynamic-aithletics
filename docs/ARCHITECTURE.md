@@ -7,6 +7,8 @@ Hybrid AIthletics uses a flat-layered architecture with SwiftUI + SwiftData. The
 ## Layers
 
 ```
+Packages/AICoachCore/      Shared library: prompt builder, coaching types, formatters, GenerationConfig
+Evals/                     AI coach eval CLI (Swift inspect + Python eval runner)
 Models/                    @Model classes, enums (data layer)
 Config/                    ModelContainer setup, environment keys (infrastructure)
 Extensions/                Date arithmetic, formatting (utilities)
@@ -66,6 +68,16 @@ Exercises can be marked as `isRepeating: Bool`. A repeating exercise serves as a
 ### CloudKit sync
 Configured via `ModelConfiguration(cloudKitDatabase: .automatic)` in `ModelContainerFactory`. All model properties have default values for CloudKit compatibility. The CloudKit container ID must be registered in the Apple Developer portal and match the entitlements file.
 
+### AICoachCore local package
+The `Packages/AICoachCore/` local Swift package is the single source of truth for all coaching logic shared between the iOS app and the eval CLI. It contains:
+- **`AICoachPromptBuilder`** — stateless prompt construction with `buildPrompt(for:)` (flat) and `buildUserContent(for:)` (user-only, for use with separate system role)
+- **Coaching types** — `CoachWorkout`, `CoachExercise`, `CoachingRequest`, `CoachingResponse` (plain structs, no SwiftData)
+- **`CoachExerciseType`** — mirrors the app's `ExerciseType` raw values without UI properties
+- **`GenerationConfig`** — all LLM generation parameters (temperature, topP, repetitionPenalty, etc.) with named presets
+- **Distance/duration formatters** — internal to the package, used by the prompt builder
+
+The app's SwiftData models are converted to AICoachCore types via `CoachTypeConversions.swift` (`CoachWorkout(from:)`, `CoachExercise(from:)`).
+
 ### AI Coach service layer
 The on-device coaching feature lives behind a protocol, `AICoachService`, so the rest of the app never imports MLX or any specific runtime directly.
 
@@ -73,11 +85,19 @@ The on-device coaching feature lives behind a protocol, `AICoachService`, so the
 
 **Implementations.**
 - `StubAICoachService` — returns a deterministic canned response and streams it in small chunks with artificial delay. Used by previews and tests.
-- `MLXAICoachService` — production implementation backed by Gemma 3 4B via MLX-Swift. The model is downloaded from Hugging Face on first use and cached locally. The actual MLX calls are gated behind `#if canImport(MLXLLM)` so the file compiles even before the SPM dependency is added, throwing `AICoachError.notImplemented` until the dependency is in place.
+- `MLXAICoachService` — production implementation backed by Gemma 3 4B via MLX-Swift. The model is downloaded from Hugging Face on first use and cached locally. The actual MLX calls are gated behind `#if canImport(MLXLLM)` so the file compiles even before the SPM dependency is added, throwing `AICoachError.notImplemented` until the dependency is in place. Reads generation parameters from `GenerationConfig.production`. Uses `UserInput(chat:)` with separate system/user roles.
 
-**Prompt construction.** `AICoachPromptBuilder` is a stateless namespace enum that turns a `CoachingRequest` (recent workouts + upcoming exercises + unit preference) into a prompt string. It reuses `Double.formattedDistance(metric:)` and the cached `lineDateFormatter` and skips RPE lines when `feltRating == 0`.
+**Prompt construction.** `AICoachPromptBuilder` lives in the `AICoachCore` package and turns a `CoachingRequest` into prompt text. It provides both `buildPrompt(for:)` (flat string) and `buildUserContent(for:)` (user content only, for use alongside `systemPreamble`). Note: Gemma 3's chat template folds system messages into the first user turn regardless, so both approaches produce identical tokenized prompts.
 
-**Request ownership.** The top-level `AerobicTrainingView` assembles the `CoachingRequest` from its own `@Query` data (last 4 weeks of workouts, next 2 weeks of exercises) in keeping with the project's "only top-level views hold queries" rule.
+**Request ownership.** The top-level `AerobicTrainingView` assembles the `CoachingRequest` from its own `@Query` data (last 4 weeks of workouts, next 2 weeks of exercises), converting SwiftData models to AICoachCore types via `CoachWorkout(from:)` and `CoachExercise(from:)`.
+
+### Eval CLI
+The `Evals/` directory contains tools for iterating on the AI coach's prompt and generation parameters outside the iOS app:
+- **`swift run CoachEval inspect`** — prints the formatted prompt from AICoachCore without running the model
+- **`python3 eval_runner.py`** — runs prompts through Python MLX and scores output quality (100-point scale)
+- Shares prompt and config via the `AICoachCore` package, so changes propagate to both app and evals
+
+See `Evals/README.md` for full documentation.
 
 ### Model delivery
 The Gemma 3 4B QAT 4-bit model is **not bundled** in the app binary. Instead, `MLXAICoachService` uses `ModelConfiguration(id: "mlx-community/gemma-3-4b-it-qat-4bit")` to download the weights from Hugging Face on first use (~2 GB). MLXLLM caches the download in the app's caches directory for offline access on subsequent launches. This keeps the app binary small and eliminates the need for developers to manually download and configure model weights.
@@ -113,10 +133,11 @@ sheet opens with concrete exercise → @Query fires → UI shows new concrete + 
 ```
 User taps "Ask Coach" in AerobicTrainingView → buildCoachRequest() reads recent workouts
 (last 4 weeks) and upcoming exercises (next 2 weeks) from @Query →
+SwiftData models converted to AICoachCore types (CoachWorkout, CoachExercise) →
 CoachingRequest assembled → AICoachSheet presented → on .task, calls
 coach.streamSuggestion(request) → AICoachPromptBuilder serializes request to prompt →
-MLXAICoachService (or StubAICoachService in previews) generates response token by token →
-AICoachSheet appends chunks to responseText → UI updates live
+MLXAICoachService builds UserInput(chat:) with system/user roles →
+MLX generates response token by token → AICoachSheet appends chunks to responseText → UI updates live
 ```
 
 ## Testing
@@ -127,6 +148,7 @@ Unit tests cover:
 - **Types**: ExerciseType codable round-trip, identifiable conformance
 - **Drag items**: ExerciseDragItem codable round-trip
 - **Repeat**: isRepeating default value, init parameter, persistence, day-of-week matching
-- **AI Coach**: prompt builder formatting (RPE inclusion, notes handling, unit respect, ordering, empty inputs), `StubAICoachService` response and streaming
+- **AI Coach**: type conversion tests (SwiftData → AICoachCore), `StubAICoachService` response and streaming
+- **AICoachCore package tests** (separate target): prompt builder formatting (RPE inclusion, notes handling, unit respect, ordering, empty inputs), distance/duration formatting, generation config codable round-trip
 
-Tests use `ModelContainerFactory.makePreviewContainer()` for isolated in-memory SwiftData contexts. The MLX-backed coach is never exercised in unit tests — all coach tests run against `StubAICoachService`.
+App tests use `ModelContainerFactory.makePreviewContainer()` for isolated in-memory SwiftData contexts. The MLX-backed coach is never exercised in unit tests — all coach tests run against `StubAICoachService`. Prompt builder tests live in the `AICoachCore` package and use plain structs, not SwiftData models.

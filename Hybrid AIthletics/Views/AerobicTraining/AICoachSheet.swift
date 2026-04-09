@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import AICoachCore
 
 /// A sheet that asks the AI coach for suggestions on adapting the user's
 /// upcoming training based on their recent workouts and perceived exertion.

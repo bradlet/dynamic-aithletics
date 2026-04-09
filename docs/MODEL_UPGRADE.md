@@ -2,7 +2,9 @@
 
 ## Current State
 
-The AI coach uses **Gemma 3 4B QAT 4-bit** (`mlx-community/gemma-3-4b-it-qat-4bit`) via MLX-Swift. The model is downloaded from Hugging Face on first use and cached locally.
+The AI coach uses **Gemma 3 4B QAT 4-bit** (`mlx-community/gemma-3-4b-it-qat-4bit`) via MLX-Swift. The model is downloaded from Hugging Face on first use and cached locally. Generation parameters are centralized in `AICoachCore.GenerationConfig.production`.
+
+**Known issue:** The model produces poor output with mlx-swift 0.29.1 due to quantized inference bugs. Python MLX 0.31.1 produces excellent output from the same model and prompt. Updating `mlx-swift-examples` to a version that depends on mlx-swift 0.31.x+ should fix this. Verify with `cd Evals && python3 eval_runner.py` after updating.
 
 ## Why Gemma 4 Was Deferred
 
@@ -28,7 +30,8 @@ Check these periodically:
 1. Update the mlx-swift-examples SPM dependency to the version that includes `"gemma4"`.
 2. In `MLXAICoachService.swift`, change `modelID` to the Gemma 4 E2B MLX quant repo (e.g. `"mlx-community/gemma-4-e2b-it-4bit"`).
 3. Update documentation references from Gemma 3 to Gemma 4.
-4. Test on a physical device — verify generation quality and performance.
+4. Verify with eval suite: `cd Evals && python3 eval_runner.py` — all scenarios should score >= 80/100.
+5. Test on a physical device — verify generation quality and performance.
 
 ### Option B: LiteRT-LM Swift SDK ships
 

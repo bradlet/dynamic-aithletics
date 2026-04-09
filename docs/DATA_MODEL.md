@@ -98,7 +98,7 @@ Creates a new Workout pre-filled from an Exercise template. This is the entry po
 
 The `feltRating` field is the primary input that lets the on-device AI Coach distinguish between *planned* workload and *experienced* workload. Two athletes can run the same 5-mile tempo at the same pace and have very different felt ratings — the coach uses the RPE signal together with distance, duration, and session type to assess whether the athlete is absorbing their training or accumulating fatigue.
 
-When the coach serializes recent workouts into its prompt (see `Services/AICoach/AICoachPromptBuilder.swift`), a workout with `feltRating == 0` simply omits the RPE line — the model is explicitly told these sessions are unrated rather than assuming a default. See [docs/adrs/1-use-lightweight-onboard-llm.md](adrs/1-use-lightweight-onboard-llm.md) for the broader architectural decision.
+When the coach serializes recent workouts into its prompt (see `Packages/AICoachCore/Sources/AICoachCore/AICoachPromptBuilder.swift`), a workout with `feltRating == 0` simply omits the RPE line — the model is explicitly told these sessions are unrated rather than assuming a default. See [docs/adrs/1-use-lightweight-onboard-llm.md](adrs/1-use-lightweight-onboard-llm.md) for the broader architectural decision.
 
 ---
 
@@ -143,6 +143,8 @@ ExerciseType: String (raw values)
 Each case has two computed properties for UI rendering:
 - **`systemImage`**: An SF Symbols icon name (Apple's built-in icon library, similar to Material Icons or FontAwesome). All running variants share `"figure.run"`.
 - **`color`**: A SwiftUI `Color` for visual grouping. Running types are blue/orange/green by intensity; cross-training types each have a distinct color.
+
+A mirror enum, `CoachExerciseType`, lives in the `AICoachCore` package with identical raw values but no UI properties. It is used for prompt building and eval scenarios. Conversion is lossless via `CoachExerciseType(from: appType)`.
 
 **Serialization:** The enum conforms to `Codable` with `String` raw values. When SwiftData persists an Exercise with `type = .tempoRun`, the database column stores the string `"Tempo Run"`. When reading back, SwiftData deserializes the string into the enum case. Adding new cases is backward-compatible as long as existing raw values don't change.
 

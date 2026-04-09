@@ -9,6 +9,7 @@
 
 import SwiftUI
 import SwiftData
+import AICoachCore
 
 /// The aerobic training tab displaying a weekly exercise plan with mileage tracking.
 struct AerobicTrainingView: View {
@@ -138,10 +139,12 @@ struct AerobicTrainingView: View {
         let recent = allWorkouts
             .filter { $0.date >= fourWeeksAgo && $0.date <= now }
             .sorted { $0.date < $1.date }
+            .map { CoachWorkout(from: $0) }
 
         let upcoming = allExercises
             .filter { $0.scheduledDate >= now.startOfDay && $0.scheduledDate <= twoWeeksAhead }
             .sorted { $0.scheduledDate < $1.scheduledDate }
+            .map { CoachExercise(from: $0) }
 
         return CoachingRequest(
             recentWorkouts: recent,

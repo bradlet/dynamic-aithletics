@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import AICoachCore
 
 /// A stub coach that returns a fixed, human-readable response.
 ///

@@ -10,6 +10,7 @@
 		1C8169042F83FE0700E33EF9 /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168F82F83FE0700E33EF9 /* CLAUDE.md */; };
 		1CD325422F849D6D00F2A1B5 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD325412F849D6D00F2A1B5 /* MLXLLM */; };
 		1CD325442F849D6D00F2A1B5 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD325432F849D6D00F2A1B5 /* MLXLMCommon */; };
+		AA0001012FA6B00000000001 /* AICoachCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0001022FA6B00000000001 /* AICoachCore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +76,7 @@
 			files = (
 				1CD325442F849D6D00F2A1B5 /* MLXLMCommon in Frameworks */,
 				1CD325422F849D6D00F2A1B5 /* MLXLLM in Frameworks */,
+				AA0001012FA6B00000000001 /* AICoachCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,6 +141,7 @@
 			packageProductDependencies = (
 				1CD325412F849D6D00F2A1B5 /* MLXLLM */,
 				1CD325432F849D6D00F2A1B5 /* MLXLMCommon */,
+				AA0001022FA6B00000000001 /* AICoachCore */,
 			);
 			productName = "Hybrid AIthletics";
 			productReference = 1C1476D12F817B6800DCF85D /* Hybrid AIthletics.app */;
@@ -162,6 +165,7 @@
 			);
 			name = "Hybrid AIthleticsTests";
 			packageProductDependencies = (
+				AA0001032FA6B00000000001 /* AICoachCore */,
 			);
 			productName = "Hybrid AIthleticsTests";
 			productReference = 1C1476E22F817B6900DCF85D /* Hybrid AIthleticsTests.xctest */;
@@ -223,7 +227,8 @@
 			mainGroup = 1C1476C82F817B6800DCF85D;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */,
+				1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				AA0001042FA6B00000000001 /* XCLocalSwiftPackageReference "Packages/AICoachCore" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1C1476D22F817B6800DCF85D /* Products */;
@@ -608,13 +613,20 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		AA0001042FA6B00000000001 /* XCLocalSwiftPackageReference "Packages/AICoachCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/AICoachCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
-		1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */ = {
+		1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/ml-explore/mlx-swift-examples";
+			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 2.29.1;
+				minimumVersion = 2.31.3;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -622,13 +634,21 @@
 /* Begin XCSwiftPackageProductDependency section */
 		1CD325412F849D6D00F2A1B5 /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			package = 1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLLM;
 		};
 		1CD325432F849D6D00F2A1B5 /* MLXLMCommon */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-examples" */;
+			package = 1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLMCommon;
+		};
+		AA0001022FA6B00000000001 /* AICoachCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AICoachCore;
+		};
+		AA0001032FA6B00000000001 /* AICoachCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = AICoachCore;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

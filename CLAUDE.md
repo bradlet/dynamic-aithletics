@@ -5,11 +5,20 @@ Hybrid AIthletics — iOS exercise tracking app (SwiftUI + SwiftData + CloudKit)
 
 ## Build & Test
 ```bash
-# Build
+# Build app
 xcodebuild -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
 
-# Run unit tests only
+# Run app unit tests
 xcodebuild test -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:"Hybrid AIthleticsTests"
+
+# Run AICoachCore package tests
+cd Packages/AICoachCore && swift test
+
+# Run AI coach evals (requires pip3 install mlx-lm)
+cd Evals && python3 eval_runner.py
+
+# Inspect AI coach prompts (no model needed)
+cd Evals && swift run CoachEval inspect --scenario high-rpe --prompt-mode chat
 ```
 
 ## Architecture
@@ -18,7 +27,8 @@ xcodebuild test -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator
 - **Distance storage**: Always miles internally. Display conversion via `Double.formattedDistance(metric:)`. Unit preference via `@Environment(\.useMetricUnits)`.
 - **Week start**: Monday always (hardcoded in `Date+Week.swift` via `mondayCalendar`).
 - **CloudKit**: All model properties must have default values for CloudKit compatibility.
-- **AI Coach service layer**: `AICoachService` protocol with two implementations — `MLXAICoachService` (production, Gemma 3 4B via MLX-Swift) and `StubAICoachService` (previews/tests). Injected via `@Environment(\.aiCoach)`. Default environment value is the stub so previews never load real models.
+- **AICoachCore local package**: `Packages/AICoachCore/` — shared library containing prompt builder, coaching types (`CoachWorkout`, `CoachExercise`, `CoachingRequest`, `CoachingResponse`), formatters, and `GenerationConfig`. Used by both the iOS app and the `Evals/` CLI. The app converts SwiftData models to AICoachCore types via `CoachTypeConversions.swift`.
+- **AI Coach service layer**: `AICoachService` protocol with two implementations — `MLXAICoachService` (production, Gemma 3 4B via MLX-Swift) and `StubAICoachService` (previews/tests). Injected via `@Environment(\.aiCoach)`. Default environment value is the stub so previews never load real models. Uses `UserInput(chat:)` with separate system/user roles for proper Gemma 3 chat template formatting.
 - **AI model delivery**: Gemma 3 4B QAT 4-bit weights are **not bundled** — they download from Hugging Face on first use via `ModelConfiguration(id:)` and are cached locally for offline access.
 - **Conditional compilation**: All MLX-specific code is gated behind `#if canImport(MLXLLM)`. The `#else` branches throw `AICoachError.notImplemented` so the app compiles on simulators/CI without the SPM dependency resolved.
 
@@ -29,7 +39,8 @@ xcodebuild test -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator
 - New model fields → test default value, explicit set, and SwiftData persistence.
 - New service/logic types → test all public methods and edge cases (empty inputs, boundary values).
 - New prompt/serialization logic → test each output field, metric/imperial variants, omission conditions.
-- Tests live in `Hybrid AIthleticsTests/Hybrid_AIthleticsTests.swift`, grouped by `struct` with a `// MARK:` header.
+- Prompt builder tests live in `Packages/AICoachCore/Tests/AICoachCoreTests/PromptBuilderTests.swift`.
+- App-level tests live in `Hybrid AIthleticsTests/Hybrid_AIthleticsTests.swift`, grouped by `struct` with a `// MARK:` header.
 - Do not ship a feature without at least one test per public method.
 
 ## Conventions
@@ -40,19 +51,24 @@ xcodebuild test -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator
 
 ## File Layout
 ```
+Packages/
+  AICoachCore/   Shared library: prompt builder, coaching types, formatters, GenerationConfig
+Evals/           AI coach eval CLI + Python eval runner
 Models/          Data models and enums
 Config/          ModelContainer, environment keys (units, aiCoach)
 Extensions/      Date+Week, Double+Distance
 Services/
-  AICoach/       Protocol, MLX implementation, stub, prompt builder
+  AICoach/       Protocol, MLX implementation, stub, type conversions
 Views/           Grouped by tab: AerobicTraining/, Strength/, History/
 ```
 
 ## Key Files
+- `Packages/AICoachCore/Sources/AICoachCore/AICoachPromptBuilder.swift` — stateless prompt serialization (shared by app + evals)
+- `Packages/AICoachCore/Sources/AICoachCore/GenerationConfig.swift` — single source of truth for LLM generation parameters
 - `Config/ModelContainerFactory.swift` — single place for container/CloudKit config
 - `Config/AICoachEnvironment.swift` — `@Environment(\.aiCoach)` key; default is `StubAICoachService`
 - `Extensions/Date+Week.swift` — all calendar arithmetic
 - `Models/ExerciseType.swift` — exercise type enum with icons and colors
 - `Services/AICoach/AICoachService.swift` — protocol + `AICoachError` enum
 - `Services/AICoach/MLXAICoachService.swift` — production coach; swap model via `modelID` constant
-- `Services/AICoach/AICoachPromptBuilder.swift` — stateless prompt serialization (model-agnostic)
+- `Services/AICoach/CoachTypeConversions.swift` — SwiftData → AICoachCore type bridge
