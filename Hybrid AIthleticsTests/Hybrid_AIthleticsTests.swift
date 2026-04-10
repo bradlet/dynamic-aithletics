@@ -569,3 +569,205 @@ struct StubAICoachServiceTests {
         #expect(assembled == "hello coach")
     }
 }
+
+// MARK: - WorkoutCSV Tests
+
+struct WorkoutCSVTests {
+
+    /// Fixed reference date: 2026-04-09T07:30:00Z
+    private var referenceDate: Date {
+        var components = DateComponents()
+        components.year = 2026
+        components.month = 4
+        components.day = 9
+        components.hour = 7
+        components.minute = 30
+        components.second = 0
+        components.timeZone = TimeZone(identifier: "UTC")
+        return Calendar(identifier: .gregorian).date(from: components)!
+    }
+
+    private func makeWorkout(
+        name: String = "Morning 5K",
+        type: ExerciseType = .run,
+        durationSeconds: Int = 1800,
+        distanceMiles: Double = 3.1,
+        notes: String = "",
+        feltRating: Int = 7
+    ) -> Workout {
+        Workout(
+            name: name,
+            type: type,
+            durationSeconds: durationSeconds,
+            distanceMiles: distanceMiles,
+            notes: notes,
+            date: referenceDate,
+            feltRating: feltRating
+        )
+    }
+
+    // MARK: Encoding
+
+    @Test func encodeProducesHeaderAndOneRowPerWorkout() {
+        let workouts = [
+            makeWorkout(name: "A", distanceMiles: 1.0),
+            makeWorkout(name: "B", distanceMiles: 2.0),
+            makeWorkout(name: "C", distanceMiles: 3.0)
+        ]
+        let csv = WorkoutCSV.encode(workouts: workouts, unit: .miles)
+        let lines = csv.split(separator: "\n", omittingEmptySubsequences: false)
+        #expect(lines.first.map(String.init) == WorkoutCSV.header)
+        // 1 header + 3 data + trailing empty from final newline
+        #expect(lines.count == 5)
+    }
+
+    @Test func encodeQuotesFieldsContainingCommasQuotesAndNewlines() {
+        let workout = makeWorkout(
+            name: "5K, easy",
+            notes: "He said \"go\"\nthen left"
+        )
+        let csv = WorkoutCSV.encode(workouts: [workout], unit: .miles)
+        #expect(csv.contains("\"5K, easy\""))
+        // Embedded quote doubled.
+        #expect(csv.contains("\"He said \"\"go\"\"\nthen left\""))
+    }
+
+    @Test func encodeUsesFixedTwoDecimalDistance() {
+        let workout = makeWorkout(distanceMiles: 3.14159)
+        let csv = WorkoutCSV.encode(workouts: [workout], unit: .miles)
+        #expect(csv.contains(",3.14,"))
+    }
+
+    @Test func encodeConvertsMilesToKilometersForKilometerUnit() {
+        let workout = makeWorkout(distanceMiles: 1.0)
+        let milesCSV = WorkoutCSV.encode(workouts: [workout], unit: .miles)
+        let kmCSV = WorkoutCSV.encode(workouts: [workout], unit: .kilometers)
+        #expect(milesCSV.contains(",1.00,"))
+        // 1 mi ≈ 1.60934 km → formatted as 1.61
+        #expect(kmCSV.contains(",1.61,"))
+    }
+
+    // MARK: Parsing
+
+    @Test func parseEmptyFileThrows() {
+        #expect(throws: WorkoutCSVError.empty) {
+            _ = try WorkoutCSV.parse("")
+        }
+        #expect(throws: WorkoutCSVError.empty) {
+            _ = try WorkoutCSV.parse("   \n  \n")
+        }
+    }
+
+    @Test func parseHeaderOnlyReturnsZeroRows() throws {
+        let result = try WorkoutCSV.parse(WorkoutCSV.header + "\n")
+        #expect(result.rows.isEmpty)
+        #expect(result.skipped.isEmpty)
+    }
+
+    @Test func parseRoundTripPreservesAllFields() throws {
+        let original = makeWorkout(
+            name: "Tempo Day",
+            type: .tempoRun,
+            durationSeconds: 2400,
+            distanceMiles: 6.25,
+            notes: "Felt strong",
+            feltRating: 9
+        )
+        let csv = WorkoutCSV.encode(workouts: [original], unit: .miles)
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.skipped.isEmpty)
+
+        let row = result.rows[0]
+        #expect(row.name == "Tempo Day")
+        #expect(row.type == .tempoRun)
+        #expect(row.durationSeconds == 2400)
+        #expect(abs(row.distance - 6.25) < 0.01)
+        #expect(row.notes == "Felt strong")
+        #expect(row.feltRating == 9)
+        #expect(abs(row.date.timeIntervalSince(referenceDate)) < 1.0)
+    }
+
+    @Test func parseHandlesQuotedFieldsAndEmbeddedNewlines() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,"5K, easy",Run,1800,3.10,"line one\nline two",7
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.skipped.isEmpty)
+        #expect(result.rows.count == 1)
+        #expect(result.rows[0].name == "5K, easy")
+        #expect(result.rows[0].notes == "line one\nline two")
+    }
+
+    @Test func parseSkipsRowsWithInvalidDateOrDistance() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Good,Run,1800,3.10,ok,7
+        not-a-date,Bad Date,Run,1800,3.10,nope,7
+        2026-04-09T07:30:00Z,Bad Distance,Run,1800,abc,nope,7
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.rows[0].name == "Good")
+        #expect(result.skipped.count == 2)
+    }
+
+    @Test func parseUnknownExerciseTypeFallsBackToOther() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Martian Jog,Teleport,1800,3.10,,5
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.rows[0].type == .other)
+    }
+
+    @Test func parseAppliesKilometersToMilesConversion() throws {
+        // Row has distance=5.0 in km → 5 / 1.60934 ≈ 3.10686 mi.
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Metric Run,Run,1800,5.00,,6
+        """
+        let result = try WorkoutCSV.parse(csv)
+        let workout = WorkoutCSV.toWorkout(result.rows[0], unit: .kilometers)
+        #expect(abs(workout.distanceMiles - 3.10686) < 0.001)
+    }
+
+    @Test func toWorkoutPreservesMilesWhenUnitIsMiles() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Imperial Run,Run,1800,4.25,,6
+        """
+        let result = try WorkoutCSV.parse(csv)
+        let workout = WorkoutCSV.toWorkout(result.rows[0], unit: .miles)
+        #expect(abs(workout.distanceMiles - 4.25) < 0.001)
+    }
+
+    // MARK: Integration with SwiftData
+
+    @Test func parsedRowsCanBeInsertedIntoModelContext() throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        // Clear any seeded workouts so the assertion is exact.
+        let existing = try context.fetch(FetchDescriptor<Workout>())
+        for workout in existing { context.delete(workout) }
+        try context.save()
+
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Alpha,Run,1800,3.00,,6
+        2026-04-09T07:30:00Z,Bravo,Bike,3600,10.00,commute,5
+        """
+        let result = try WorkoutCSV.parse(csv)
+        for row in result.rows {
+            context.insert(WorkoutCSV.toWorkout(row, unit: .miles))
+        }
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Workout>())
+        #expect(fetched.count == 2)
+        #expect(fetched.contains(where: { $0.name == "Alpha" && $0.type == .run }))
+        #expect(fetched.contains(where: { $0.name == "Bravo" && $0.type == .bike }))
+    }
+}
