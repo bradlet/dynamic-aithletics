@@ -94,21 +94,26 @@ final class CoachGenerator {
         )
 
         let startTime = Date()
-        let result: (output: String, tokenCount: Int) = try await container.perform {
-            [maxTokens = config.maxTokens] context in
+        let result: (output: String, tokenCount: Int) = try await container.perform { context in
             let input = try await context.processor.prepare(input: userInput)
-            var allTokens: [Int] = []
-            let result = try MLXLMCommon.generate(
+            let stream = try MLXLMCommon.generate(
                 input: input,
                 parameters: parameters,
-                context: context,
-                didGenerate: { (tokens: [Int]) in
-                    allTokens.append(contentsOf: tokens)
-                    if allTokens.count >= maxTokens { return .stop }
-                    return Self.checkRepetition(allTokens: allTokens)
-                }
+                context: context
             )
-            return (result.output, allTokens.count)
+            var output = ""
+            var tokenCount = 0
+            for await event in stream {
+                switch event {
+                case .chunk(let text):
+                    output += text
+                case .info(let info):
+                    tokenCount = info.generationTokenCount
+                case .toolCall:
+                    break
+                }
+            }
+            return (output, tokenCount)
         }
 
         let totalTime = Date().timeIntervalSince(startTime)
@@ -117,32 +122,6 @@ final class CoachGenerator {
             tokenCount: result.tokenCount,
             totalTime: totalTime
         )
-    }
-
-    /// Detects repetition in generated tokens. Returns `.stop` if a trigram
-    /// (3-token sequence) has appeared 3+ times in the last 30 tokens.
-    /// Mirrors the app's MLXAICoachService.checkRepetition exactly.
-    private static func checkRepetition(allTokens: [Int]) -> GenerateDisposition {
-        let windowSize = 30
-        let ngramSize = 3
-        let maxRepeats = 3
-
-        guard allTokens.count >= ngramSize else { return .more }
-
-        let start = max(0, allTokens.count - windowSize)
-        let window = Array(allTokens[start...])
-
-        guard window.count >= ngramSize else { return .more }
-
-        var counts: [String: Int] = [:]
-        for i in 0...(window.count - ngramSize) {
-            let key = window[i..<(i + ngramSize)].map(String.init).joined(separator: ",")
-            counts[key, default: 0] += 1
-            if counts[key]! >= maxRepeats {
-                return .stop
-            }
-        }
-        return .more
     }
 }
 

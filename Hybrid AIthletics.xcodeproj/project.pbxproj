@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1C8169042F83FE0700E33EF9 /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168F82F83FE0700E33EF9 /* CLAUDE.md */; };
+		1CCF39D82F88A594009D4D21 /* AICoachCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0001032FA6B00000000001 /* AICoachCore */; };
 		1CD325422F849D6D00F2A1B5 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD325412F849D6D00F2A1B5 /* MLXLLM */; };
 		1CD325442F849D6D00F2A1B5 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD325432F849D6D00F2A1B5 /* MLXLMCommon */; };
 		AA0001012FA6B00000000001 /* AICoachCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0001022FA6B00000000001 /* AICoachCore */; };
@@ -84,6 +85,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1CCF39D82F88A594009D4D21 /* AICoachCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

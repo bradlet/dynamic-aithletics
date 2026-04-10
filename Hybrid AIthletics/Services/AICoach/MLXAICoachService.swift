@@ -160,56 +160,36 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
         ])
     }
 
-    /// Detects repetition in generated tokens. Returns `.stop` if a trigram
-    /// (3-token sequence) has appeared 3+ times in the last 30 tokens, which
-    /// is a reliable signal of degenerate looping.
-    private static func checkRepetition(allTokens: [Int]) -> GenerateDisposition {
-        let windowSize = 30
-        let ngramSize = 3
-        let maxRepeats = 3
-
-        guard allTokens.count >= ngramSize else { return .more }
-
-        let start = max(0, allTokens.count - windowSize)
-        let window = Array(allTokens[start...])
-
-        guard window.count >= ngramSize else { return .more }
-
-        // Count occurrences of each trigram in the window.
-        var counts: [String: Int] = [:]
-        for i in 0...(window.count - ngramSize) {
-            let key = window[i..<(i + ngramSize)].map(String.init).joined(separator: ",")
-            counts[key, default: 0] += 1
-            if counts[key]! >= maxRepeats {
-                return .stop
-            }
-        }
-        return .more
-    }
-
     /// Loads (or downloads) the model and runs generation to completion.
+    ///
+    /// Uses the non-deprecated `AsyncStream<Generation>` overload of
+    /// `MLXLMCommon.generate` so that detokenization goes through MLX's
+    /// `NaiveStreamingDetokenizer`. The old `didGenerate: ([Int]) -> ...`
+    /// overload passes a cumulative token array on every call — misreading
+    /// it as a delta produces quadratic growth, premature stop, and garbled
+    /// output.
     private func generate(request: CoachingRequest) async throws -> String {
         let container = try await getContainer()
         let parameters = makeParameters()
         let userInput = makeUserInput(for: request)
-        return try await container.perform { [generationConfig] context in
+        return try await container.perform { context in
             let input = try await context.processor.prepare(input: userInput)
-            var allTokens: [Int] = []
-            let result = try MLXLMCommon.generate(
+            let stream = try MLXLMCommon.generate(
                 input: input,
                 parameters: parameters,
-                context: context,
-                didGenerate: { (tokens: [Int]) in
-                    allTokens.append(contentsOf: tokens)
-                    if allTokens.count >= generationConfig.maxTokens { return .stop }
-                    return MLXAICoachService.checkRepetition(allTokens: allTokens)
-                }
+                context: context
             )
-            return result.output
+            var output = ""
+            for await event in stream {
+                if case .chunk(let text) = event {
+                    output += text
+                }
+            }
+            return output
         }
     }
 
-    /// Streaming variant — yields decoded token chunks to `onChunk` as they are generated.
+    /// Streaming variant — yields decoded text deltas to `onChunk` as they are generated.
     private func generateStreaming(
         request: CoachingRequest,
         onChunk: @escaping @Sendable (String) -> Void
@@ -217,21 +197,18 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
         let container = try await getContainer()
         let parameters = makeParameters()
         let userInput = makeUserInput(for: request)
-        try await container.perform { [generationConfig] context in
+        try await container.perform { context in
             let input = try await context.processor.prepare(input: userInput)
-            var allTokens: [Int] = []
-            _ = try MLXLMCommon.generate(
+            let stream = try MLXLMCommon.generate(
                 input: input,
                 parameters: parameters,
-                context: context,
-                didGenerate: { (tokens: [Int]) in
-                    allTokens.append(contentsOf: tokens)
-                    let text = context.tokenizer.decode(tokens: tokens)
-                    onChunk(text)
-                    if allTokens.count >= generationConfig.maxTokens { return .stop }
-                    return MLXAICoachService.checkRepetition(allTokens: allTokens)
-                }
+                context: context
             )
+            for await event in stream {
+                if case .chunk(let text) = event {
+                    onChunk(text)
+                }
+            }
         }
     }
 
