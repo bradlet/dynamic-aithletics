@@ -1,6 +1,14 @@
 # Hybrid AIthletics
 
-An iOS exercise tracking application built with SwiftUI, SwiftData, and CloudKit. Designed for runners and endurance athletes to plan weekly training routines, record completed workouts, and track mileage over time.
+Hybrid AIletics (pronunciation: `/eɪˈθlɛtɪks/`; "ay-THLET-iks") is an iOS exercise tracking application designed for hybrid athletes with a focus on endurance training. It is a *personal* fitness application, explicitly without social aspects to support the notion that our fitness journies should not be built on comparison but through self-motivation to reach our own health and fitness goals.
+
+The app helps plan weekly training routines, record completed workouts, and track mileage over time. It also provides dynamic exercise program insights and suggestions utilizing onboard AI. We explicitly opt to use small language models which can run entirely on your own mobile device for several key reasons:
+
+1. We believe that you should always have complete ownership of your data. Your health data will never be shared with an AI provider / company through any API; it never leaves your phone (though, we do support ICloud storage, but this is highly secure and not shared with 3rd parties).
+2. We want you to feel comfortable getting AI insights on your training as often as possible, without worrying about environmental impact: your usage is not adding to the plethora of data centers using energy and water; it's all on-device with lightweight AI models.
+3. We will always maintain a **zero-subscription model**. We are tired of the subscription economy, too, and want to provide a highly-functional tool to aid you in your health and endurance competition journey, that will keep you performing at your peak for years to come.
+
+We don't withhold any features from the free app. Upgrade one time only to support the creators and unlock an ad-free experience. Forever.
 
 ## Features
 
