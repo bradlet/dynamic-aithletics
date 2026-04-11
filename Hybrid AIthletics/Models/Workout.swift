@@ -31,6 +31,16 @@ final class Workout {
     /// Feeds the on-device AI Coach's training-load assessment.
     var feltRating: Int = 0
 
+    /// Provenance of this workout record. Stores the raw value of a
+    /// `WorkoutSource` (e.g. "Manual", "CSV", "Apple Exercise App"). Stored
+    /// as String for CloudKit compatibility and forward-extensibility.
+    var source: String = WorkoutSource.manual.rawValue
+
+    /// Stable identifier from the external source that produced this record
+    /// (e.g. `HKWorkout.uuid.uuidString`). Used for deduplication on re-import.
+    /// `nil` for manual entries and legacy records created before this field existed.
+    var externalID: String? = nil
+
     /// The exercise template this workout was recorded from, if any.
     var sourceExercise: Exercise?
 
@@ -43,6 +53,8 @@ final class Workout {
     ///   - notes: Optional notes.
     ///   - date: When the workout was performed.
     ///   - feltRating: Subjective 1–10 effort rating. `0` means not recorded.
+    ///   - source: Provenance string. Defaults to `WorkoutSource.manual`.
+    ///   - externalID: External source identifier for dedup. Defaults to `nil`.
     ///   - sourceExercise: The planned exercise this was recorded from, if any.
     init(
         name: String,
@@ -52,6 +64,8 @@ final class Workout {
         notes: String = "",
         date: Date = Date(),
         feltRating: Int = 0,
+        source: String = WorkoutSource.manual.rawValue,
+        externalID: String? = nil,
         sourceExercise: Exercise? = nil
     ) {
         self.id = UUID()
@@ -62,6 +76,8 @@ final class Workout {
         self.notes = notes
         self.date = date
         self.feltRating = feltRating
+        self.source = source
+        self.externalID = externalID
         self.sourceExercise = sourceExercise
     }
 

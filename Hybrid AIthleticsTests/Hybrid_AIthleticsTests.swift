@@ -770,4 +770,200 @@ struct WorkoutCSVTests {
         #expect(fetched.contains(where: { $0.name == "Alpha" && $0.type == .run }))
         #expect(fetched.contains(where: { $0.name == "Bravo" && $0.type == .bike }))
     }
+
+    @Test func csvImportsAreTaggedWithCsvSource() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Alpha,Run,1800,3.00,,6
+        """
+        let result = try WorkoutCSV.parse(csv)
+        let workout = WorkoutCSV.toWorkout(result.rows[0], unit: .miles)
+        #expect(workout.source == WorkoutSource.csv.rawValue)
+        #expect(workout.workoutSource == .csv)
+        // CSV imports don't populate externalID (no stable row identifier yet).
+        #expect(workout.externalID == nil)
+    }
+}
+
+// MARK: - WorkoutSource Tests
+
+struct WorkoutSourceTests {
+
+    @Test func defaultWorkoutSourceIsManual() {
+        let workout = Workout(
+            name: "Test",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0
+        )
+        #expect(workout.source == "Manual")
+        #expect(workout.workoutSource == .manual)
+        #expect(workout.externalID == nil)
+    }
+
+    @Test func explicitSourceIsHonored() {
+        let workout = Workout(
+            name: "Test",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            source: WorkoutSource.appleHealth.rawValue,
+            externalID: "abc-123"
+        )
+        #expect(workout.source == "Apple Exercise App")
+        #expect(workout.workoutSource == .appleHealth)
+        #expect(workout.externalID == "abc-123")
+    }
+
+    @Test func unknownSourceStringMapsToUnknownCase() {
+        let workout = Workout(
+            name: "Test",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            source: "SomeFutureIntegration"
+        )
+        #expect(workout.workoutSource == .unknown)
+    }
+}
+
+// MARK: - HealthKit Import Tests
+
+import HealthKit
+
+struct HealthKitImportTests {
+
+    // MARK: Activity type mapping
+
+    @Test func mapsRunningActivityTypeToRun() {
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .running) == .run)
+    }
+
+    @Test func mapsWalkingActivityTypeToWalk() {
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .walking) == .walk)
+    }
+
+    @Test func mapsCyclingActivityTypeToBike() {
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .cycling) == .bike)
+    }
+
+    @Test func mapsSwimmingActivityTypeToSwim() {
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .swimming) == .swim)
+    }
+
+    @Test func mapsHikingActivityTypeToHike() {
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .hiking) == .hike)
+    }
+
+    @Test func mapsEllipticalActivityTypeToElliptical() {
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .elliptical) == .elliptical)
+    }
+
+    @Test func mapsUnknownActivityTypeToOther() {
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .americanFootball) == .other)
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .yoga) == .other)
+        #expect(HealthKitWorkoutMapper.exerciseType(for: .traditionalStrengthTraining) == .other)
+    }
+
+    // MARK: DTO → Workout
+
+    /// Builds a canonical DTO for the mapping tests so assertions aren't
+    /// polluted with boilerplate.
+    private func makeDTO(
+        id: String = "dto-1",
+        activityType: HKWorkoutActivityType = .running,
+        startDate: Date = Date(timeIntervalSince1970: 1_700_000_000),
+        duration: TimeInterval = 1800,
+        distanceMiles: Double? = 3.1
+    ) -> HealthKitWorkout {
+        HealthKitWorkout(
+            id: id,
+            activityType: activityType,
+            startDate: startDate,
+            duration: duration,
+            distanceMiles: distanceMiles
+        )
+    }
+
+    @Test func toWorkoutSetsAppleHealthSource() {
+        let workout = HealthKitWorkoutMapper.toWorkout(makeDTO())
+        #expect(workout.source == "Apple Exercise App")
+        #expect(workout.workoutSource == .appleHealth)
+    }
+
+    @Test func toWorkoutPreservesExternalID() {
+        let workout = HealthKitWorkoutMapper.toWorkout(makeDTO(id: "hk-uuid-xyz"))
+        #expect(workout.externalID == "hk-uuid-xyz")
+    }
+
+    @Test func toWorkoutHandlesNilDistance() {
+        let workout = HealthKitWorkoutMapper.toWorkout(
+            makeDTO(activityType: .elliptical, distanceMiles: nil)
+        )
+        #expect(workout.distanceMiles == 0.0)
+        #expect(workout.type == .elliptical)
+    }
+
+    @Test func toWorkoutCopiesDateAndDuration() {
+        let start = Date(timeIntervalSince1970: 1_700_000_000)
+        let workout = HealthKitWorkoutMapper.toWorkout(
+            makeDTO(startDate: start, duration: 2700.5)
+        )
+        #expect(workout.date == start)
+        #expect(workout.durationSeconds == 2700)
+    }
+
+    @Test func toWorkoutNamesWorkoutAfterExerciseType() {
+        let workout = HealthKitWorkoutMapper.toWorkout(makeDTO(activityType: .cycling))
+        #expect(workout.name == ExerciseType.bike.rawValue)
+    }
+
+    @Test func toWorkoutCopiesDistanceFromDTO() {
+        let workout = HealthKitWorkoutMapper.toWorkout(makeDTO(distanceMiles: 5.25))
+        #expect(workout.distanceMiles == 5.25)
+    }
+
+    // MARK: Stub service
+
+    @Test func stubServiceReturnsFixtures() async throws {
+        let stub = StubHealthKitImportService()
+        try await stub.requestAuthorization()
+        let fetched = try await stub.fetchRecentWorkouts(
+            since: Date.distantPast,
+            limit: 100
+        )
+        #expect(fetched.count == stub.fixtures.count)
+        #expect(!fetched.isEmpty)
+    }
+
+    @Test func stubServiceRespectsLimit() async throws {
+        let stub = StubHealthKitImportService()
+        let fetched = try await stub.fetchRecentWorkouts(
+            since: Date.distantPast,
+            limit: 2
+        )
+        #expect(fetched.count == 2)
+    }
+
+    @Test func stubServiceFiltersBySinceDate() async throws {
+        let stub = StubHealthKitImportService()
+        // Fixtures span roughly the last 10 days; filter to last 2 days.
+        let fetched = try await stub.fetchRecentWorkouts(
+            since: Date().addingTimeInterval(-2 * 86400),
+            limit: 100
+        )
+        // At least the -1 day run fixture should survive; the 10-day elliptical should not.
+        #expect(fetched.contains(where: { $0.id == "stub-run-1" }))
+        #expect(!fetched.contains(where: { $0.id == "stub-elliptical-1" }))
+    }
+
+    @Test func stubServiceReturnsNewestFirst() async throws {
+        let stub = StubHealthKitImportService()
+        let fetched = try await stub.fetchRecentWorkouts(
+            since: Date.distantPast,
+            limit: 100
+        )
+        let dates = fetched.map { $0.startDate }
+        #expect(dates == dates.sorted(by: >))
+    }
 }

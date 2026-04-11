@@ -155,7 +155,8 @@ enum WorkoutCSV {
     }
 
     /// Converts a parsed row to a `Workout`, applying the distance unit
-    /// conversion to produce the internal miles storage value.
+    /// conversion to produce the internal miles storage value. Tags the
+    /// resulting workout with `source = WorkoutSource.csv` for provenance.
     static func toWorkout(_ row: WorkoutCSVRow, unit: WorkoutCSVDistanceUnit) -> Workout {
         Workout(
             name: row.name,
@@ -164,7 +165,8 @@ enum WorkoutCSV {
             distanceMiles: unit.toMiles(row.distance),
             notes: row.notes,
             date: row.date,
-            feltRating: row.feltRating
+            feltRating: row.feltRating,
+            source: WorkoutSource.csv.rawValue
         )
     }
 

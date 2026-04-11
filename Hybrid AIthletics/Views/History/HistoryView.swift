@@ -27,6 +27,10 @@ struct HistoryView: View {
     @State private var importUnit: WorkoutCSVDistanceUnit = .miles
     @State private var errorMessage: String?
 
+    // MARK: HealthKit Import state
+
+    @State private var isHealthKitImporterPresented = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -50,6 +54,11 @@ struct HistoryView: View {
                             isImporterPresented = true
                         } label: {
                             Label("Import Workouts", systemImage: "square.and.arrow.down")
+                        }
+                        Button {
+                            isHealthKitImporterPresented = true
+                        } label: {
+                            Label("Import from Apple Health", systemImage: "heart.text.square")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -80,6 +89,9 @@ struct HistoryView: View {
                     onCancel: { pendingImport = nil },
                     onConfirm: { commitImport(pending.result) }
                 )
+            }
+            .sheet(isPresented: $isHealthKitImporterPresented) {
+                ImportHealthKitSheet()
             }
             .alert(
                 "Something went wrong",

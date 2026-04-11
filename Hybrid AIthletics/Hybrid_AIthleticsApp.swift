@@ -19,10 +19,15 @@ struct Hybrid_AIthleticsApp: App {
     /// package is not available, invocations throw `AICoachError.notImplemented`.
     private let aiCoach: AICoachService = MLXAICoachService()
 
+    /// Shared HealthKit import service. Backed by a real `HKHealthStore`,
+    /// used by the History tab's "Import from Apple Health" flow.
+    private let healthKitImport: HealthKitImportService = LiveHealthKitImportService()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(\.aiCoach, aiCoach)
+                .environment(\.healthKitImport, healthKitImport)
         }
         .modelContainer(sharedModelContainer)
     }
