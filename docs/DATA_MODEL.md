@@ -90,6 +90,8 @@ A Workout represents a **completed exercise session** — the user actually ran,
 | `feltRating` | `Int` | `0` | Subjective Rate of Perceived Exertion on a 1–10 scale recorded after the session (1 = brutal, 10 = amazing). A value of `0` means the user did not record a rating. Feeds the on-device AI Coach's training-load assessment — see [AI Coach Input](#ai-coach-input) below. |
 | `sourceExercise` | `Exercise?` | `nil` | Optional back-reference to the planned exercise this workout was recorded from. `nil` if the workout was logged independently. |
 
+**Editable surface:** All Workout fields except `source` and `externalID` are user-editable from the History tab via `WorkoutDetailSheet`. `source` and `externalID` are intentionally hidden because they are provenance/dedup metadata owned by the import pipeline (`WorkoutCSV`, HealthKit import) — mutating them would break dedup on re-import and corrupt import-status reporting. The mutation logic is factored out into a stateless `WorkoutEditor` helper (`Views/History/WorkoutDetailSheet.swift`) so the field mapping is unit-testable without instantiating a SwiftUI view.
+
 **Factory method: `Workout.draft(from:)`**
 
 Creates a new Workout pre-filled from an Exercise template. This is the entry point when a user taps "Record Workout" on a planned exercise. The draft copies `name`, `type`, `durationSeconds`, and `distanceMiles` from the exercise, sets `sourceExercise` to establish the relationship, and leaves `notes` empty and `feltRating` at `0` (the user provides fresh notes and a rating for each workout). The user can edit every field before saving.

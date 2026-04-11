@@ -36,12 +36,17 @@ struct RecordWorkoutSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                nameAndTypeSection
-                durationSection
-                distanceSection
-                dateSection
-                notesSection
-                feltRatingSection
+                WorkoutFormFields(
+                    name: $name,
+                    type: $type,
+                    hours: $hours,
+                    minutes: $minutes,
+                    seconds: $seconds,
+                    distance: $distance,
+                    date: $workoutDate,
+                    notes: $notes,
+                    feltRating: $feltRating
+                )
             }
             .navigationTitle("Record Workout")
             .navigationBarTitleDisplayMode(.inline)
@@ -55,79 +60,6 @@ struct RecordWorkoutSheet: View {
                 }
             }
             .onAppear { populateFromExercise() }
-        }
-    }
-
-    // MARK: - Form Sections
-
-    /// Name and exercise type picker.
-    private var nameAndTypeSection: some View {
-        Section {
-            TextField("Workout Name", text: $name)
-            Picker("Type", selection: $type) {
-                ForEach(ExerciseType.allCases) { exerciseType in
-                    Label(exerciseType.rawValue, systemImage: exerciseType.systemImage)
-                        .tag(exerciseType)
-                }
-            }
-        }
-    }
-
-    /// Duration pickers for hours, minutes, seconds.
-    private var durationSection: some View {
-        Section("Duration") {
-            HStack {
-                Picker("Hours", selection: $hours) {
-                    ForEach(0..<24) { Text("\($0)h").tag($0) }
-                }
-                .pickerStyle(.wheel)
-                .frame(maxWidth: .infinity)
-                Picker("Minutes", selection: $minutes) {
-                    ForEach(0..<60) { Text("\($0)m").tag($0) }
-                }
-                .pickerStyle(.wheel)
-                .frame(maxWidth: .infinity)
-                Picker("Seconds", selection: $seconds) {
-                    ForEach(0..<60) { Text("\($0)s").tag($0) }
-                }
-                .pickerStyle(.wheel)
-                .frame(maxWidth: .infinity)
-            }
-            .frame(height: 120)
-        }
-    }
-
-    /// Distance input field.
-    private var distanceSection: some View {
-        Section("Distance") {
-            HStack {
-                TextField("0.0", value: $distance, format: .number.precision(.fractionLength(1)))
-                    .keyboardType(.decimalPad)
-                Text(useMetricUnits ? "km" : "mi")
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    /// Date and time picker for when the workout was performed.
-    private var dateSection: some View {
-        Section("Date & Time") {
-            DatePicker("When", selection: $workoutDate)
-        }
-    }
-
-    /// Notes text field.
-    private var notesSection: some View {
-        Section("Notes") {
-            TextField("How did it go?", text: $notes, axis: .vertical)
-                .lineLimit(3...6)
-        }
-    }
-
-    /// Subjective 1–10 effort rating that feeds the AI coach's load assessment.
-    private var feltRatingSection: some View {
-        Section("How did it feel?") {
-            FeltRatingPicker(value: $feltRating)
         }
     }
 

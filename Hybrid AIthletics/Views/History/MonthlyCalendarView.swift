@@ -3,24 +3,25 @@
 //  Hybrid AIthletics
 //
 //  A month-grid calendar that shows colored dots on days with recorded workouts.
-//  Tapping a day with workouts shows a detail popover.
+//  Tapping a day with workouts invokes `onDayTap(day)` so the parent view can
+//  navigate to that workout in the list below.
 //
 
 import SwiftUI
 import SwiftData
 
-/// Displays a monthly calendar grid with workout indicators and day-tap popovers.
+/// Displays a monthly calendar grid with workout indicators.
+///
+/// Tapping a day that contains at least one workout invokes `onDayTap(day)`.
+/// The parent (`HistoryView`) is responsible for translating that into a
+/// `WorkoutNavigationRequest` for `WorkoutListView`.
 struct MonthlyCalendarView: View {
     /// The month currently being displayed.
     @Binding var selectedMonth: Date
     /// All recorded workouts (filtered by caller or unfiltered).
     let workouts: [Workout]
-    @Environment(\.useMetricUnits) private var useMetricUnits
-
-    /// The day selected for the detail popover.
-    @State private var selectedDay: Date?
-    /// Whether the detail popover is showing.
-    @State private var showPopover = false
+    /// Invoked when the user taps a day that has at least one workout.
+    let onDayTap: (Date) -> Void
 
     /// Weekday header labels.
     private let weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -34,16 +35,6 @@ struct MonthlyCalendarView: View {
             calendarGrid
         }
         .padding(.horizontal)
-        .popover(isPresented: $showPopover) {
-            if let day = selectedDay {
-                DayDetailPopover(
-                    day: day,
-                    workouts: workoutsForDay(day),
-                    useMetricUnits: useMetricUnits
-                )
-                .presentationCompactAdaptation(.popover)
-            }
-        }
     }
 
     /// Header with month/year and navigation arrows.
@@ -91,13 +82,14 @@ struct MonthlyCalendarView: View {
                     workouts: workoutsForDay(day),
                     isToday: day.isSameDay(as: Date())
                 )
+                .contentShape(RoundedRectangle(cornerRadius: 6))
                 .onTapGesture {
                     let dayWorkouts = workoutsForDay(day)
                     if !dayWorkouts.isEmpty {
-                        selectedDay = day
-                        showPopover = true
+                        onDayTap(day)
                     }
                 }
+                .accessibilityIdentifier("calendarDay.\(Self.dayIdentifier(for: day))")
             }
         }
     }
@@ -112,6 +104,18 @@ struct MonthlyCalendarView: View {
         if let newMonth = Calendar.current.date(byAdding: .month, value: value, to: selectedMonth) {
             selectedMonth = newMonth
         }
+    }
+
+    /// Stable "yyyy-MM-dd" identifier for accessibility.
+    private static let dayIdentifierFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    private static func dayIdentifier(for day: Date) -> String {
+        dayIdentifierFormatter.string(from: day)
     }
 }
 
@@ -149,37 +153,11 @@ private struct DayCell: View {
     }
 }
 
-/// Popover showing workout details for a selected day.
-private struct DayDetailPopover: View {
-    let day: Date
-    let workouts: [Workout]
-    let useMetricUnits: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(day, format: .dateTime.weekday(.wide).month(.abbreviated).day())
-                .font(.headline)
-            Divider()
-            ForEach(workouts) { workout in
-                HStack {
-                    Image(systemName: workout.type.systemImage)
-                        .foregroundStyle(workout.type.color)
-                    VStack(alignment: .leading) {
-                        Text(workout.name)
-                            .font(.subheadline.bold())
-                        Text("\(workout.distanceMiles.formattedDistance(metric: useMetricUnits)) - \(workout.durationSeconds.formattedDuration)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        .padding()
-        .frame(minWidth: 200)
-    }
-}
-
 #Preview {
-    MonthlyCalendarView(selectedMonth: .constant(Date()), workouts: [])
-        .modelContainer(ModelContainerFactory.makePreviewContainer())
+    MonthlyCalendarView(
+        selectedMonth: .constant(Date()),
+        workouts: [],
+        onDayTap: { _ in }
+    )
+    .modelContainer(ModelContainerFactory.makePreviewContainer())
 }

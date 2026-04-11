@@ -50,4 +50,24 @@ extension Int {
     var formattedDuration: String {
         Double(self).formattedDuration
     }
+
+    /// Formats this value (seconds of duration) as an average pace given a
+    /// distance in miles, in the user's preferred unit.
+    /// - Parameters:
+    ///   - distanceMiles: The distance the duration was covered over, in miles.
+    ///   - metric: If `true`, returns pace as minutes per kilometer; otherwise minutes per mile.
+    /// - Returns: A string like `"7:32 /mi"` or `"4:41 /km"`. Returns `"--"`
+    ///   when `distanceMiles` is zero or negative (e.g. strength workouts) or
+    ///   when the computation would be non-finite.
+    func formattedPace(distanceMiles: Double, metric: Bool) -> String {
+        guard distanceMiles > 0 else { return "--" }
+        let distance = metric ? distanceMiles * milesToKm : distanceMiles
+        guard distance > 0 else { return "--" }
+        let secondsPerUnit = Double(self) / distance
+        guard secondsPerUnit.isFinite else { return "--" }
+        let totalSeconds = Int(secondsPerUnit)
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%d:%02d /%@", minutes, seconds, metric ? "km" : "mi")
+    }
 }

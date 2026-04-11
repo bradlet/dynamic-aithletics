@@ -140,15 +140,62 @@ MLXAICoachService builds UserInput(chat:) with system/user roles →
 MLX generates response token by token → AICoachSheet appends chunks to responseText → UI updates live
 ```
 
+### Editing or deleting a recorded workout
+```
+User taps a row in WorkoutListView → the row's .sheet(item:) presents
+WorkoutDetailSheet with the Workout instance → @State fields seed from the
+workout in init(), distance converts to display units in .onAppear (since
+@Environment isn't available during init) → WorkoutFormFields renders the
+same form sections RecordWorkoutSheet uses → User edits → Save calls
+WorkoutEditor.apply(_:to:), mutating fields directly on the Workout → SwiftData
+auto-persists → @Query in HistoryView fires → list refreshes → sheet dismisses.
+
+Delete path: Delete Workout button → confirmationAlert → "Delete" tapped →
+performDelete() calls modelContext.delete(workout) then modelContext.save() to
+flush before @Query re-evaluates → dismiss. Under the `-uiTestSeed` launch
+argument, the alert is bypassed because SwiftUI's nested alert button
+structure is not reliably driveable via XCUIApplication — UI tests call
+performDelete() directly, and the alert's functional correctness is covered
+by unit tests over WorkoutEditor + modelContext.delete.
+```
+
+### Navigating from calendar to workout list
+```
+User taps a calendar day with workouts → MonthlyCalendarView invokes
+onDayTap(day) → HistoryView resolves the first (most-recent) Workout for
+that day from its @Query result and constructs a fresh
+WorkoutNavigationRequest(workoutID:) (new UUID id per tap so repeat taps
+still fire .onChange) → WorkoutListView.onChange computes the target page
+index via WorkoutListPagination.pageIndex(forItemAt:pageSize:), animates
+currentPage, sets highlightedID → ~2.5s later, a background Task clears
+highlightedID with an ease-in-out animation.
+```
+
 ## Testing
 
 Unit tests cover:
 - **Models**: persistence, relationships, factory methods, date normalization, repeat flag, felt-rating default and persistence
-- **Extensions**: date arithmetic (week boundaries, month boundaries, same-day/week/month checks), distance formatting, duration formatting
+- **Extensions**: date arithmetic (week boundaries, month boundaries, same-day/week/month checks), distance formatting, duration formatting, **pace formatting** (metric/imperial, zero-distance fallback, truncation behavior)
 - **Types**: ExerciseType codable round-trip, identifiable conformance
 - **Drag items**: ExerciseDragItem codable round-trip
 - **Repeat**: isRepeating default value, init parameter, persistence, day-of-week matching
 - **AI Coach**: type conversion tests (SwiftData → AICoachCore), `StubAICoachService` response and streaming
 - **AICoachCore package tests** (separate target): prompt builder formatting (RPE inclusion, notes handling, unit respect, ordering, empty inputs), distance/duration formatting, generation config codable round-trip
+- **Workout list pagination**: pure-math helpers in `WorkoutListPagination` (page index boundaries, total page counts, empty-state handling)
+- **Workout detail edit**: `WorkoutEditor.apply(_:to:)` rewrites all mutable fields, preserves id + import metadata (`source`, `externalID`), and `modelContext.delete` scopes correctly
 
-App tests use `ModelContainerFactory.makePreviewContainer()` for isolated in-memory SwiftData contexts. The MLX-backed coach is never exercised in unit tests — all coach tests run against `StubAICoachService`. Prompt builder tests live in the `AICoachCore` package and use plain structs, not SwiftData models.
+App tests use `ModelContainerFactory.makePreviewContainer()` for isolated in-memory SwiftData contexts. Tests that touch a context should construct a detached `ModelContext(container)` rather than using `container.mainContext`, which is `@MainActor`-isolated and crashes under Swift Testing's parallel execution. The MLX-backed coach is never exercised in unit tests — all coach tests run against `StubAICoachService`. Prompt builder tests live in the `AICoachCore` package and use plain structs, not SwiftData models.
+
+### Functional UI tests
+
+`Hybrid AIthleticsUITests/HistoryUITests.swift` (XCTest + `XCUIApplication`; Swift Testing doesn't integrate with XCUI) validates the History tab end-to-end:
+
+- First-page rendering (10 rows), prev/next button enablement at page boundaries
+- Forward/backward page navigation via `workoutList.prevPage` / `workoutList.nextPage` identifiers
+- Last-page disable behavior and partial-page rendering
+- Calendar day tap → workout list focus (tap-today keeps page 1 and highlights the row)
+- Workout row tap → `WorkoutDetailSheet` presents with the shared form fields
+- Edit flow: mutate name → save → row label updates
+- Delete flow: tap Delete Workout → row removed → pagination clamp
+
+Tests launch the app with `-uiTestSeed` which switches to `makePreviewContainer()` (no CloudKit, no persistent state) and seeds 25 deterministic workouts via `Config/UITestFixtures.swift`. This gives 3 pages at 10 per page, enough to exercise all pagination boundaries. Rows and controls carry stable `.accessibilityIdentifier` strings (`workoutRow.<uuid>`, `workoutList.pageLabel`, `workoutForm.nameField`, `workoutDetail.saveButton`, `workoutDetail.deleteButton`, `calendarDay.yyyy-MM-dd`). The delete path's confirmation alert is bypassed in UI test mode because SwiftUI's nested alert button tree breaks XCUI automation — the alert is still shown to real users, and its functional correctness is covered by unit tests over `WorkoutEditor`.

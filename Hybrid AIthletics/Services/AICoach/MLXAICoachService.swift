@@ -152,14 +152,6 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
         )
     }
 
-    /// Builds a `UserInput` with proper system/user role separation.
-    private func makeUserInput(for request: CoachingRequest) -> UserInput {
-        UserInput(chat: [
-            .system(AICoachPromptBuilder.systemPreamble),
-            .user(AICoachPromptBuilder.buildUserContent(for: request)),
-        ])
-    }
-
     /// Loads (or downloads) the model and runs generation to completion.
     ///
     /// Uses the non-deprecated `AsyncStream<Generation>` overload of
@@ -171,8 +163,14 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
     private func generate(request: CoachingRequest) async throws -> String {
         let container = try await getContainer()
         let parameters = makeParameters()
-        let userInput = makeUserInput(for: request)
+        // Capture only `Sendable` values (`request`, `parameters`) in the
+        // perform closure. `UserInput` is non-Sendable, so build it inside
+        // the closure rather than capturing it from the outer scope.
         return try await container.perform { context in
+            let userInput = UserInput(chat: [
+                .system(AICoachPromptBuilder.systemPreamble),
+                .user(AICoachPromptBuilder.buildUserContent(for: request)),
+            ])
             let input = try await context.processor.prepare(input: userInput)
             let stream = try MLXLMCommon.generate(
                 input: input,
@@ -196,8 +194,13 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
     ) async throws {
         let container = try await getContainer()
         let parameters = makeParameters()
-        let userInput = makeUserInput(for: request)
+        // As in `generate(request:)`, construct the non-Sendable `UserInput`
+        // inside the perform closure so it isn't captured across actor hops.
         try await container.perform { context in
+            let userInput = UserInput(chat: [
+                .system(AICoachPromptBuilder.systemPreamble),
+                .user(AICoachPromptBuilder.buildUserContent(for: request)),
+            ])
             let input = try await context.processor.prepare(input: userInput)
             let stream = try MLXLMCommon.generate(
                 input: input,

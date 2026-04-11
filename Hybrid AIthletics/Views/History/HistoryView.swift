@@ -18,6 +18,11 @@ struct HistoryView: View {
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
     @State private var selectedMonth: Date = Date()
 
+    /// Drives `WorkoutListView` to jump to a specific workout's page and
+    /// highlight it briefly. A new request (fresh `id`) is constructed on
+    /// every calendar day tap so repeat taps still fire the observer.
+    @State private var navigationRequest: WorkoutNavigationRequest?
+
     // MARK: CSV Import/Export state
 
     @State private var exportDocument: WorkoutCSVDocument?
@@ -36,7 +41,11 @@ struct HistoryView: View {
             ScrollView {
                 LazyVStack(spacing: 20) {
                     SummaryStatsView(workouts: allWorkouts)
-                    MonthlyCalendarView(selectedMonth: $selectedMonth, workouts: allWorkouts)
+                    MonthlyCalendarView(
+                        selectedMonth: $selectedMonth,
+                        workouts: allWorkouts,
+                        onDayTap: handleCalendarDayTap
+                    )
                     workoutListSection
                 }
                 .padding(.vertical)
@@ -114,8 +123,23 @@ struct HistoryView: View {
             Text("Recent Workouts")
                 .font(.headline)
                 .padding(.horizontal)
-            WorkoutListView(workouts: allWorkouts)
+            WorkoutListView(
+                workouts: allWorkouts,
+                navigationRequest: navigationRequest
+            )
         }
+    }
+
+    // MARK: Calendar navigation
+
+    /// Translates a calendar day tap into a navigation request for the
+    /// workout list. Since `allWorkouts` is sorted descending by date, the
+    /// first match on a day is the most recent workout for that day.
+    private func handleCalendarDayTap(_ day: Date) {
+        guard let match = allWorkouts.first(where: { $0.date.isSameDay(as: day) }) else {
+            return
+        }
+        navigationRequest = WorkoutNavigationRequest(workoutID: match.id)
     }
 
     // MARK: Export

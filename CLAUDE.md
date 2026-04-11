@@ -11,6 +11,9 @@ xcodebuild -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator,name
 # Run app unit tests
 xcodebuild test -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:"Hybrid AIthleticsTests"
 
+# Run History tab functional UI tests
+xcodebuild test -scheme "Hybrid AIthletics" -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:"Hybrid AIthleticsUITests/HistoryUITests"
+
 # Run AICoachCore package tests
 cd Packages/AICoachCore && swift test
 
@@ -41,6 +44,8 @@ cd Evals && swift run CoachEval inspect --scenario high-rpe --prompt-mode chat
 - New prompt/serialization logic → test each output field, metric/imperial variants, omission conditions.
 - Prompt builder tests live in `Packages/AICoachCore/Tests/AICoachCoreTests/PromptBuilderTests.swift`.
 - App-level tests live in `Hybrid AIthleticsTests/Hybrid_AIthleticsTests.swift`, grouped by `struct` with a `// MARK:` header.
+- Functional UI tests for multi-step flows live in `Hybrid AIthleticsUITests/` using `XCTest` + `XCUIApplication` (UI tests stay on XCTest because Swift Testing doesn't integrate with XCUI). They launch the app with `-uiTestSeed` to install an in-memory container + deterministic fixtures via `Config/UITestFixtures.swift`. Add new identifiers via `.accessibilityIdentifier(...)` when introducing testable controls.
+- SwiftData tests that touch a `ModelContext` should use `ModelContext(container)` rather than `container.mainContext` — `mainContext` is `@MainActor`-isolated and crashes under Swift Testing's parallel execution.
 - Do not ship a feature without at least one test per public method.
 
 ## Conventions
@@ -55,11 +60,15 @@ Packages/
   AICoachCore/   Shared library: prompt builder, coaching types, formatters, GenerationConfig
 Evals/           AI coach eval CLI + Python eval runner
 Models/          Data models and enums
-Config/          ModelContainer, environment keys (units, aiCoach)
-Extensions/      Date+Week, Double+Distance
+Config/          ModelContainer, environment keys (units, aiCoach), UITestFixtures
+Extensions/      Date+Week, Double+Distance (distance, duration, pace formatting)
 Services/
   AICoach/       Protocol, MLX implementation, stub, type conversions
-Views/           Grouped by tab: AerobicTraining/, Strength/, History/
+Views/
+  AerobicTraining/  Training tab
+  History/          History tab (calendar, workout list, detail sheet)
+  Strength/         Strength tab
+  Shared/           Cross-tab building blocks (e.g. WorkoutFormFields)
 ```
 
 ## Key Files
@@ -67,8 +76,13 @@ Views/           Grouped by tab: AerobicTraining/, Strength/, History/
 - `Packages/AICoachCore/Sources/AICoachCore/GenerationConfig.swift` — single source of truth for LLM generation parameters
 - `Config/ModelContainerFactory.swift` — single place for container/CloudKit config
 - `Config/AICoachEnvironment.swift` — `@Environment(\.aiCoach)` key; default is `StubAICoachService`
+- `Config/UITestFixtures.swift` — deterministic fixture seed activated by `-uiTestSeed` launch arg
 - `Extensions/Date+Week.swift` — all calendar arithmetic
+- `Extensions/Double+Distance.swift` — distance, duration, and pace formatting (`Int.formattedPace(distanceMiles:metric:)` for min/mile and min/km)
 - `Models/ExerciseType.swift` — exercise type enum with icons and colors
 - `Services/AICoach/AICoachService.swift` — protocol + `AICoachError` enum
 - `Services/AICoach/MLXAICoachService.swift` — production coach; swap model via `modelID` constant
 - `Services/AICoach/CoachTypeConversions.swift` — SwiftData → AICoachCore type bridge
+- `Views/Shared/WorkoutFormFields.swift` — reusable workout form sections shared by `RecordWorkoutSheet` (create) and `WorkoutDetailSheet` (edit)
+- `Views/History/WorkoutDetailSheet.swift` — edit + delete popup for a recorded workout; contains the `WorkoutEditor` helper enum that owns the mutation path (unit-tested)
+- `Views/History/WorkoutListView.swift` — discrete 10-per-page pagination, tappable rows, calendar-driven navigation/highlight, `WorkoutListPagination` helper for testable page math

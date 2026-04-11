@@ -967,3 +967,215 @@ struct HealthKitImportTests {
         #expect(dates == dates.sorted(by: >))
     }
 }
+
+// MARK: - Pace Formatting Tests
+
+struct PaceFormattingTests {
+
+    @Test func imperialSixMinuteMile() {
+        // 5 miles in 30 min → 6:00 /mi
+        #expect(1800.formattedPace(distanceMiles: 5.0, metric: false) == "6:00 /mi")
+    }
+
+    @Test func metricConvertsCorrectly() {
+        // 5 miles = 8.0467 km; 1800 / 8.0467 ≈ 223.69 s/km → 3:43 /km
+        let result = 1800.formattedPace(distanceMiles: 5.0, metric: true)
+        #expect(result == "3:43 /km")
+    }
+
+    @Test func zeroDistanceReturnsDash() {
+        #expect(1800.formattedPace(distanceMiles: 0.0, metric: false) == "--")
+        #expect(1800.formattedPace(distanceMiles: 0.0, metric: true) == "--")
+    }
+
+    @Test func negativeDistanceReturnsDash() {
+        #expect(1800.formattedPace(distanceMiles: -1.0, metric: false) == "--")
+    }
+
+    @Test func slowPaceTwoDigitMinutes() {
+        // 1 mile in 720 seconds → 12:00 /mi
+        #expect(720.formattedPace(distanceMiles: 1.0, metric: false) == "12:00 /mi")
+    }
+
+    @Test func fractionalSecondsTruncateDownward() {
+        // 1 mile in 365 seconds → 6:05 /mi (not 6:06 — floor, not round)
+        #expect(365.formattedPace(distanceMiles: 1.0, metric: false) == "6:05 /mi")
+    }
+
+    @Test func paddingIsTwoDigits() {
+        // 2 miles in 720 seconds → 6:00 /mi (zero padded seconds)
+        #expect(720.formattedPace(distanceMiles: 2.0, metric: false) == "6:00 /mi")
+        // 1 mile in 365s → 6:05 — validates leading zero on seconds
+        #expect(365.formattedPace(distanceMiles: 1.0, metric: false) == "6:05 /mi")
+    }
+}
+
+// MARK: - Workout List Pagination Tests
+
+struct WorkoutListPaginationTests {
+
+    @Test func pageIndexForFirstItemIsZero() {
+        #expect(WorkoutListPagination.pageIndex(forItemAt: 0, pageSize: 10) == 0)
+    }
+
+    @Test func pageIndexBoundaryAtPageSize() {
+        // Index 10 is the first item of the second page (zero-indexed: page 1).
+        #expect(WorkoutListPagination.pageIndex(forItemAt: 10, pageSize: 10) == 1)
+    }
+
+    @Test func pageIndexLastItemOnFirstPage() {
+        #expect(WorkoutListPagination.pageIndex(forItemAt: 9, pageSize: 10) == 0)
+    }
+
+    @Test func pageIndexDeepPage() {
+        // Index 57, pageSize 10 → page 5 (items 50-59).
+        #expect(WorkoutListPagination.pageIndex(forItemAt: 57, pageSize: 10) == 5)
+    }
+
+    @Test func pageIndexDefensiveNegative() {
+        // Defensive: negative index floors to page 0.
+        #expect(WorkoutListPagination.pageIndex(forItemAt: -3, pageSize: 10) == 0)
+    }
+
+    @Test func totalPagesEmpty() {
+        // Empty state still renders as one page.
+        #expect(WorkoutListPagination.totalPages(count: 0, pageSize: 10) == 1)
+    }
+
+    @Test func totalPagesExactMultiple() {
+        #expect(WorkoutListPagination.totalPages(count: 20, pageSize: 10) == 2)
+    }
+
+    @Test func totalPagesRemainder() {
+        #expect(WorkoutListPagination.totalPages(count: 23, pageSize: 10) == 3)
+    }
+
+    @Test func totalPagesSmallerThanPage() {
+        #expect(WorkoutListPagination.totalPages(count: 3, pageSize: 10) == 1)
+    }
+
+    @Test func totalPagesSingleFullPage() {
+        #expect(WorkoutListPagination.totalPages(count: 10, pageSize: 10) == 1)
+    }
+}
+
+// MARK: - Workout Detail Edit Tests
+
+struct WorkoutDetailEditTests {
+
+    /// Creates a fresh in-memory context for each test. Follows the same
+    /// pattern as `ExerciseModelTests` — a detached `ModelContext` so tests
+    /// don't touch `container.mainContext` (which is `@MainActor`-isolated
+    /// and incompatible with Swift Testing's parallel execution).
+    private func makeContext() -> ModelContext {
+        let container = ModelContainerFactory.makePreviewContainer()
+        return ModelContext(container)
+    }
+
+    @Test func applyRewritesAllMutableFields() throws {
+        let context = makeContext()
+        let workout = Workout(
+            name: "Original",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            notes: "original notes",
+            date: Date(timeIntervalSince1970: 1_700_000_000),
+            feltRating: 4
+        )
+        context.insert(workout)
+
+        let newDate = Date(timeIntervalSince1970: 1_710_000_000)
+        let edits = WorkoutEditor.EditedValues(
+            name: "Edited Name",
+            type: .tempoRun,
+            durationSeconds: 2700,
+            distanceMiles: 6.2,
+            date: newDate,
+            notes: "edited notes",
+            feltRating: 9
+        )
+        WorkoutEditor.apply(edits, to: workout)
+
+        #expect(workout.name == "Edited Name")
+        #expect(workout.type == .tempoRun)
+        #expect(workout.durationSeconds == 2700)
+        #expect(workout.distanceMiles == 6.2)
+        #expect(workout.date == newDate)
+        #expect(workout.notes == "edited notes")
+        #expect(workout.feltRating == 9)
+    }
+
+    @Test func applyPreservesIdAndImportMetadata() throws {
+        let context = makeContext()
+        let workout = Workout(
+            name: "Imported",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            source: WorkoutSource.appleHealth.rawValue,
+            externalID: "hk-abc-123"
+        )
+        context.insert(workout)
+        let originalID = workout.id
+
+        let edits = WorkoutEditor.EditedValues(
+            name: "Renamed",
+            type: .easyRun,
+            durationSeconds: 2400,
+            distanceMiles: 4.0,
+            date: Date(),
+            notes: "",
+            feltRating: 6
+        )
+        WorkoutEditor.apply(edits, to: workout)
+
+        #expect(workout.id == originalID)
+        #expect(workout.source == WorkoutSource.appleHealth.rawValue)
+        #expect(workout.externalID == "hk-abc-123")
+    }
+
+    @Test func deleteRemovesWorkoutFromContext() throws {
+        let context = makeContext()
+        let workout = Workout(
+            name: "Doomed",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0
+        )
+        context.insert(workout)
+        try context.save()
+
+        context.delete(workout)
+        try context.save()
+
+        let remaining = try context.fetch(FetchDescriptor<Workout>())
+        #expect(remaining.isEmpty)
+    }
+
+    @Test func deleteLeavesOtherWorkoutsIntact() throws {
+        let context = makeContext()
+        let keep = Workout(name: "Keep me", type: .run, durationSeconds: 1800, distanceMiles: 3.0)
+        let remove = Workout(name: "Remove me", type: .bike, durationSeconds: 3600, distanceMiles: 10.0)
+        context.insert(keep)
+        context.insert(remove)
+        try context.save()
+
+        context.delete(remove)
+        try context.save()
+
+        let remaining = try context.fetch(FetchDescriptor<Workout>())
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.name == "Keep me")
+    }
+
+    @Test func metricDistanceConversionRoundTrip() {
+        // Simulate what WorkoutDetailSheet.save() does: user entered 10.0 km,
+        // we convert to miles for storage, and reading it back via
+        // `toDisplayDistance(metric: true)` should give us back ~10.0 km.
+        let kmInput = 10.0
+        let milesStored = kmInput / 1.60934
+        let kmDisplayed = milesStored.toDisplayDistance(metric: true)
+        #expect(abs(kmDisplayed - kmInput) < 0.0001)
+    }
+}
