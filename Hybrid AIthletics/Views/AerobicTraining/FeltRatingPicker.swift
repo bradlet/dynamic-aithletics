@@ -109,7 +109,7 @@ struct FeltRatingPicker: View {
     private func dot(for index: Int) -> some View {
         let isSelected = index == value
         let isActive = value != 0 && index <= value
-        let tint = tint(for: index)
+        let tint = FeltRatingVisuals.tint(for: index)
 
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.65)) {
@@ -171,25 +171,15 @@ struct FeltRatingPicker: View {
     }
 
     /// Face symbol morphs across three expression tiers, plus unset.
+    /// Delegates to `FeltRatingVisuals` so the display stat card in
+    /// `SummaryStatsView` renders an identical face for the same rating.
     private var faceSymbol: String {
-        switch value {
-        case 0:      return "face.dashed"
-        case 1...4:  return "face.dashed"           // struggle (red tint carries meaning)
-        case 5...7:  return "face.smiling"          // steady
-        case 8...10: return "face.smiling.inverse"  // triumph
-        default:     return "face.dashed"
-        }
+        FeltRatingVisuals.symbolName(for: value)
     }
 
+    /// Red → amber → green ramp, shared with the "Feeling like" stat card.
     private var currentTint: Color {
-        value == 0 ? .secondary : tint(for: value)
-    }
-
-    /// Red → amber → green ramp for index 1...10, via HSB interpolation.
-    private func tint(for index: Int) -> Color {
-        let clamped = Double(max(1, min(10, index)) - 1) / 9.0  // 0...1
-        let hue: Double = 0.0 + (0.37 * clamped)                // ~red → ~green
-        return Color(hue: hue, saturation: 0.78, brightness: 0.92)
+        FeltRatingVisuals.tint(for: value)
     }
 }
 

@@ -40,7 +40,7 @@ struct HistoryView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 20) {
-                    SummaryStatsView(workouts: allWorkouts)
+                    PerformanceHubView(workouts: allWorkouts)
                     MonthlyCalendarView(
                         selectedMonth: $selectedMonth,
                         workouts: allWorkouts,

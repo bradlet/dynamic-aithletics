@@ -1179,3 +1179,214 @@ struct WorkoutDetailEditTests {
         #expect(abs(kmDisplayed - kmInput) < 0.0001)
     }
 }
+
+// MARK: - WorkoutAggregations Tests
+
+struct WorkoutAggregationsTests {
+
+    /// Builds a deterministic date; hour defaults to midday so boundary
+    /// tests that need a specific time-of-day can override it explicitly.
+    private func makeDate(year: Int, month: Int, day: Int, hour: Int = 12, minute: Int = 0, second: Int = 0) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        components.hour = hour
+        components.minute = minute
+        components.second = second
+        return Calendar.current.date(from: components)!
+    }
+
+    /// Constructs a `Workout` directly (no ModelContext) for pure-logic tests.
+    private func makeWorkout(date: Date, miles: Double, felt: Int = 0) -> Workout {
+        Workout(
+            name: "test",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: miles,
+            date: date,
+            feltRating: felt
+        )
+    }
+
+    // 2026-04-08 is a Wednesday; its Monday is 2026-04-06.
+    private var anchorWednesday: Date { makeDate(year: 2026, month: 4, day: 8) }
+
+    @Test func weeklyMileageReturnsAllWeeksEvenWhenEmpty() {
+        let points = WorkoutAggregations.weeklyMileage(
+            workouts: [],
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.count == 4)
+        #expect(points.allSatisfy { $0.value == 0 })
+        // Chronological order: strictly increasing weekStart.
+        let starts = points.map(\.weekStart)
+        #expect(starts == starts.sorted())
+    }
+
+    @Test func weeklyMileageBucketsWorkoutsIntoCorrectWeek() {
+        // Current week (Mon Apr 6 – Sun Apr 12): workout on Mon Apr 6 = 5.0 mi
+        // Previous week (Mar 30 – Apr 5): workout on Sun Apr 5 = 3.0 mi
+        let workouts = [
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 6), miles: 5.0),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 5), miles: 3.0)
+        ]
+        let points = WorkoutAggregations.weeklyMileage(
+            workouts: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.count == 4)
+        #expect(points.last?.value == 5.0)
+        #expect(points[points.count - 2].value == 3.0)
+        #expect(points[0].value == 0)
+        #expect(points[1].value == 0)
+    }
+
+    @Test func weeklyMileageSumsMultipleWorkoutsInSameWeek() {
+        // Tue Apr 7 and Thu Apr 9 both in the week containing the Wednesday anchor.
+        let workouts = [
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 7), miles: 4.0),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 9), miles: 6.5)
+        ]
+        let points = WorkoutAggregations.weeklyMileage(
+            workouts: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.last?.value == 10.5)
+    }
+
+    @Test func weeklyMileageIgnoresWorkoutsOutsideWindow() {
+        // January workout should not land in April's 4-week window.
+        let workouts = [
+            makeWorkout(date: makeDate(year: 2026, month: 1, day: 15), miles: 99.0)
+        ]
+        let points = WorkoutAggregations.weeklyMileage(
+            workouts: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.allSatisfy { $0.value == 0 })
+    }
+
+    @Test func weeklyAverageFeltRatingExcludesZeroRatings() {
+        // Three workouts in the current week rated 6, 8, 0 → avg = 7.0 (not 4.67).
+        let workouts = [
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, felt: 6),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, felt: 8),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, felt: 0)
+        ]
+        let points = WorkoutAggregations.weeklyAverageFeltRating(
+            workouts: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.last?.value == 7.0)
+    }
+
+    @Test func weeklyAverageFeltRatingEmptyWeekIsZero() {
+        let points = WorkoutAggregations.weeklyAverageFeltRating(
+            workouts: [],
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.count == 4)
+        #expect(points.allSatisfy { $0.value == 0 })
+    }
+
+    @Test func weeklyAverageFeltRatingWeekWithOnlyUnratedIsZero() {
+        // Two workouts in the current week, both feltRating = 0 — must not NaN or crash.
+        let workouts = [
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, felt: 0),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, felt: 0)
+        ]
+        let points = WorkoutAggregations.weeklyAverageFeltRating(
+            workouts: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.last?.value == 0)
+    }
+
+    @Test func currentWeekMileageSumsWorkoutsInAnchorWeek() {
+        // Mon + Tue + Wed of the current week plus a workout on prior Sun (must be excluded).
+        let workouts = [
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 6), miles: 2.0),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 8), miles: 4.0),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 5), miles: 99.0) // previous Sunday
+        ]
+        let total = WorkoutAggregations.currentWeekMileage(
+            workouts: workouts,
+            anchor: anchorWednesday
+        )
+        #expect(total == 9.0)
+    }
+
+    @Test func currentWeekMileageBoundaryMondayStart() {
+        // Anchor Monday at 00:00:00, workout at same instant — must count.
+        let monday = makeDate(year: 2026, month: 4, day: 6, hour: 0, minute: 0, second: 0)
+        let workouts = [makeWorkout(date: monday, miles: 5.0)]
+        let total = WorkoutAggregations.currentWeekMileage(
+            workouts: workouts,
+            anchor: monday
+        )
+        #expect(total == 5.0)
+    }
+
+    @Test func currentWeekMileageBoundarySundayEnd() {
+        // Sunday 23:59:59 workout is in the same week; Mon 00:00 of next week is not.
+        let sundayNight = makeDate(year: 2026, month: 4, day: 12, hour: 23, minute: 59, second: 59)
+        let nextMondayStart = makeDate(year: 2026, month: 4, day: 13, hour: 0, minute: 0, second: 0)
+        let workouts = [
+            makeWorkout(date: sundayNight, miles: 5.0),
+            makeWorkout(date: nextMondayStart, miles: 99.0)
+        ]
+        let total = WorkoutAggregations.currentWeekMileage(
+            workouts: workouts,
+            anchor: sundayNight
+        )
+        #expect(total == 5.0)
+    }
+
+    @Test func currentWeekAverageFeltRatingReturnsNilWhenNoRated() {
+        let workouts = [
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, felt: 0),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, felt: 0)
+        ]
+        let avg = WorkoutAggregations.currentWeekAverageFeltRating(
+            workouts: workouts,
+            anchor: anchorWednesday
+        )
+        #expect(avg == nil)
+    }
+
+    @Test func currentWeekAverageFeltRatingAveragesOnlyRated() {
+        // 5, 7, 0 → 6.0, not 4.0.
+        let workouts = [
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, felt: 5),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, felt: 7),
+            makeWorkout(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, felt: 0)
+        ]
+        let avg = WorkoutAggregations.currentWeekAverageFeltRating(
+            workouts: workouts,
+            anchor: anchorWednesday
+        )
+        #expect(avg == 6.0)
+    }
+
+    @Test func weeklyBucketsOrderingIsChronological() {
+        let buckets = WorkoutAggregations.weeklyBuckets(
+            workouts: [],
+            weekCount: 6,
+            anchor: anchorWednesday
+        )
+        #expect(buckets.count == 6)
+        let starts = buckets.map(\.weekStart)
+        for i in 1..<starts.count {
+            #expect(starts[i] > starts[i - 1])
+        }
+    }
+}
