@@ -4,3 +4,6 @@ Hybrid AIthletics/Resources/
 # Swift Package Manager build artifacts
 .build/
 
+# IDEs
+.vscode/
+

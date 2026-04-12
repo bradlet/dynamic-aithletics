@@ -9,6 +9,8 @@
 
 import Foundation
 
+let FR_RPE_MIDPOINT = 5
+
 /// Stateless helpers for building the prompt passed to the AI coach.
 public enum AICoachPromptBuilder {
 
@@ -97,8 +99,15 @@ public enum AICoachPromptBuilder {
         let distance = workout.distanceMiles.formattedDistance(metric: metric)
         let duration = workout.durationSeconds.formattedDuration
         var line = "- \(date) \(workout.type.rawValue), \(distance), \(duration)"
+        // "Felt rating" is the inverse of "Rate of perceive exertion" (RPE)
+        // FR 1 == RPE 10
+        // FR 5 == RPE 5
+        let frDiffFromMidpoint = abs(workout.feltRating - FR_RPE_MIDPOINT)
+        let rpe = workout.feltRating > FR_RPE_MIDPOINT
+            ? FR_RPE_MIDPOINT - frDiffFromMidpoint
+            : FR_RPE_MIDPOINT + frDiffFromMidpoint
         if workout.feltRating > 0 {
-            line += ", RPE \(workout.feltRating)/10"
+            line += ", RPE \(rpe)/10"
         }
         let trimmedNotes = workout.notes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedNotes.isEmpty {
