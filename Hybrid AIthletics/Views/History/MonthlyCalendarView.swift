@@ -11,14 +11,14 @@ import SwiftUI
 
 /// Displays a monthly calendar grid with activity indicators.
 ///
-/// Tapping a day that contains at least one item invokes `onDayTap(day)`.
-/// The parent is responsible for translating that tap into navigation.
+/// Tapping any day invokes `onDayTap(day)`. The parent decides what
+/// to do (navigate to an existing item, open a scheduling sheet, etc.).
 struct MonthlyCalendarView: View {
     /// The month currently being displayed.
     @Binding var selectedMonth: Date
     /// Items to display as colored dots (workouts, exercises, or lightweight dots).
     let items: [any CalendarDisplayable]
-    /// Invoked when the user taps a day that has at least one item.
+    /// Invoked when the user taps any day in the calendar.
     let onDayTap: (Date) -> Void
 
     /// Weekday header labels.
@@ -82,10 +82,7 @@ struct MonthlyCalendarView: View {
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .onTapGesture {
-                    let dayItems = itemsForDay(day)
-                    if !dayItems.isEmpty {
-                        onDayTap(day)
-                    }
+                    onDayTap(day)
                 }
                 .accessibilityIdentifier("calendarDay.\(Self.dayIdentifier(for: day))")
             }

@@ -91,10 +91,10 @@ struct WorkoutFormFields: View {
         }
     }
 
-    /// Date and time picker.
+    /// Date picker (date only — time is not tracked).
     private var dateSection: some View {
-        Section("Date & Time") {
-            DatePicker("When", selection: $date)
+        Section("Date") {
+            DatePicker("When", selection: $date, displayedComponents: .date)
         }
     }
 

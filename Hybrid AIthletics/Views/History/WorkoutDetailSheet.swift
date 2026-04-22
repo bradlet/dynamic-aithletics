@@ -155,7 +155,7 @@ struct WorkoutDetailSheet: View {
             type: type,
             durationSeconds: hours * 3600 + minutes * 60 + seconds,
             distanceMiles: distanceMiles,
-            date: date,
+            date: date.startOfDay,
             notes: notes,
             feltRating: feltRating
         )

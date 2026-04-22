@@ -27,8 +27,14 @@ struct AddExerciseSheet: View {
     @State private var seconds = 0
     @State private var distance = 0.0
     @State private var notes = ""
-    @State private var scheduledDate = Date()
+    @State private var scheduledDate: Date
     @State private var isRepeating = false
+
+    init(exercise: Exercise?, defaultDate: Date) {
+        self.exercise = exercise
+        self.defaultDate = defaultDate
+        _scheduledDate = State(initialValue: defaultDate)
+    }
 
     /// Whether the form has enough data to save.
     private var canSave: Bool {

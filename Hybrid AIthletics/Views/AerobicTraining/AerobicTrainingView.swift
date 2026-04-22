@@ -126,7 +126,11 @@ struct AerobicTrainingView: View {
             }
             .navigationTitle("Aerobic Training")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showAddExercise) {
+            .sheet(isPresented: $showAddExercise, onDismiss: {
+                // After scheduling, navigate to and highlight the day so the
+                // user sees their new exercise in the weekly view.
+                exerciseNavigationRequest = ExerciseNavigationRequest(targetDate: addExerciseDate)
+            }) {
                 AddExerciseSheet(exercise: nil, defaultDate: addExerciseDate)
             }
             .sheet(item: $recordingExercise) { exercise in
@@ -166,7 +170,8 @@ struct AerobicTrainingView: View {
 
     // MARK: - Month Calendar Navigation
 
-    /// Navigates the weekly view to the week containing the tapped day and highlights it.
+    /// Navigates the weekly view to the week containing the tapped day.
+    /// Days with existing items get highlighted; empty days open the schedule sheet.
     private func handleMonthDayTap(_ day: Date) {
         withAnimation {
             selectedWeek = day.startOfWeek
@@ -174,7 +179,16 @@ struct AerobicTrainingView: View {
         if !day.isSameMonth(as: selectedMonth) {
             selectedMonth = day.startOfMonth
         }
-        exerciseNavigationRequest = ExerciseNavigationRequest(targetDate: day)
+
+        let hasItems = monthCalendarItems.contains {
+            Calendar.current.isDate($0.displayDate, inSameDayAs: day)
+        }
+        if hasItems {
+            exerciseNavigationRequest = ExerciseNavigationRequest(targetDate: day)
+        } else {
+            addExerciseDate = day
+            showAddExercise = true
+        }
     }
 
     /// Assembles a `CoachingRequest` from the last 4 weeks of workouts and

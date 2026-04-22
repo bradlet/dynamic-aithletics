@@ -121,7 +121,7 @@ struct RecordWorkoutSheet: View {
             durationSeconds: durationSec,
             distanceMiles: distanceMiles,
             notes: notes,
-            date: workoutDate,
+            date: workoutDate.startOfDay,
             feltRating: feltRating,
             sourceExercise: sourceExercise
         )
