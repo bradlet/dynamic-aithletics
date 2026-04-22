@@ -35,6 +35,8 @@ struct ExerciseCardView: View {
     let onRecord: () -> Void
     /// Called when the user taps to edit the exercise.
     let onEdit: () -> Void
+    /// Whether a workout has already been recorded for this exercise.
+    var hasRecordedWorkout: Bool = false
     /// Binding to the ID of the exercise currently showing its delete button (shared across all cards).
     @Binding var swipeDeleteActiveID: UUID?
     /// Whether this card displays a virtual repeating instance (template shown on a different week).
@@ -72,8 +74,10 @@ struct ExerciseCardView: View {
                 }
         )
         .contextMenu {
-            Button { onRecord() } label: {
-                Label("Record Workout", systemImage: "checkmark.circle")
+            if !hasRecordedWorkout {
+                Button { onRecord() } label: {
+                    Label("Record Workout", systemImage: "checkmark.circle")
+                }
             }
             Button { onEdit() } label: {
                 Label("Edit", systemImage: "pencil")
@@ -124,12 +128,14 @@ struct ExerciseCardView: View {
                     .foregroundStyle(.secondary)
                     .font(.caption2)
             }
-            Button { onRecord() } label: {
-                Image(systemName: "checkmark.circle")
-                    .foregroundStyle(.green)
-                    .font(.callout)
+            if !hasRecordedWorkout {
+                Button { onRecord() } label: {
+                    Image(systemName: "checkmark.circle")
+                        .foregroundStyle(.green)
+                        .font(.callout)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
         .padding(8)
         .background(exercise.type.color.opacity(0.1))

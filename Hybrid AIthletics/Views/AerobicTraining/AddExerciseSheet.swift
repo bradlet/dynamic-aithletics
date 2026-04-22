@@ -25,7 +25,7 @@ struct AddExerciseSheet: View {
     @State private var hours = 0
     @State private var minutes = 0
     @State private var seconds = 0
-    @State private var distance = 0.0
+    @State private var distance: Double?
     @State private var notes = ""
     @State private var scheduledDate: Date
     @State private var isRepeating = false
@@ -39,6 +39,7 @@ struct AddExerciseSheet: View {
     /// Whether the form has enough data to save.
     private var canSave: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
+        && (distance ?? 0) > 0
     }
 
     var body: some View {
@@ -173,7 +174,7 @@ struct AddExerciseSheet: View {
     /// Saves the exercise (creates new or updates existing).
     private func save() {
         let durationSec = hours * 3600 + minutes * 60 + seconds
-        let distanceMiles = useMetricUnits ? distance / 1.60934 : distance
+        let distanceMiles = useMetricUnits ? (distance ?? 0) / 1.60934 : (distance ?? 0)
 
         if let exercise {
             exercise.name = name

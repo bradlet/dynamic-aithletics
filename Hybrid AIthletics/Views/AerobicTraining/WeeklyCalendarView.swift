@@ -242,6 +242,7 @@ private struct DaySwimlane: View {
                     exercise: exercise,
                     onRecord: { onRecord(exercise) },
                     onEdit: { onEdit(exercise) },
+                    hasRecordedWorkout: hasWorkoutsRecorded(exercise),
                     swipeDeleteActiveID: $swipeDeleteActiveID,
                     isVirtual: exercise.isRepeating && !exercise.scheduledDate.isSameDay(as: day)
                 )
