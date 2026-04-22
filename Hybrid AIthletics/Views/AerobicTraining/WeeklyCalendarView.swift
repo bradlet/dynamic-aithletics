@@ -10,6 +10,17 @@
 import SwiftUI
 import SwiftData
 
+/// Navigation request to highlight a specific day in the weekly view.
+struct ExerciseNavigationRequest: Equatable, Identifiable {
+    let id: UUID
+    let targetDate: Date
+
+    init(targetDate: Date) {
+        self.id = UUID()
+        self.targetDate = targetDate
+    }
+}
+
 /// A weekly view with vertical swimlanes for each day, showing planned exercises.
 struct WeeklyCalendarView: View {
     /// The 7 dates (Mon-Sun) for the displayed week.
@@ -18,12 +29,16 @@ struct WeeklyCalendarView: View {
     let exercises: [Exercise]
     /// Workouts recorded this week (pre-filtered by parent).
     let workouts: [Workout]
-    /// Called when the user taps + on a specific day.
+    /// Called when the user taps the schedule button on a specific day.
     let onAdd: (Date) -> Void
+    /// Called when the user taps the quick-add button on a specific day.
+    let onQuickAdd: (Date) -> Void
     /// Called when the user taps an exercise to record it.
     let onRecord: (Exercise) -> Void
     /// Called when the user wants to edit an exercise.
     let onEdit: (Exercise) -> Void
+    /// Optional navigation request to highlight a specific day.
+    let navigationRequest: ExerciseNavigationRequest?
 
     @Environment(\.modelContext) private var modelContext
 
@@ -38,6 +53,7 @@ struct WeeklyCalendarView: View {
                             hasRecordedWorkout(for: exercise)
                         },
                         onAdd: { onAdd(day) },
+                        onQuickAdd: { onQuickAdd(day) },
                         onRecord: { exercise in
                             let target = materializeIfNeeded(exercise, for: day)
                             onRecord(target)
@@ -48,7 +64,8 @@ struct WeeklyCalendarView: View {
                         },
                         onDrop: { exerciseID in
                             rescheduleExercise(id: exerciseID, to: day)
-                        }
+                        },
+                        isHighlighted: navigationRequest?.targetDate.isSameDay(as: day) == true
                     )
                     if day != days.last {
                         Divider()
@@ -104,18 +121,32 @@ struct WeeklyCalendarView: View {
             }
         }
     }
+
+    /// Stable "yyyy-MM-dd" identifier for accessibility.
+    private static let dayIdentifierFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    static func dayID(_ day: Date) -> String {
+        dayIdentifierFormatter.string(from: day)
+    }
 }
 
-/// A single day's swimlane showing its label, exercises, and add button.
+/// A single day's swimlane showing its label, exercises, and action buttons.
 private struct DaySwimlane: View {
     let day: Date
     let exercises: [Exercise]
     /// Closure that checks if a given exercise has a recorded workout.
     let hasWorkoutsRecorded: (Exercise) -> Bool
     let onAdd: () -> Void
+    let onQuickAdd: () -> Void
     let onRecord: (Exercise) -> Void
     let onEdit: (Exercise) -> Void
     let onDrop: (UUID) -> Void
+    let isHighlighted: Bool
 
     /// Whether this swimlane is for today.
     private var isToday: Bool { day.isSameDay(as: Date()) }
@@ -127,7 +158,12 @@ private struct DaySwimlane: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
-        .background(isToday ? Color.blue.opacity(0.05) : Color.clear)
+        .background(
+            isHighlighted
+                ? Color.accentColor.opacity(0.12)
+                : (isToday ? Color.blue.opacity(0.05) : Color.clear)
+        )
+        .accessibilityIdentifier("daySwimlane.\(WeeklyCalendarView.dayID(day))")
         .dropDestination(for: ExerciseDragItem.self) { items, _ in
             guard let item = items.first else { return false }
             onDrop(item.exerciseID)
@@ -135,7 +171,7 @@ private struct DaySwimlane: View {
         }
     }
 
-    /// Day label with short weekday, date number, and add button.
+    /// Day label with short weekday, date number, and action buttons.
     private var dayHeader: some View {
         HStack {
             Text(day.shortWeekdayName)
@@ -145,10 +181,21 @@ private struct DaySwimlane: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             Spacer()
-            Button(action: onAdd) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.caption)
-                    .foregroundStyle(.blue)
+            HStack(spacing: 12) {
+                Button(action: onQuickAdd) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.body)
+                        .foregroundStyle(.green)
+                }
+                .accessibilityLabel("Quick add workout")
+                .accessibilityIdentifier("daySwimlane.quickAdd.\(WeeklyCalendarView.dayID(day))")
+                Button(action: onAdd) {
+                    Image(systemName: "calendar.badge.plus")
+                        .font(.body)
+                        .foregroundStyle(.blue)
+                }
+                .accessibilityLabel("Schedule exercise")
+                .accessibilityIdentifier("daySwimlane.schedule.\(WeeklyCalendarView.dayID(day))")
             }
         }
     }
@@ -180,8 +227,10 @@ private struct DaySwimlane: View {
         exercises: [],
         workouts: [],
         onAdd: { _ in },
+        onQuickAdd: { _ in },
         onRecord: { _ in },
-        onEdit: { _ in }
+        onEdit: { _ in },
+        navigationRequest: nil
     )
     .modelContainer(ModelContainerFactory.makePreviewContainer())
 }

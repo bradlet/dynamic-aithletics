@@ -45,7 +45,7 @@ struct AddExerciseSheet: View {
                 repeatSection
                 notesSection
             }
-            .navigationTitle(exercise == nil ? "New Exercise" : "Edit Exercise")
+            .navigationTitle(exercise == nil ? "Schedule Exercise" : "Edit Exercise")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -57,21 +57,27 @@ struct AddExerciseSheet: View {
                 }
             }
             .onAppear { populateFields() }
+            .onChange(of: type) { oldType, newType in
+                if name == oldType.rawValue {
+                    name = newType.rawValue
+                }
+            }
         }
     }
 
     // MARK: - Form Sections
 
-    /// Name and exercise type picker.
+    /// Exercise type picker and name field (type first, name secondary).
     private var nameAndTypeSection: some View {
         Section {
-            TextField("Exercise Name", text: $name)
             Picker("Type", selection: $type) {
                 ForEach(ExerciseType.allCases) { exerciseType in
                     Label(exerciseType.rawValue, systemImage: exerciseType.systemImage)
                         .tag(exerciseType)
                 }
             }
+            TextField("Exercise name", text: $name)
+                .foregroundStyle(name == type.rawValue ? .secondary : .primary)
         }
     }
 
@@ -153,6 +159,7 @@ struct AddExerciseSheet: View {
             scheduledDate = exercise.scheduledDate
             isRepeating = exercise.isRepeating
         } else {
+            name = type.rawValue
             scheduledDate = defaultDate
         }
     }

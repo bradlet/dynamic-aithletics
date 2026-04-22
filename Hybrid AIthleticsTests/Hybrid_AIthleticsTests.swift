@@ -1390,3 +1390,171 @@ struct WorkoutAggregationsTests {
         }
     }
 }
+
+// MARK: - CalendarDisplayable Tests
+
+struct CalendarDisplayableTests {
+
+    @Test func exerciseDisplayDateIsScheduledDate() {
+        let date = Date()
+        let exercise = Exercise(
+            name: "Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: date
+        )
+        #expect(exercise.displayDate == exercise.scheduledDate)
+    }
+
+    @Test func workoutDisplayDateIsDate() {
+        let date = Date()
+        let workout = Workout(
+            name: "Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: date,
+            feltRating: 7
+        )
+        #expect(workout.displayDate == workout.date)
+    }
+
+    @Test func calendarDotPreservesFields() {
+        let date = Date()
+        let dot = CalendarDot(displayDate: date, type: .longRun)
+        #expect(dot.displayDate == date)
+        #expect(dot.type == .longRun)
+    }
+}
+
+// MARK: - ExerciseNavigationRequest Tests
+
+struct ExerciseNavigationRequestTests {
+
+    @Test func twoRequestsWithSameDateHaveDifferentIDs() {
+        let date = Date()
+        let r1 = ExerciseNavigationRequest(targetDate: date)
+        let r2 = ExerciseNavigationRequest(targetDate: date)
+        #expect(r1.id != r2.id)
+    }
+
+    @Test func equatableComparesAllFields() {
+        let date = Date()
+        let r1 = ExerciseNavigationRequest(targetDate: date)
+        let r2 = ExerciseNavigationRequest(targetDate: date)
+        #expect(r1 != r2, "Different ids should make requests not equal")
+        #expect(r1 == r1, "Same instance should be equal to itself")
+    }
+}
+
+// MARK: - ExerciseVirtualExpansion Tests
+
+struct ExerciseVirtualExpansionTests {
+
+    private let calendar = Calendar.current
+
+    /// Helper to create a date at midnight.
+    private func makeDate(year: Int, month: Int, day: Int) -> Date {
+        calendar.date(from: DateComponents(year: year, month: month, day: day))!
+    }
+
+    @Test func monthWithNoRepeatingReturnsOnlyConcrete() {
+        let april = makeDate(year: 2026, month: 4, day: 1)
+        let ex1 = Exercise(
+            name: "Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: makeDate(year: 2026, month: 4, day: 10),
+            isRepeating: false
+        )
+        let ex2 = Exercise(
+            name: "Swim",
+            type: .swim,
+            durationSeconds: 2400,
+            distanceMiles: 1.0,
+            scheduledDate: makeDate(year: 2026, month: 4, day: 15),
+            isRepeating: false
+        )
+        let items = ExerciseVirtualExpansion.monthItems(
+            allExercises: [ex1, ex2],
+            month: april
+        )
+        #expect(items.count == 2)
+    }
+
+    @Test func repeatingExerciseProducesDotsForAllMatchingWeekdays() {
+        let april = makeDate(year: 2026, month: 4, day: 1)
+        // April 6 2026 is a Monday; April has 4 Mondays (6, 13, 20, 27)
+        let mondayExercise = Exercise(
+            name: "Monday Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: makeDate(year: 2026, month: 3, day: 2), // a Monday in March
+            isRepeating: true
+        )
+        let items = ExerciseVirtualExpansion.monthItems(
+            allExercises: [mondayExercise],
+            month: april
+        )
+        // Should produce dots for each Monday in April
+        let mondays = april.daysInMonth().filter { $0.mondayBasedWeekdayIndex == 0 }
+        #expect(items.count == mondays.count)
+        for item in items {
+            #expect(item.type == .run)
+            #expect(item.displayDate.mondayBasedWeekdayIndex == 0)
+        }
+    }
+
+    @Test func concreteExerciseSuppressesVirtualDot() {
+        let april = makeDate(year: 2026, month: 4, day: 1)
+        // Repeating run on Mondays from March
+        let repeating = Exercise(
+            name: "Monday Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: makeDate(year: 2026, month: 3, day: 2),
+            isRepeating: true
+        )
+        // Concrete instance on April 6 (a Monday) with same name/type
+        let concrete = Exercise(
+            name: "Monday Run",
+            type: .run,
+            durationSeconds: 2000,
+            distanceMiles: 4.0,
+            scheduledDate: makeDate(year: 2026, month: 4, day: 6),
+            isRepeating: false
+        )
+        let items = ExerciseVirtualExpansion.monthItems(
+            allExercises: [repeating, concrete],
+            month: april
+        )
+        // Concrete should count + remaining Mondays get virtual dots
+        let mondays = april.daysInMonth().filter { $0.mondayBasedWeekdayIndex == 0 }
+        #expect(items.count == mondays.count, "One concrete + (N-1) virtual = N total Mondays")
+        // Verify the April 6 item is the concrete exercise, not a CalendarDot
+        let april6Items = items.filter { $0.displayDate.isSameDay(as: makeDate(year: 2026, month: 4, day: 6)) }
+        #expect(april6Items.count == 1)
+        #expect(april6Items.first is Exercise)
+    }
+
+    @Test func exerciseOutsideMonthExcludedFromConcrete() {
+        let april = makeDate(year: 2026, month: 4, day: 1)
+        let marchExercise = Exercise(
+            name: "March Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: makeDate(year: 2026, month: 3, day: 15),
+            isRepeating: false
+        )
+        let items = ExerciseVirtualExpansion.monthItems(
+            allExercises: [marchExercise],
+            month: april
+        )
+        #expect(items.isEmpty)
+    }
+}

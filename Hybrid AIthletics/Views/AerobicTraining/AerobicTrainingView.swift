@@ -3,26 +3,28 @@
 //  Hybrid AIthletics
 //
 //  Top-level view for the Aerobic Training tab.
-//  Shows a weekly calendar with planned exercises, a mileage header
-//  comparing planned vs completed miles, and sheets for adding/recording.
+//  Shows a monthly calendar with exercise dots, a weekly calendar with
+//  planned exercises, mileage stats, and sheets for adding/recording.
 //
 
 import SwiftUI
 import SwiftData
 import AICoachCore
 
-/// The aerobic training tab displaying a weekly exercise plan with mileage tracking.
+/// The aerobic training tab displaying a monthly overview and weekly exercise plan.
 struct AerobicTrainingView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Query private var allExercises: [Exercise]
     @Query(sort: \Workout.date) private var allWorkouts: [Workout]
 
+    /// The month displayed in the monthly calendar.
+    @State private var selectedMonth: Date = Date()
     /// The Monday of the currently displayed week.
     @State private var selectedWeek: Date = Date().startOfWeek
-    /// Controls the add exercise sheet.
+    /// Controls the schedule exercise sheet.
     @State private var showAddExercise = false
-    /// The date to default when adding a new exercise (set by the + button on a day).
+    /// The date to default when scheduling a new exercise (set by the calendar button on a day).
     @State private var addExerciseDate: Date = Date()
     /// The exercise selected for recording a workout.
     @State private var recordingExercise: Exercise?
@@ -30,6 +32,10 @@ struct AerobicTrainingView: View {
     @State private var editingExercise: Exercise?
     /// The request passed to the AI coach sheet when the user taps "Ask Coach".
     @State private var coachRequest: CoachingRequest?
+    /// Quick-add request (records a workout directly without scheduling first).
+    @State private var quickAddRequest: QuickAddRequest?
+    /// Navigation request from monthly calendar tap to highlight a day in the weekly view.
+    @State private var exerciseNavigationRequest: ExerciseNavigationRequest?
 
     /// Exercises scheduled within the currently displayed week, including virtual repeating exercises.
     private var weekExercises: [Exercise] {
@@ -69,6 +75,11 @@ struct AerobicTrainingView: View {
         return allWorkouts.filter { $0.date >= start && $0.date <= end }
     }
 
+    /// Calendar display items for the monthly overview.
+    private var monthCalendarItems: [any CalendarDisplayable] {
+        ExerciseVirtualExpansion.monthItems(allExercises: allExercises, month: selectedMonth)
+    }
+
     /// Sum of planned exercise distances for the current week.
     private var plannedMiles: Double {
         weekExercises.reduce(0) { $0 + $1.distanceMiles }
@@ -81,24 +92,37 @@ struct AerobicTrainingView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                weekHeader
-                Divider()
-                WeeklyCalendarView(
-                    days: selectedWeek.daysInWeek(),
-                    exercises: weekExercises,
-                    workouts: weekWorkouts,
-                    onAdd: { date in
-                        addExerciseDate = date
-                        showAddExercise = true
-                    },
-                    onRecord: { exercise in
-                        recordingExercise = exercise
-                    },
-                    onEdit: { exercise in
-                        editingExercise = exercise
-                    }
-                )
+            ScrollView {
+                VStack(spacing: 0) {
+                    MonthlyCalendarView(
+                        selectedMonth: $selectedMonth,
+                        items: monthCalendarItems,
+                        onDayTap: handleMonthDayTap
+                    )
+                    .padding(.bottom, 8)
+                    Divider()
+                    weekHeader
+                    Divider()
+                    WeeklyCalendarView(
+                        days: selectedWeek.daysInWeek(),
+                        exercises: weekExercises,
+                        workouts: weekWorkouts,
+                        onAdd: { date in
+                            addExerciseDate = date
+                            showAddExercise = true
+                        },
+                        onQuickAdd: { date in
+                            quickAddRequest = QuickAddRequest(date: date)
+                        },
+                        onRecord: { exercise in
+                            recordingExercise = exercise
+                        },
+                        onEdit: { exercise in
+                            editingExercise = exercise
+                        },
+                        navigationRequest: exerciseNavigationRequest
+                    )
+                }
             }
             .navigationTitle("Aerobic Training")
             .navigationBarTitleDisplayMode(.inline)
@@ -106,10 +130,13 @@ struct AerobicTrainingView: View {
                 AddExerciseSheet(exercise: nil, defaultDate: addExerciseDate)
             }
             .sheet(item: $recordingExercise) { exercise in
-                RecordWorkoutSheet(exercise: exercise)
+                RecordWorkoutSheet(exercise: exercise, defaultDate: exercise.scheduledDate)
             }
             .sheet(item: $editingExercise) { exercise in
                 AddExerciseSheet(exercise: exercise, defaultDate: exercise.scheduledDate)
+            }
+            .sheet(item: $quickAddRequest) { request in
+                RecordWorkoutSheet(exercise: nil, defaultDate: request.date)
             }
             .sheet(item: $coachRequest) { request in
                 AICoachSheet(request: request)
@@ -123,7 +150,31 @@ struct AerobicTrainingView: View {
                     }
                 }
             }
+            .onChange(of: exerciseNavigationRequest) { _, newValue in
+                guard let request = newValue else { return }
+                Task { @MainActor in
+                    try? await Task.sleep(for: .seconds(2.5))
+                    if exerciseNavigationRequest?.id == request.id {
+                        withAnimation(.easeInOut(duration: 0.4)) {
+                            exerciseNavigationRequest = nil
+                        }
+                    }
+                }
+            }
         }
+    }
+
+    // MARK: - Month Calendar Navigation
+
+    /// Navigates the weekly view to the week containing the tapped day and highlights it.
+    private func handleMonthDayTap(_ day: Date) {
+        withAnimation {
+            selectedWeek = day.startOfWeek
+        }
+        if !day.isSameMonth(as: selectedMonth) {
+            selectedMonth = day.startOfMonth
+        }
+        exerciseNavigationRequest = ExerciseNavigationRequest(targetDate: day)
     }
 
     /// Assembles a `CoachingRequest` from the last 4 weeks of workouts and
@@ -229,6 +280,14 @@ struct AerobicTrainingView: View {
             selectedWeek = newWeek.startOfWeek
         }
     }
+}
+
+// MARK: - Quick Add Request
+
+/// Identifiable wrapper for the quick-add sheet presentation.
+private struct QuickAddRequest: Identifiable {
+    let id = UUID()
+    let date: Date
 }
 
 /// A small stat display with a label and value.

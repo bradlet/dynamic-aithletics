@@ -43,7 +43,7 @@ struct HistoryView: View {
                     PerformanceHubView(workouts: allWorkouts)
                     MonthlyCalendarView(
                         selectedMonth: $selectedMonth,
-                        workouts: allWorkouts,
+                        items: allWorkouts,
                         onDayTap: handleCalendarDayTap
                     )
                     workoutListSection

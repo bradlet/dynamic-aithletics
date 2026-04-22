@@ -3,20 +3,23 @@
 //  Hybrid AIthletics
 //
 //  Form sheet for recording a completed workout.
-//  Pre-fills from the source exercise's defaults; all fields are editable.
+//  When given a source exercise, pre-fills from its defaults.
+//  When exercise is nil (quick add), creates both an Exercise and Workout on save.
 //
 
 import SwiftUI
 import SwiftData
 
-/// A form for recording a workout, pre-filled from a planned exercise.
+/// A form for recording a workout, optionally pre-filled from a planned exercise.
 struct RecordWorkoutSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.useMetricUnits) private var useMetricUnits
 
-    /// The exercise template to pre-fill defaults from.
-    let exercise: Exercise
+    /// The exercise template to pre-fill defaults from, or nil for quick add.
+    let exercise: Exercise?
+    /// The default date for the workout (used when exercise is nil).
+    let defaultDate: Date
 
     @State private var name = ""
     @State private var type: ExerciseType = .run
@@ -27,6 +30,7 @@ struct RecordWorkoutSheet: View {
     @State private var notes = ""
     @State private var workoutDate = Date()
     @State private var feltRating = 0
+    @State private var previousType: ExerciseType = .run
 
     /// Whether the form has enough data to save.
     private var canSave: Bool {
@@ -59,28 +63,57 @@ struct RecordWorkoutSheet: View {
                         .disabled(!canSave)
                 }
             }
-            .onAppear { populateFromExercise() }
+            .onAppear { populateFields() }
+            .onChange(of: type) { oldType, newType in
+                if name == oldType.rawValue {
+                    name = newType.rawValue
+                }
+            }
         }
     }
 
     // MARK: - Actions
 
-    /// Pre-fills form fields from the source exercise template.
-    private func populateFromExercise() {
-        name = exercise.name
-        type = exercise.type
-        let total = exercise.durationSeconds
-        hours = total / 3600
-        minutes = (total % 3600) / 60
-        seconds = total % 60
-        distance = useMetricUnits ? exercise.distanceMiles.toDisplayDistance(metric: true) : exercise.distanceMiles
-        workoutDate = Date()
+    /// Pre-fills form fields from the source exercise template or defaults.
+    private func populateFields() {
+        if let exercise {
+            name = exercise.name
+            type = exercise.type
+            let total = exercise.durationSeconds
+            hours = total / 3600
+            minutes = (total % 3600) / 60
+            seconds = total % 60
+            distance = useMetricUnits ? exercise.distanceMiles.toDisplayDistance(metric: true) : exercise.distanceMiles
+            previousType = exercise.type
+        } else {
+            name = type.rawValue
+            previousType = type
+        }
+        workoutDate = defaultDate
     }
 
-    /// Creates and saves the workout record.
+    /// Creates and saves the workout record. When no source exercise exists,
+    /// also creates a matching exercise so every workout has a source.
     private func save() {
         let durationSec = hours * 3600 + minutes * 60 + seconds
         let distanceMiles = useMetricUnits ? distance / 1.60934 : distance
+
+        let sourceExercise: Exercise
+        if let exercise {
+            sourceExercise = exercise
+        } else {
+            let newExercise = Exercise(
+                name: name,
+                type: type,
+                durationSeconds: durationSec,
+                distanceMiles: distanceMiles,
+                notes: notes,
+                scheduledDate: workoutDate,
+                isRepeating: false
+            )
+            modelContext.insert(newExercise)
+            sourceExercise = newExercise
+        }
 
         let workout = Workout(
             name: name,
@@ -90,7 +123,7 @@ struct RecordWorkoutSheet: View {
             notes: notes,
             date: workoutDate,
             feltRating: feltRating,
-            sourceExercise: exercise
+            sourceExercise: sourceExercise
         )
         modelContext.insert(workout)
         dismiss()
@@ -106,6 +139,6 @@ struct RecordWorkoutSheet: View {
         distanceMiles: 3.0,
         scheduledDate: Date()
     )
-    return RecordWorkoutSheet(exercise: exercise)
+    return RecordWorkoutSheet(exercise: exercise, defaultDate: Date())
         .modelContainer(container)
 }

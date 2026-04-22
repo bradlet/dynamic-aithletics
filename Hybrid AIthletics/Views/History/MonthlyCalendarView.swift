@@ -2,25 +2,23 @@
 //  MonthlyCalendarView.swift
 //  Hybrid AIthletics
 //
-//  A month-grid calendar that shows colored dots on days with recorded workouts.
-//  Tapping a day with workouts invokes `onDayTap(day)` so the parent view can
-//  navigate to that workout in the list below.
+//  A month-grid calendar that shows colored dots on days with activity.
+//  Accepts any `CalendarDisplayable` items (workouts, exercises, or dots).
+//  Tapping a day with items invokes `onDayTap(day)` so the parent can navigate.
 //
 
 import SwiftUI
-import SwiftData
 
-/// Displays a monthly calendar grid with workout indicators.
+/// Displays a monthly calendar grid with activity indicators.
 ///
-/// Tapping a day that contains at least one workout invokes `onDayTap(day)`.
-/// The parent (`HistoryView`) is responsible for translating that into a
-/// `WorkoutNavigationRequest` for `WorkoutListView`.
+/// Tapping a day that contains at least one item invokes `onDayTap(day)`.
+/// The parent is responsible for translating that tap into navigation.
 struct MonthlyCalendarView: View {
     /// The month currently being displayed.
     @Binding var selectedMonth: Date
-    /// All recorded workouts (filtered by caller or unfiltered).
-    let workouts: [Workout]
-    /// Invoked when the user taps a day that has at least one workout.
+    /// Items to display as colored dots (workouts, exercises, or lightweight dots).
+    let items: [any CalendarDisplayable]
+    /// Invoked when the user taps a day that has at least one item.
     let onDayTap: (Date) -> Void
 
     /// Weekday header labels.
@@ -79,13 +77,13 @@ struct MonthlyCalendarView: View {
             ForEach(days, id: \.self) { day in
                 DayCell(
                     day: day,
-                    workouts: workoutsForDay(day),
+                    items: itemsForDay(day),
                     isToday: day.isSameDay(as: Date())
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .onTapGesture {
-                    let dayWorkouts = workoutsForDay(day)
-                    if !dayWorkouts.isEmpty {
+                    let dayItems = itemsForDay(day)
+                    if !dayItems.isEmpty {
                         onDayTap(day)
                     }
                 }
@@ -94,9 +92,9 @@ struct MonthlyCalendarView: View {
         }
     }
 
-    /// Returns workouts that occurred on the given day.
-    private func workoutsForDay(_ day: Date) -> [Workout] {
-        workouts.filter { $0.date.isSameDay(as: day) }
+    /// Returns items scheduled on the given day.
+    private func itemsForDay(_ day: Date) -> [any CalendarDisplayable] {
+        items.filter { $0.displayDate.isSameDay(as: day) }
     }
 
     /// Advances or rewinds the displayed month.
@@ -122,7 +120,7 @@ struct MonthlyCalendarView: View {
 /// A single day cell in the monthly calendar grid.
 private struct DayCell: View {
     let day: Date
-    let workouts: [Workout]
+    let items: [any CalendarDisplayable]
     let isToday: Bool
 
     var body: some View {
@@ -131,10 +129,10 @@ private struct DayCell: View {
                 .font(.caption)
                 .fontWeight(isToday ? .bold : .regular)
                 .foregroundStyle(isToday ? .blue : .primary)
-            // Colored dot if workouts exist on this day.
-            if let firstWorkout = workouts.first {
+            // Colored dot if items exist on this day.
+            if let firstItem = items.first {
                 Circle()
-                    .fill(firstWorkout.type.color)
+                    .fill(firstItem.type.color)
                     .frame(width: 6, height: 6)
             } else {
                 Circle()
@@ -156,8 +154,7 @@ private struct DayCell: View {
 #Preview {
     MonthlyCalendarView(
         selectedMonth: .constant(Date()),
-        workouts: [],
+        items: [],
         onDayTap: { _ in }
     )
-    .modelContainer(ModelContainerFactory.makePreviewContainer())
 }
