@@ -37,6 +37,8 @@ struct ExerciseCardView: View {
     let onEdit: () -> Void
     /// Binding to the ID of the exercise currently showing its delete button (shared across all cards).
     @Binding var swipeDeleteActiveID: UUID?
+    /// Whether this card displays a virtual repeating instance (template shown on a different week).
+    var isVirtual: Bool = false
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Environment(\.modelContext) private var modelContext
     @State private var showDeleteConfirmation = false
@@ -81,16 +83,20 @@ struct ExerciseCardView: View {
             }
         }
         .confirmationDialog(
-            "Delete \(exercise.name)?",
+            isVirtual ? "Stop repeating \(exercise.name)?" : "Delete \(exercise.name)?",
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) { deleteExerciseAndWorkouts() }
+            Button(isVirtual ? "Stop Repeating" : "Delete", role: .destructive) { deleteExerciseAndWorkouts() }
             Button("Cancel", role: .cancel) {
                 withAnimation(.spring(response: 0.3)) { swipeDeleteActiveID = nil }
             }
         } message: {
-            Text("This will permanently delete the exercise and all associated workout records.")
+            if isVirtual {
+                Text("This exercise will no longer appear on future weeks. Past exercises and workout records will be preserved.")
+            } else {
+                Text("This will permanently delete the exercise and all associated workout records.")
+            }
         }
     }
 
@@ -143,13 +149,17 @@ struct ExerciseCardView: View {
         .background(Color.red)
     }
 
-    /// Deletes this exercise and all associated workouts from the model context.
+    /// Deletes this exercise and all associated workouts, or stops recurrence for virtual repeating instances.
     private func deleteExerciseAndWorkouts() {
         withAnimation {
-            for workout in exercise.workouts {
-                modelContext.delete(workout)
+            if isVirtual {
+                exercise.isRepeating = false
+            } else {
+                for workout in exercise.workouts {
+                    modelContext.delete(workout)
+                }
+                modelContext.delete(exercise)
             }
-            modelContext.delete(exercise)
             swipeDeleteActiveID = nil
         }
     }

@@ -1650,4 +1650,64 @@ struct ExerciseCascadeDeleteTests {
         #expect(workouts.count == 1, "Workout survives due to .nullify delete rule")
         #expect(workouts.first?.sourceExercise == nil, "Exercise link is nullified")
     }
+
+    @Test func deleteVirtualRepeatingStopsRecurrence() throws {
+        let context = try makeContext()
+        let exercise = Exercise(
+            name: "Weekly Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: Date(),
+            isRepeating: true
+        )
+        context.insert(exercise)
+
+        let workout = Workout.draft(from: exercise)
+        context.insert(workout)
+        try context.save()
+
+        #expect(exercise.isRepeating == true)
+        #expect(exercise.workouts.count == 1)
+
+        // Virtual delete: just stop recurrence, preserve exercise + workouts
+        exercise.isRepeating = false
+        try context.save()
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        let workouts = try context.fetch(FetchDescriptor<Workout>())
+        #expect(exercises.count == 1, "Exercise is preserved")
+        #expect(exercises.first?.isRepeating == false, "Recurrence stopped")
+        #expect(workouts.count == 1, "Workout is preserved")
+        #expect(workouts.first?.sourceExercise === exercise, "Workout still linked")
+    }
+
+    @Test func deleteTemplateInOwnWeekRemovesExerciseAndWorkouts() throws {
+        let context = try makeContext()
+        let exercise = Exercise(
+            name: "Weekly Tempo",
+            type: .tempoRun,
+            durationSeconds: 2400,
+            distanceMiles: 5.0,
+            scheduledDate: Date(),
+            isRepeating: true
+        )
+        context.insert(exercise)
+
+        let workout = Workout.draft(from: exercise)
+        context.insert(workout)
+        try context.save()
+
+        // Non-virtual delete: full cascade (template is in its own week)
+        for w in exercise.workouts {
+            context.delete(w)
+        }
+        context.delete(exercise)
+        try context.save()
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        let workouts = try context.fetch(FetchDescriptor<Workout>())
+        #expect(exercises.isEmpty, "Template exercise deleted")
+        #expect(workouts.isEmpty, "Associated workouts deleted")
+    }
 }

@@ -222,7 +222,8 @@ private struct DaySwimlane: View {
                     exercise: exercise,
                     onRecord: { onRecord(exercise) },
                     onEdit: { onEdit(exercise) },
-                    swipeDeleteActiveID: $swipeDeleteActiveID
+                    swipeDeleteActiveID: $swipeDeleteActiveID,
+                    isVirtual: exercise.isRepeating && !exercise.scheduledDate.isSameDay(as: day)
                 )
                 // Checkmark indicator if a workout has been recorded.
                 if hasWorkoutsRecorded(exercise) {
