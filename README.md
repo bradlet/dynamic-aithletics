@@ -83,7 +83,11 @@ CloudKit sync is configured but requires a container ID registered in the Apple 
 
 ## Running Tests
 
-Tests use the Swift Testing framework. Run from Xcode (Cmd+U) or via:
+Tests use the Swift Testing framework. UI tests spin up simulators.
+
+### Unit Tests
+
+Run from Xcode (Cmd+U) or via:
 
 ```bash
 xcodebuild test -scheme "Hybrid AIthletics" \
