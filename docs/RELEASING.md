@@ -165,7 +165,7 @@ From the Xcode Organizer (opened automatically after archiving, or via **Window 
 
 After uploading, the build goes through Apple's **automated processing** (5-30 minutes). You'll receive an email when it's ready. If there are issues (missing icons, invalid entitlements), you'll get an email detailing what to fix.
 
-You can also upload using the `xcodebuild` CLI:
+You can also archive and export via the CLI, then upload with the **Transporter** app (free on the Mac App Store) or Xcode Organizer:
 
 ```bash
 # Archive
@@ -174,22 +174,45 @@ xcodebuild archive \
   -archivePath ./build/HybridAIthletics.xcarchive \
   -destination 'generic/platform=iOS'
 
-# Export for App Store upload
+# Export IPA for App Store upload
 xcodebuild -exportArchive \
   -archivePath ./build/HybridAIthletics.xcarchive \
   -exportPath ./build/export \
   -exportOptionsPlist ExportOptions.plist
-
-# Upload (requires an app-specific password — see below)
-xcrun altool --upload-app \
-  -f ./build/export/Hybrid\\ AIthletics.ipa \
-  -u your@apple.id \
-  -p @keychain:AC_PASSWORD
 ```
+
+> **Note:** `xcrun altool --upload-app` was deprecated in Xcode 15. Use Xcode Organizer (recommended) or the free **[Transporter](https://apps.apple.com/us/app/transporter/id1450874784)** app to upload the exported IPA.
 
 **Reference:** [Distributing your app for beta testing and releases](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases)
 
-## Step 9: Submit for App Review
+## Step 9: TestFlight (Recommended for Personal Use)
+
+After your build finishes processing in App Store Connect (5–30 minutes, you'll get an email), you can install it on your device via TestFlight **without going through App Store review**. This is the right path if you just want the app reliably on your phone — it won't expire like a development build.
+
+### Internal testing (instant, no review required)
+
+Internal testers are members of your App Store Connect team (up to 100 people). As the account owner, you are automatically eligible.
+
+1. Go to [appstoreconnect.apple.com](https://appstoreconnect.apple.com) > **My Apps** > **Hybrid AIthletics**
+2. Click the **TestFlight** tab
+3. Under **Internal Testing**, click **+** to create a group (e.g. "Internal")
+4. Add yourself as a tester using your Apple ID
+5. Under the group, click **Builds** and select the build you just uploaded
+6. Install the **[TestFlight app](https://apps.apple.com/us/app/testflight/id899247664)** on your iPhone if you haven't already
+7. Open TestFlight — your app will appear automatically (or check your email for an invite link)
+8. Tap **Install**
+
+The app now lives on your device independently of Xcode. Future updates are just archive → upload → TestFlight notifies you to update.
+
+### External testing (optional, requires Beta App Review)
+
+If you want to share the app with people outside your developer team (up to 10,000 testers), create an **External Testing** group. This requires a **Beta App Review** — lighter than a full App Store review and usually completes in 1–2 days.
+
+---
+
+The remaining steps (10–12) are only needed when you're ready to publish to the public App Store.
+
+## Step 10: Submit for App Review
 
 Once the build finishes processing in App Store Connect:
 
@@ -203,7 +226,7 @@ Once the build finishes processing in App Store Connect:
 5. Review all sections — App Store Connect will warn you if anything is missing
 6. Click **Submit for Review**
 
-## Step 10: Wait for Review
+## Step 11: Wait for Review
 
 Apple's review process typically takes **24-48 hours**, though it can be faster (same day) or slower (up to a week for first submissions or if issues arise).
 
@@ -227,7 +250,7 @@ You can reply to the reviewer in the Resolution Center to ask for clarification 
 
 **Reference:** [App Store Review Guidelines](https://developer.apple.com/app-store/review/guidelines/)
 
-## Step 11: Post-Release
+## Step 12: Post-Release
 
 After your app is live:
 
