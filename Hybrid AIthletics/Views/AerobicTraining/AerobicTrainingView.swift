@@ -22,10 +22,8 @@ struct AerobicTrainingView: View {
     @State private var selectedMonth: Date = Date()
     /// The Monday of the currently displayed week.
     @State private var selectedWeek: Date = Date().startOfWeek
-    /// Controls the schedule exercise sheet.
-    @State private var showAddExercise = false
-    /// The date to default when scheduling a new exercise (set by the calendar button on a day).
-    @State private var addExerciseDate: Date = Date()
+    /// The request passed to the schedule exercise sheet (nil = hidden).
+    @State private var addExerciseRequest: AddExerciseRequest?
     /// The exercise selected for recording a workout.
     @State private var recordingExercise: Exercise?
     /// The exercise selected for editing.
@@ -110,8 +108,7 @@ struct AerobicTrainingView: View {
                         exercises: weekExercises,
                         workouts: weekWorkouts,
                         onAdd: { date in
-                            addExerciseDate = date
-                            showAddExercise = true
+                            addExerciseRequest = AddExerciseRequest(date: date)
                         },
                         onQuickAdd: { date in
                             quickAddRequest = QuickAddRequest(date: date)
@@ -130,12 +127,13 @@ struct AerobicTrainingView: View {
             }
             .navigationTitle("Aerobic Training")
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(isPresented: $showAddExercise, onDismiss: {
-                // After scheduling, navigate to and highlight the day so the
-                // user sees their new exercise in the weekly view.
-                exerciseNavigationRequest = ExerciseNavigationRequest(targetDate: addExerciseDate)
-            }) {
-                AddExerciseSheet(exercise: nil, defaultDate: addExerciseDate)
+            .sheet(item: $addExerciseRequest) { request in
+                AddExerciseSheet(exercise: nil, defaultDate: request.date)
+                    .onDisappear {
+                        // After scheduling, navigate to and highlight the day so the
+                        // user sees their new exercise in the weekly view.
+                        exerciseNavigationRequest = ExerciseNavigationRequest(targetDate: request.date)
+                    }
             }
             .sheet(item: $recordingExercise) { exercise in
                 RecordWorkoutSheet(exercise: exercise, defaultDate: exercise.scheduledDate)
@@ -190,8 +188,7 @@ struct AerobicTrainingView: View {
         if hasItems {
             exerciseNavigationRequest = ExerciseNavigationRequest(targetDate: day)
         } else {
-            addExerciseDate = day
-            showAddExercise = true
+            addExerciseRequest = AddExerciseRequest(date: day)
         }
     }
 
@@ -321,7 +318,13 @@ struct AerobicTrainingView: View {
     }
 }
 
-// MARK: - Quick Add Request
+// MARK: - Sheet Requests
+
+/// Identifiable wrapper for the add-exercise sheet presentation.
+private struct AddExerciseRequest: Identifiable {
+    let id = UUID()
+    let date: Date
+}
 
 /// Identifiable wrapper for the quick-add sheet presentation.
 private struct QuickAddRequest: Identifiable {
