@@ -1557,6 +1557,42 @@ struct ExerciseVirtualExpansionTests {
         )
         #expect(items.isEmpty)
     }
+
+    @Test func sameMonthRepeatingExerciseExpandsToFutureWeekdaysOnly() {
+        let april = makeDate(year: 2026, month: 4, day: 1)
+        // April 14, 2026 is a Tuesday; April has Tuesdays on 7, 14, 21, 28
+        let tuesdayExercise = Exercise(
+            name: "Tuesday Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: makeDate(year: 2026, month: 4, day: 14),
+            isRepeating: true
+        )
+        let items = ExerciseVirtualExpansion.monthItems(
+            allExercises: [tuesdayExercise],
+            month: april
+        )
+        // Should produce items for April 14 (concrete), 21, 28 (dots) — NOT April 7
+        #expect(items.count == 3)
+        // April 7 (before scheduled date) should have no item
+        let april7Items = items.filter {
+            $0.displayDate.isSameDay(as: makeDate(year: 2026, month: 4, day: 7))
+        }
+        #expect(april7Items.isEmpty)
+        // The original date (April 14) should be the concrete Exercise
+        let april14Items = items.filter {
+            $0.displayDate.isSameDay(as: makeDate(year: 2026, month: 4, day: 14))
+        }
+        #expect(april14Items.count == 1)
+        #expect(april14Items.first is Exercise)
+        // Later Tuesdays should be CalendarDots
+        let april21Items = items.filter {
+            $0.displayDate.isSameDay(as: makeDate(year: 2026, month: 4, day: 21))
+        }
+        #expect(april21Items.count == 1)
+        #expect(april21Items.first is CalendarDot)
+    }
 }
 
 // MARK: - Exercise Reschedule Tests

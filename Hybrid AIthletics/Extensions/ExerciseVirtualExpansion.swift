@@ -38,15 +38,13 @@ enum ExerciseVirtualExpansion {
         var items: [any CalendarDisplayable] = concrete
 
         // Repeating exercises whose original date is outside this month
-        let repeating = allExercises.filter { exercise in
-            exercise.isRepeating
-            && !(exercise.scheduledDate >= start && exercise.scheduledDate <= end)
-        }
+        let repeating = allExercises.filter { $0.isRepeating }
 
         for template in repeating {
             let targetDayIndex = template.scheduledDate.mondayBasedWeekdayIndex
             for day in monthDays {
-                guard day.mondayBasedWeekdayIndex == targetDayIndex else { continue }
+                guard day.mondayBasedWeekdayIndex == targetDayIndex,
+                      day >= template.scheduledDate.startOfDay else { continue }
                 let alreadyExists = concrete.contains { existing in
                     existing.scheduledDate.isSameDay(as: day)
                     && existing.name == template.name
