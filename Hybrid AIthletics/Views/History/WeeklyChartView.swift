@@ -45,8 +45,8 @@ enum PerformanceTimeWindow: String, CaseIterable, Identifiable {
     var labelStride: (component: Calendar.Component, count: Int) {
         switch self {
         case .oneMonth:   return (.weekOfYear, 1)
-        case .threeMonth: return (.weekOfYear, 2)
-        case .sixMonth:   return (.month, 1)
+        case .threeMonth: return (.weekOfYear, 4)
+        case .sixMonth:   return (.month, 2)
         }
     }
 
@@ -83,7 +83,7 @@ struct WeeklyChartConfiguration {
     )
 
     static let feltRating = WeeklyChartConfiguration(
-        title: "Weekly Avg Felt",
+        title: "How it's been feeling",
         fixedYScaleZeroToTen: true,
         projection: WorkoutAggregations.weeklyAverageFeltRating,
         isDistance: false
@@ -106,7 +106,7 @@ struct WeeklyChartView: View {
         let raw = configuration.projection(workouts, selectedWindow.weekCount, Date())
         guard configuration.isDistance, useMetricUnits else { return raw }
         return raw.map {
-            WeeklyMetricPoint(weekStart: $0.weekStart, value: $0.value * 1.60934)
+            WeeklyMetricPoint(weekStart: $0.weekStart, value: $0.value)
         }
     }
 
@@ -149,19 +149,13 @@ struct WeeklyChartView: View {
                 }
             }
             .chartXAxis {
-                // Dense grid + tick marks at every week so data density
-                // stays visible on wider windows.
-                AxisMarks(values: .stride(by: .weekOfYear)) { _ in
-                    AxisGridLine()
-                    AxisTick()
-                }
-                // Sparser labels driven by the selected window.
                 AxisMarks(
                     values: .stride(
                         by: selectedWindow.labelStride.component,
                         count: selectedWindow.labelStride.count
                     )
                 ) { _ in
+                    AxisTick()
                     if selectedWindow.labelIncludesDay {
                         AxisValueLabel(format: .dateTime.month(.abbreviated).day())
                     } else {
