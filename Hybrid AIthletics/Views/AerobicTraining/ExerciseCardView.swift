@@ -35,11 +35,67 @@ struct ExerciseCardView: View {
     let onRecord: () -> Void
     /// Called when the user taps to edit the exercise.
     let onEdit: () -> Void
+    /// Binding to the ID of the exercise currently showing its delete button (shared across all cards).
+    @Binding var swipeDeleteActiveID: UUID?
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Environment(\.modelContext) private var modelContext
     @State private var showDeleteConfirmation = false
 
+    /// Whether this card is currently in delete mode (red X visible).
+    private var isInDeleteMode: Bool {
+        swipeDeleteActiveID == exercise.id
+    }
+
     var body: some View {
+        HStack(spacing: 0) {
+            cardContent
+            if isInDeleteMode {
+                deleteButton
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .draggable(ExerciseDragItem(exerciseID: exercise.id))
+        .gesture(
+            DragGesture(minimumDistance: 15)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    withAnimation(.spring(response: 0.3)) {
+                        if horizontal < -60 {
+                            swipeDeleteActiveID = exercise.id
+                        } else if swipeDeleteActiveID == exercise.id {
+                            swipeDeleteActiveID = nil
+                        }
+                    }
+                }
+        )
+        .contextMenu {
+            Button { onRecord() } label: {
+                Label("Record Workout", systemImage: "checkmark.circle")
+            }
+            Button { onEdit() } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+            Button(role: .destructive) { showDeleteConfirmation = true } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+        .confirmationDialog(
+            "Delete \(exercise.name)?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { deleteExerciseAndWorkouts() }
+            Button("Cancel", role: .cancel) {
+                withAnimation(.spring(response: 0.3)) { swipeDeleteActiveID = nil }
+            }
+        } message: {
+            Text("This will permanently delete the exercise and all associated workout records.")
+        }
+    }
+
+    /// The main card content (icon, name, metadata, record button).
+    private var cardContent: some View {
         HStack(spacing: 8) {
             Image(systemName: exercise.type.systemImage)
                 .foregroundStyle(exercise.type.color)
@@ -70,34 +126,31 @@ struct ExerciseCardView: View {
             .buttonStyle(.plain)
         }
         .padding(8)
-        .background(exercise.type.color.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
-        .draggable(ExerciseDragItem(exerciseID: exercise.id))
-        .contextMenu {
-            Button { onRecord() } label: {
-                Label("Record Workout", systemImage: "checkmark.circle")
-            }
-            Button { onEdit() } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-            Button(role: .destructive) { showDeleteConfirmation = true } label: {
-                Label("Delete", systemImage: "trash")
-            }
-        }
-        .confirmationDialog(
-            "Delete \(exercise.name)?",
-            isPresented: $showDeleteConfirmation,
-            titleVisibility: .visible
-        ) {
-            Button("Delete", role: .destructive) { deleteExercise() }
-        } message: {
-            Text("Any recorded workouts will keep their data but lose their link to this exercise.")
-        }
+        .background(exercise.type.color.opacity(0.1))
     }
 
-    /// Deletes this exercise from the model context.
-    private func deleteExercise() {
+    /// Red X delete button revealed by swiping left on the card.
+    private var deleteButton: some View {
+        Button {
+            showDeleteConfirmation = true
+        } label: {
+            Image(systemName: "xmark.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.white)
+        }
+        .frame(width: 44)
+        .frame(maxHeight: .infinity)
+        .background(Color.red)
+    }
+
+    /// Deletes this exercise and all associated workouts from the model context.
+    private func deleteExerciseAndWorkouts() {
         withAnimation {
+            for workout in exercise.workouts {
+                modelContext.delete(workout)
+            }
             modelContext.delete(exercise)
+            swipeDeleteActiveID = nil
         }
     }
 }
@@ -111,7 +164,12 @@ struct ExerciseCardView: View {
         distanceMiles: 3.0,
         scheduledDate: Date()
     )
-    return ExerciseCardView(exercise: exercise, onRecord: {}, onEdit: {})
-        .modelContainer(container)
-        .padding()
+    return ExerciseCardView(
+        exercise: exercise,
+        onRecord: {},
+        onEdit: {},
+        swipeDeleteActiveID: .constant(nil)
+    )
+    .modelContainer(container)
+    .padding()
 }

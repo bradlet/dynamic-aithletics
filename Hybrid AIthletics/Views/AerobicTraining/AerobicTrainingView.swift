@@ -36,6 +36,8 @@ struct AerobicTrainingView: View {
     @State private var quickAddRequest: QuickAddRequest?
     /// Navigation request from monthly calendar tap to highlight a day in the weekly view.
     @State private var exerciseNavigationRequest: ExerciseNavigationRequest?
+    /// The edge new content slides in from during a weekly swipe transition.
+    @State private var weekSlideEdge: Edge = .trailing
 
     /// Exercises scheduled within the currently displayed week, including virtual repeating exercises.
     private var weekExercises: [Exercise] {
@@ -122,6 +124,8 @@ struct AerobicTrainingView: View {
                         },
                         navigationRequest: exerciseNavigationRequest
                     )
+                    .id(selectedWeek)
+                    .transition(.push(from: weekSlideEdge))
                 }
             }
             .navigationTitle("Aerobic Training")
@@ -258,6 +262,27 @@ struct AerobicTrainingView: View {
         .padding(.horizontal)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    let vertical = value.translation.height
+                    guard abs(horizontal) > abs(vertical),
+                          abs(horizontal) > 50 else { return }
+                    if horizontal < 0 {
+                        weekSlideEdge = .trailing
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            changeWeek(by: 1)
+                        }
+                    } else {
+                        weekSlideEdge = .leading
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            changeWeek(by: -1)
+                        }
+                    }
+                }
+        )
     }
 
     /// Formatted label for the current week, e.g. "Apr 7 - Apr 13, 2026".

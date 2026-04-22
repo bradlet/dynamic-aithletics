@@ -41,6 +41,8 @@ struct WeeklyCalendarView: View {
     let navigationRequest: ExerciseNavigationRequest?
 
     @Environment(\.modelContext) private var modelContext
+    /// Tracks which exercise card is currently showing the swipe-to-delete button.
+    @State private var swipeDeleteActiveID: UUID?
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -65,7 +67,8 @@ struct WeeklyCalendarView: View {
                         onDrop: { exerciseID in
                             rescheduleExercise(id: exerciseID, to: day)
                         },
-                        isHighlighted: navigationRequest?.targetDate.isSameDay(as: day) == true
+                        isHighlighted: navigationRequest?.targetDate.isSameDay(as: day) == true,
+                        swipeDeleteActiveID: $swipeDeleteActiveID
                     )
                     if day != days.last {
                         Divider()
@@ -73,6 +76,15 @@ struct WeeklyCalendarView: View {
                 }
             }
         }
+        .simultaneousGesture(
+            TapGesture().onEnded {
+                if swipeDeleteActiveID != nil {
+                    withAnimation(.spring(response: 0.3)) {
+                        swipeDeleteActiveID = nil
+                    }
+                }
+            }
+        )
     }
 
     /// Returns exercises scheduled for the given day, including virtual repeating exercises.
@@ -147,6 +159,8 @@ private struct DaySwimlane: View {
     let onEdit: (Exercise) -> Void
     let onDrop: (UUID) -> Void
     let isHighlighted: Bool
+    /// Binding to the ID of the exercise card currently showing its delete button.
+    @Binding var swipeDeleteActiveID: UUID?
 
     /// Whether this swimlane is for today.
     private var isToday: Bool { day.isSameDay(as: Date()) }
@@ -207,7 +221,8 @@ private struct DaySwimlane: View {
                 ExerciseCardView(
                     exercise: exercise,
                     onRecord: { onRecord(exercise) },
-                    onEdit: { onEdit(exercise) }
+                    onEdit: { onEdit(exercise) },
+                    swipeDeleteActiveID: $swipeDeleteActiveID
                 )
                 // Checkmark indicator if a workout has been recorded.
                 if hasWorkoutsRecorded(exercise) {

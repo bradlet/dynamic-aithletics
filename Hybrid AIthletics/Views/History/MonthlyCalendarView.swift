@@ -25,27 +25,52 @@ struct MonthlyCalendarView: View {
     private let weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
     /// Grid columns: 7 days.
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 7)
+    /// The edge new content slides in from during a swipe transition.
+    @State private var slideEdge: Edge = .trailing
 
     var body: some View {
         VStack(spacing: 8) {
             monthHeader
             weekdayHeaderRow
             calendarGrid
+                .id(selectedMonth.startOfMonth)
+                .transition(.push(from: slideEdge))
         }
+        .clipped()
         .padding(.horizontal)
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 30)
+                .onEnded { value in
+                    let horizontal = value.translation.width
+                    let vertical = value.translation.height
+                    guard abs(horizontal) > abs(vertical), abs(horizontal) > 50 else { return }
+                    if horizontal < 0 {
+                        slideEdge = .trailing
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            changeMonth(by: 1)
+                        }
+                    } else {
+                        slideEdge = .leading
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            changeMonth(by: -1)
+                        }
+                    }
+                }
+        )
     }
 
     /// Header with month/year and navigation arrows.
     private var monthHeader: some View {
         HStack {
-            Button { changeMonth(by: -1) } label: {
+            Button { navigateMonth(by: -1) } label: {
                 Image(systemName: "chevron.left")
             }
             Spacer()
             Text(selectedMonth, format: .dateTime.month(.wide).year())
                 .font(.headline)
             Spacer()
-            Button { changeMonth(by: 1) } label: {
+            Button { navigateMonth(by: 1) } label: {
                 Image(systemName: "chevron.right")
             }
         }
@@ -98,6 +123,14 @@ struct MonthlyCalendarView: View {
     private func changeMonth(by value: Int) {
         if let newMonth = Calendar.current.date(byAdding: .month, value: value, to: selectedMonth) {
             selectedMonth = newMonth
+        }
+    }
+
+    /// Navigates the month with a matching slide transition (used by chevron buttons).
+    private func navigateMonth(by value: Int) {
+        slideEdge = value > 0 ? .trailing : .leading
+        withAnimation(.easeInOut(duration: 0.25)) {
+            changeMonth(by: value)
         }
     }
 

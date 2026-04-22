@@ -1558,3 +1558,96 @@ struct ExerciseVirtualExpansionTests {
         #expect(items.isEmpty)
     }
 }
+
+// MARK: - Exercise Cascade Delete Tests
+
+struct ExerciseCascadeDeleteTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = ModelContainerFactory.makePreviewContainer()
+        return ModelContext(container)
+    }
+
+    @Test func cascadeDeleteRemovesExerciseAndWorkouts() throws {
+        let context = try makeContext()
+        let exercise = Exercise(
+            name: "Tempo Run",
+            type: .tempoRun,
+            durationSeconds: 2400,
+            distanceMiles: 5.0,
+            scheduledDate: Date()
+        )
+        context.insert(exercise)
+
+        let workout1 = Workout.draft(from: exercise)
+        let workout2 = Workout.draft(from: exercise)
+        context.insert(workout1)
+        context.insert(workout2)
+        try context.save()
+
+        #expect(exercise.workouts.count == 2)
+
+        // Cascade delete: remove workouts first, then exercise
+        for workout in exercise.workouts {
+            context.delete(workout)
+        }
+        context.delete(exercise)
+        try context.save()
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        let workouts = try context.fetch(FetchDescriptor<Workout>())
+        #expect(exercises.isEmpty)
+        #expect(workouts.isEmpty)
+    }
+
+    @Test func cascadeDeleteWithNoWorkouts() throws {
+        let context = try makeContext()
+        let exercise = Exercise(
+            name: "Easy Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: Date()
+        )
+        context.insert(exercise)
+        try context.save()
+
+        #expect(exercise.workouts.isEmpty)
+
+        // Cascade delete with empty workouts list
+        for workout in exercise.workouts {
+            context.delete(workout)
+        }
+        context.delete(exercise)
+        try context.save()
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(exercises.isEmpty)
+    }
+
+    @Test func nullifyRulePreservesWorkoutsOnPlainDelete() throws {
+        let context = try makeContext()
+        let exercise = Exercise(
+            name: "Long Run",
+            type: .longRun,
+            durationSeconds: 3600,
+            distanceMiles: 8.0,
+            scheduledDate: Date()
+        )
+        context.insert(exercise)
+
+        let workout = Workout.draft(from: exercise)
+        context.insert(workout)
+        try context.save()
+
+        // Plain delete (without cascade) — nullify rule keeps workout
+        context.delete(exercise)
+        try context.save()
+
+        let exercises = try context.fetch(FetchDescriptor<Exercise>())
+        let workouts = try context.fetch(FetchDescriptor<Workout>())
+        #expect(exercises.isEmpty)
+        #expect(workouts.count == 1, "Workout survives due to .nullify delete rule")
+        #expect(workouts.first?.sourceExercise == nil, "Exercise link is nullified")
+    }
+}
