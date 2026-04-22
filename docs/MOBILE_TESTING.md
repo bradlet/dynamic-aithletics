@@ -177,7 +177,7 @@ To remove the app from your iPhone:
 - Select **Remove App** > **Delete App** > **Delete**
 - Or go to **Settings > General > iPhone Storage**, find the app, and select **Delete App**
 
-Rebuilding in Xcode will reinstall it.
+Note that this will also delete all app data. Rebuilding in Xcode will reinstall it.
 
 ## Next Steps
 
