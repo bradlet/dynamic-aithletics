@@ -110,6 +110,26 @@ struct WeeklyChartView: View {
         }
     }
 
+    /// Subset of `points` dates used for x-axis tick marks and labels.
+    /// Filtered from the actual Monday-anchored data dates so ticks align
+    /// exactly with plotted points rather than the system calendar's week
+    /// start (Sunday in the US locale).
+    private var labelDates: [Date] {
+        let dates = points.map(\.weekStart)
+        guard let first = dates.first else { return [] }
+        let (component, count) = selectedWindow.labelStride
+        return dates.filter { date in
+            let comps = Calendar.current.dateComponents([component], from: first, to: date)
+            let diff: Int
+            switch component {
+            case .weekOfYear: diff = comps.weekOfYear ?? 0
+            case .month:      diff = comps.month ?? 0
+            default:          diff = 0
+            }
+            return diff % count == 0
+        }
+    }
+
     /// Y-scale domain for the chart. Felt rating is clamped to the
     /// rating scale; mileage auto-scales to the max value with a zero
     /// baseline so short/flat weeks are still visible.
@@ -149,12 +169,7 @@ struct WeeklyChartView: View {
                 }
             }
             .chartXAxis {
-                AxisMarks(
-                    values: .stride(
-                        by: selectedWindow.labelStride.component,
-                        count: selectedWindow.labelStride.count
-                    )
-                ) { _ in
+                AxisMarks(values: labelDates) { _ in
                     AxisTick()
                     if selectedWindow.labelIncludesDay {
                         AxisValueLabel(format: .dateTime.month(.abbreviated).day())
