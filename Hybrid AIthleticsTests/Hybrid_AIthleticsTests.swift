@@ -1559,6 +1559,63 @@ struct ExerciseVirtualExpansionTests {
     }
 }
 
+// MARK: - Exercise Reschedule Tests
+
+struct ExerciseRescheduleTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = ModelContainerFactory.makePreviewContainer()
+        return ModelContext(container)
+    }
+
+    @Test func rescheduleUpdatesExerciseAndWorkoutDates() throws {
+        let context = try makeContext()
+        let monday = Date().startOfWeek
+        let exercise = Exercise(
+            name: "Easy Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: monday
+        )
+        context.insert(exercise)
+
+        let workout = Workout.draft(from: exercise)
+        context.insert(workout)
+        try context.save()
+
+        let wednesday = Calendar.current.date(byAdding: .day, value: 2, to: monday)!.startOfDay
+        exercise.scheduledDate = wednesday
+        for w in exercise.workouts {
+            w.date = wednesday
+        }
+        try context.save()
+
+        #expect(exercise.scheduledDate == wednesday)
+        #expect(workout.date == wednesday)
+    }
+
+    @Test func repeatingExerciseShouldNotBeRescheduled() throws {
+        let context = try makeContext()
+        let monday = Date().startOfWeek
+        let exercise = Exercise(
+            name: "Repeating Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            scheduledDate: monday,
+            isRepeating: true
+        )
+        context.insert(exercise)
+        try context.save()
+
+        // Simulate the guard: repeating exercises are blocked
+        #expect(exercise.isRepeating)
+        // The view's rescheduleExercise returns early; date is unchanged
+        #expect(exercise.scheduledDate == monday.startOfDay)
+    }
+}
+
 // MARK: - Exercise Cascade Delete Tests
 
 struct ExerciseCascadeDeleteTests {

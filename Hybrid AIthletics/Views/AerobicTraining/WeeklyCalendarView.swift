@@ -43,6 +43,8 @@ struct WeeklyCalendarView: View {
     @Environment(\.modelContext) private var modelContext
     /// Tracks which exercise card is currently showing the swipe-to-delete button.
     @State private var swipeDeleteActiveID: UUID?
+    /// Whether to show the alert for attempting to drag a repeating exercise.
+    @State private var showRepeatingDragAlert = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -75,6 +77,11 @@ struct WeeklyCalendarView: View {
                     }
                 }
             }
+        }
+        .alert("Cannot Move Repeating Exercise", isPresented: $showRepeatingDragAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Repeating exercises cannot be moved. Delete the exercise and create a new one on the desired day.")
         }
         .simultaneousGesture(
             TapGesture().onEnded {
@@ -122,14 +129,19 @@ struct WeeklyCalendarView: View {
         workouts.contains { $0.sourceExercise == exercise }
     }
 
-    /// Moves an exercise to a new day by updating its scheduledDate. Materializes virtual exercises first.
+    /// Moves an exercise to a new day by updating its scheduledDate and any linked workout dates.
+    /// Blocks repeating exercises with an alert instead of rescheduling.
     private func rescheduleExercise(id: UUID, to day: Date) {
         guard let exercise = exercises.first(where: { $0.id == id }) else { return }
-        if isVirtual(exercise) {
-            materializeIfNeeded(exercise, for: day)
-        } else {
-            withAnimation {
-                exercise.scheduledDate = day.startOfDay
+        if exercise.isRepeating {
+            showRepeatingDragAlert = true
+            return
+        }
+        withAnimation {
+            let newDate = day.startOfDay
+            exercise.scheduledDate = newDate
+            for workout in exercise.workouts {
+                workout.date = newDate
             }
         }
     }
@@ -172,11 +184,13 @@ private struct DaySwimlane: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
+        .frame(minHeight: 30, alignment: .top)
         .background(
             isHighlighted
                 ? Color.accentColor.opacity(0.12)
                 : (isToday ? Color.blue.opacity(0.05) : Color.clear)
         )
+        .contentShape(Rectangle())
         .accessibilityIdentifier("daySwimlane.\(WeeklyCalendarView.dayID(day))")
         .dropDestination(for: ExerciseDragItem.self) { items, _ in
             guard let item = items.first else { return false }
@@ -185,7 +199,7 @@ private struct DaySwimlane: View {
         }
     }
 
-    /// Day label with short weekday, date number, and action buttons.
+    /// Day label with short weekday, date number, and action buttons. Also a drop target.
     private var dayHeader: some View {
         HStack {
             Text(day.shortWeekdayName)
@@ -211,6 +225,12 @@ private struct DaySwimlane: View {
                 .accessibilityLabel("Schedule exercise")
                 .accessibilityIdentifier("daySwimlane.schedule.\(WeeklyCalendarView.dayID(day))")
             }
+        }
+        .contentShape(Rectangle())
+        .dropDestination(for: ExerciseDragItem.self) { items, _ in
+            guard let item = items.first else { return false }
+            onDrop(item.exerciseID)
+            return true
         }
     }
 
