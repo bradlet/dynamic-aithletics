@@ -685,7 +685,10 @@ struct WorkoutCSVTests {
         #expect(abs(row.distance - 6.25) < 0.01)
         #expect(row.notes == "Felt strong")
         #expect(row.feltRating == 9)
-        #expect(abs(row.date.timeIntervalSince(referenceDate)) < 1.0)
+        // Parsed dates are normalized to local midnight (CSV dates are calendar
+        // days), so compare against start-of-day rather than the exact reference.
+        let expectedDay = Calendar.current.startOfDay(for: referenceDate)
+        #expect(abs(row.date.timeIntervalSince(expectedDay)) < 1.0)
     }
 
     @Test func parseHandlesQuotedFieldsAndEmbeddedNewlines() throws {

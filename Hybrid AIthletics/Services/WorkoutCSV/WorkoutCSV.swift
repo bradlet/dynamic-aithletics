@@ -299,21 +299,21 @@ enum WorkoutCSV {
         return f
     }()
 
-    /// DateFormatter for `yyyy-MM-dd` format.
+    /// DateFormatter for `yyyy-MM-dd` format. Uses the user's local timezone
+    /// so plain dates without timezone info land on the correct calendar day.
     private static let yyyyMMddFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "yyyy-MM-dd"
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
 
     /// DateFormatter for `M/d/yyyy` format (handles single- and double-digit month/day).
+    /// Uses the user's local timezone so plain dates land on the correct calendar day.
     private static let mdyyyyFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "M/d/yyyy"
         f.locale = Locale(identifier: "en_US_POSIX")
-        f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
 
@@ -457,14 +457,41 @@ enum WorkoutCSV {
         ))
     }
 
+    /// UTC calendar used to extract date components from ISO8601 dates.
+    private static let utcCalendar: Calendar = {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        return cal
+    }()
+
     /// Parses a date string, trying multiple formats in order:
     /// ISO8601, ISO8601 with fractional seconds, yyyy-MM-dd, M/d/yyyy.
+    ///
+    /// All results are normalized to the start of the calendar day in the
+    /// user's local timezone. CSV dates represent calendar days, so
+    /// `2025-08-04T00:00:00Z` should land on August 4th regardless of the
+    /// user's timezone offset from UTC.
     private static func parseDate(_ string: String) -> Date? {
         let trimmed = string.trimmingCharacters(in: .whitespaces)
-        if let d = iso8601Formatter.date(from: trimmed) { return d }
-        if let d = iso8601FractionalFormatter.date(from: trimmed) { return d }
-        if let d = yyyyMMddFormatter.date(from: trimmed) { return d }
-        if let d = mdyyyyFormatter.date(from: trimmed) { return d }
+
+        // ISO8601 dates include timezone info (the Z suffix), so we must
+        // extract year/month/day in UTC to get the intended calendar date,
+        // then rebuild at local midnight.
+        if let d = iso8601Formatter.date(from: trimmed) { return localMidnight(fromUTC: d) }
+        if let d = iso8601FractionalFormatter.date(from: trimmed) { return localMidnight(fromUTC: d) }
+
+        // Plain date formats use the local timezone (no TZ in the string),
+        // so startOfDay in local time is correct.
+        if let d = yyyyMMddFormatter.date(from: trimmed) { return Calendar.current.startOfDay(for: d) }
+        if let d = mdyyyyFormatter.date(from: trimmed) { return Calendar.current.startOfDay(for: d) }
         return nil
+    }
+
+    /// Extracts year/month/day from a UTC date and returns local midnight
+    /// for that calendar date. This ensures `2025-08-04T00:00:00Z` becomes
+    /// August 4th at midnight local time, not August 3rd.
+    private static func localMidnight(fromUTC date: Date) -> Date {
+        let comps = utcCalendar.dateComponents([.year, .month, .day], from: date)
+        return Calendar.current.date(from: comps) ?? date
     }
 }
