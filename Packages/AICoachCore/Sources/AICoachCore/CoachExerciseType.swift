@@ -23,5 +23,6 @@ public enum CoachExerciseType: String, Codable, CaseIterable, Sendable {
     case swim = "Swim"
     case hike = "Hike"
     case elliptical = "Elliptical"
+    case race = "Race"
     case other = "Other"
 }

@@ -142,6 +142,49 @@ Once the app is running on your device, you can inspect CloudKit data and local 
 - Xcode's Debug Navigator shows app logs and memory usage
 - CloudKit sync status is logged during app runtime
 
+## Running Tests from the CLI
+
+### Unit Tests (macOS — fast, no simulator)
+
+Unit tests run on your Mac and don't require a simulator. They test data models, CSV parsing, formatting logic, and other non-UI code:
+
+```bash
+# Run all unit tests
+xcodebuild test -scheme "Hybrid AIthletics" \
+  -only-testing:"Hybrid AIthleticsTests"
+```
+
+This is fast and ideal for development iteration. Tests use a stub AI coach service, so the Gemma model is not needed.
+
+### UI Tests (iOS Simulator)
+
+UI tests require a simulator and exercise the full app interface — calendar interaction, workout recording, deletion flows, etc.:
+
+```bash
+# Run all UI tests on iPhone 17 simulator
+xcodebuild test -scheme "Hybrid AIthletics" \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:"Hybrid AIthleticsUITests"
+```
+
+### History Tab Functional Tests
+
+To run only the History tab UI tests:
+
+```bash
+xcodebuild test -scheme "Hybrid AIthletics" \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -only-testing:"Hybrid AIthleticsUITests/HistoryUITests"
+```
+
+### AICoachCore Package Tests
+
+Test the shared prompt-building library (no iOS dependency):
+
+```bash
+cd Packages/AICoachCore && swift test
+```
+
 ## Troubleshooting
 
 ### "Cannot run in foreground"

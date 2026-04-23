@@ -28,6 +28,7 @@ struct HistoryView: View {
     @State private var exportDocument: WorkoutCSVDocument?
     @State private var isExporterPresented = false
     @State private var isImporterPresented = false
+    @State private var isPreImportSheetPresented = false
     @State private var pendingImport: PendingImport?
     @State private var importUnit: WorkoutCSVDistanceUnit = .miles
     @State private var errorMessage: String?
@@ -60,7 +61,7 @@ struct HistoryView: View {
                             Label("Export Workouts", systemImage: "square.and.arrow.up")
                         }
                         Button {
-                            isImporterPresented = true
+                            isPreImportSheetPresented = true
                         } label: {
                             Label("Import Workouts", systemImage: "square.and.arrow.down")
                         }
@@ -83,6 +84,19 @@ struct HistoryView: View {
                 if case .failure(let error) = result {
                     errorMessage = "Export failed: \(error.localizedDescription)"
                 }
+            }
+            .sheet(isPresented: $isPreImportSheetPresented) {
+                CSVImportGatewaySheet(
+                    onChooseFile: {
+                        isPreImportSheetPresented = false
+                        // Delay slightly so the sheet dismissal completes
+                        // before the file importer is presented.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            isImporterPresented = true
+                        }
+                    },
+                    onCancel: { isPreImportSheetPresented = false }
+                )
             }
             .fileImporter(
                 isPresented: $isImporterPresented,
@@ -195,10 +209,11 @@ struct HistoryView: View {
         }
     }
 
-    /// Inserts all successfully parsed rows as new workouts.
+    /// Inserts all successfully parsed rows as new workouts with parent exercises.
     private func commitImport(_ result: WorkoutCSVParseResult) {
         for row in result.rows {
-            let workout = WorkoutCSV.toWorkout(row, unit: importUnit)
+            let (exercise, workout) = WorkoutCSV.toWorkoutWithExercise(row, unit: importUnit)
+            modelContext.insert(exercise)
             modelContext.insert(workout)
         }
         do {
@@ -215,6 +230,54 @@ private struct PendingImport: Identifiable {
     let id = UUID()
     let filename: String
     let result: WorkoutCSVParseResult
+}
+
+/// Gateway sheet shown before opening the file picker, with a link to import help.
+private struct CSVImportGatewaySheet: View {
+    let onChooseFile: () -> Void
+    let onCancel: () -> Void
+    @State private var isHelpPresented = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 24) {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 48))
+                    .foregroundStyle(.secondary)
+
+                Text("Select a CSV file to import your workout history.")
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
+
+                Button(action: onChooseFile) {
+                    Label("Choose File", systemImage: "folder")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .padding(.horizontal, 40)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .navigationTitle("Import Workouts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", action: onCancel)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        isHelpPresented = true
+                    } label: {
+                        Image(systemName: "questionmark.circle")
+                    }
+                }
+            }
+            .sheet(isPresented: $isHelpPresented) {
+                CSVImportHelpView()
+            }
+        }
+        .presentationDetents([.medium])
+    }
 }
 
 #Preview {

@@ -83,7 +83,7 @@ enum WorkoutCSV {
 
     /// Fixed schema header. Column order is authoritative; header names
     /// are written on export but ignored on import (the schema is fixed).
-    static let header = "date,name,type,duration_seconds,distance,notes,felt_rating"
+    static let header = "date,name,type,duration,distance,notes,felt_rating"
 
     // MARK: - Encoding
 
@@ -109,7 +109,7 @@ enum WorkoutCSV {
             escape(date),
             escape(workout.name),
             escape(workout.type.rawValue),
-            String(workout.durationSeconds),
+            formatDuration(workout.durationSeconds),
             formatDistance(distance),
             escape(workout.notes),
             String(workout.feltRating)
@@ -170,6 +170,111 @@ enum WorkoutCSV {
         )
     }
 
+    /// Creates an `Exercise` from a parsed CSV row. Used during import so
+    /// workouts are not orphaned without a parent exercise.
+    static func toExercise(_ row: WorkoutCSVRow, unit: WorkoutCSVDistanceUnit) -> Exercise {
+        Exercise(
+            name: row.name,
+            type: row.type,
+            durationSeconds: row.durationSeconds,
+            distanceMiles: unit.toMiles(row.distance),
+            notes: row.notes,
+            scheduledDate: row.date,
+            isRepeating: false
+        )
+    }
+
+    /// Creates both an `Exercise` and a linked `Workout` from a parsed CSV
+    /// row, mirroring the quick-add flow in `RecordWorkoutSheet`.
+    static func toWorkoutWithExercise(
+        _ row: WorkoutCSVRow,
+        unit: WorkoutCSVDistanceUnit
+    ) -> (exercise: Exercise, workout: Workout) {
+        let exercise = toExercise(row, unit: unit)
+        let workout = Workout(
+            name: row.name,
+            type: row.type,
+            durationSeconds: row.durationSeconds,
+            distanceMiles: unit.toMiles(row.distance),
+            notes: row.notes,
+            date: row.date,
+            feltRating: row.feltRating,
+            source: WorkoutSource.csv.rawValue,
+            sourceExercise: exercise
+        )
+        return (exercise, workout)
+    }
+
+    // MARK: - Duration Parsing
+
+    /// Parses a flexible duration string into total seconds.
+    ///
+    /// Supported formats:
+    /// - Plain integer (no unit suffix): treated as seconds (e.g., `"1800"` → 1800)
+    /// - Unit-tagged components: `_h`, `_m`, `_s` in any order, separated by
+    ///   optional whitespace. Decimal values are floored. All units are optional.
+    ///   Examples: `"40m"` → 2400, `"2h 30m"` → 9000, `"1h 30m 45s"` → 5445
+    ///
+    /// Returns `nil` for empty or unparseable input.
+    static func parseDuration(_ string: String) -> Int? {
+        let trimmed = string.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+
+        // Plain integer with no unit suffix → seconds.
+        if let seconds = Int(trimmed) {
+            return seconds >= 0 ? seconds : nil
+        }
+
+        // Scan for unit-tagged components: number followed by h/m/s.
+        var total = 0
+        var foundAny = false
+        var remaining = trimmed[...]
+
+        while !remaining.isEmpty {
+            // Skip whitespace between components.
+            remaining = remaining.drop(while: { $0.isWhitespace })
+            if remaining.isEmpty { break }
+
+            // Extract the numeric part (digits and optional decimal point).
+            let numStart = remaining.startIndex
+            let numPart = remaining.prefix(while: { $0.isNumber || $0 == "." })
+            guard !numPart.isEmpty else { return nil }
+
+            guard let value = Double(numPart) else { return nil }
+            remaining = remaining[numPart.endIndex...]
+
+            // Extract the unit suffix.
+            guard let unit = remaining.first else { return nil }
+            let lowered = unit.lowercased()
+            let multiplier: Int
+            switch lowered {
+            case "h": multiplier = 3600
+            case "m": multiplier = 60
+            case "s": multiplier = 1
+            default: return nil
+            }
+            remaining = remaining[remaining.index(after: remaining.startIndex)...]
+
+            total += Int(value) * multiplier
+            foundAny = true
+        }
+
+        return foundAny ? total : nil
+    }
+
+    /// Formats a duration in seconds to a human-readable string (e.g., `"1h 30m"`).
+    static func formatDuration(_ seconds: Int) -> String {
+        guard seconds > 0 else { return "0s" }
+        let h = seconds / 3600
+        let m = (seconds % 3600) / 60
+        let s = seconds % 60
+        var parts: [String] = []
+        if h > 0 { parts.append("\(h)h") }
+        if m > 0 { parts.append("\(m)m") }
+        if s > 0 { parts.append("\(s)s") }
+        return parts.isEmpty ? "0s" : parts.joined(separator: " ")
+    }
+
     // MARK: - Internals
 
     /// A single logical CSV record after field splitting. `startLine` is
@@ -191,6 +296,24 @@ enum WorkoutCSV {
     private static let iso8601FractionalFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    /// DateFormatter for `yyyy-MM-dd` format.
+    private static let yyyyMMddFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
+
+    /// DateFormatter for `M/d/yyyy` format (handles single- and double-digit month/day).
+    private static let mdyyyyFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "M/d/yyyy"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "UTC")
         return f
     }()
 
@@ -236,7 +359,7 @@ enum WorkoutCSV {
                     i += 1
                     continue
                 }
-                if c == "\n" { line += 1 }
+                if c == "\n" || c == "\r\n" { line += 1 }
                 currentField.append(c)
                 i += 1
                 continue
@@ -250,14 +373,9 @@ enum WorkoutCSV {
                 currentFields.append(currentField)
                 currentField = ""
                 i += 1
-            case "\r":
-                // Normalize CRLF/CR to LF by deferring to the newline branch.
-                if i + 1 < chars.count && chars[i + 1] == "\n" {
-                    i += 1 // consume \r, let \n handler finish the record
-                    continue
-                }
-                fallthrough
-            case "\n":
+            case "\r\n", "\r", "\n":
+                // Swift treats \r\n as a single Character (grapheme cluster),
+                // so it must be its own case alongside standalone \r and \n.
                 currentFields.append(currentField)
                 records.append(Record(fields: currentFields, startLine: recordStartLine))
                 currentFields = []
@@ -288,9 +406,11 @@ enum WorkoutCSV {
 
     /// Decodes a tokenized row's fields into a `WorkoutCSVRow`.
     /// Returns `.skip` with a short human-readable reason on failure.
+    /// Minimum 5 fields required (date, name, type, duration, distance).
+    /// Notes (field 6) defaults to "" and felt_rating (field 7) defaults to 0.
     private static func decodeRow(_ fields: [String]) -> DecodeOutcome {
-        guard fields.count >= 7 else {
-            return .skip("expected 7 fields, got \(fields.count)")
+        guard fields.count >= 5 else {
+            return .skip("expected at least 5 fields, got \(fields.count)")
         }
 
         let dateString = fields[0]
@@ -298,27 +418,37 @@ enum WorkoutCSV {
         let typeString = fields[2]
         let durationString = fields[3]
         let distanceString = fields[4]
-        let notes = fields[5]
-        let ratingString = fields[6]
+        let notes = fields.count > 5 ? fields[5] : ""
+        let ratingString = fields.count > 6 ? fields[6] : ""
 
         guard let date = parseDate(dateString) else {
             return .skip("invalid date '\(dateString)'")
         }
-        guard let duration = Int(durationString.trimmingCharacters(in: .whitespaces)) else {
-            return .skip("invalid duration_seconds '\(durationString)'")
+        guard let duration = parseDuration(durationString) else {
+            return .skip("invalid duration '\(durationString)'")
         }
         guard let distance = Double(distanceString.trimmingCharacters(in: .whitespaces)) else {
             return .skip("invalid distance '\(distanceString)'")
         }
-        guard let rating = Int(ratingString.trimmingCharacters(in: .whitespaces)) else {
+
+        let rating: Int
+        let trimmedRating = ratingString.trimmingCharacters(in: .whitespaces)
+        if trimmedRating.isEmpty {
+            rating = 0
+        } else if let parsed = Int(trimmedRating) {
+            rating = parsed
+        } else {
             return .skip("invalid felt_rating '\(ratingString)'")
         }
 
-        let type = ExerciseType(rawValue: typeString) ?? .other
+        let type = ExerciseType.fromCSV(typeString) ?? ExerciseType(rawValue: typeString) ?? .other
+
+        // Infer name from exercise type display name if blank.
+        let resolvedName = name.trimmingCharacters(in: .whitespaces).isEmpty ? type.rawValue : name
 
         return .row(WorkoutCSVRow(
             date: date,
-            name: name,
+            name: resolvedName,
             type: type,
             durationSeconds: duration,
             distance: distance,
@@ -327,11 +457,14 @@ enum WorkoutCSV {
         ))
     }
 
-    /// Parses an ISO8601 date, falling back to the fractional-seconds variant.
+    /// Parses a date string, trying multiple formats in order:
+    /// ISO8601, ISO8601 with fractional seconds, yyyy-MM-dd, M/d/yyyy.
     private static func parseDate(_ string: String) -> Date? {
         let trimmed = string.trimmingCharacters(in: .whitespaces)
         if let d = iso8601Formatter.date(from: trimmed) { return d }
         if let d = iso8601FractionalFormatter.date(from: trimmed) { return d }
+        if let d = yyyyMMddFormatter.date(from: trimmed) { return d }
+        if let d = mdyyyyFormatter.date(from: trimmed) { return d }
         return nil
     }
 }

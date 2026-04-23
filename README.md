@@ -83,16 +83,39 @@ CloudKit sync is configured but requires a container ID registered in the Apple 
 
 ## Running Tests
 
-Tests use the Swift Testing framework. UI tests spin up simulators.
+Tests use the Swift Testing framework.
 
-### Unit Tests
+### Unit Tests (macOS — fast, no simulator needed)
 
-Run from Xcode (Cmd+U) or via:
+Run from Xcode (Cmd+U) or via CLI:
 
 ```bash
+# Run all unit tests on macOS
+xcodebuild test -scheme "Hybrid AIthletics" \
+  -only-testing:"Hybrid AIthleticsTests"
+```
+
+Unit tests run on macOS and don't require a simulator. They're fast and test all SwiftData models, CSV parsing, date/distance formatting, and logic layer code. Tests use `StubAICoachService` so the model is not needed.
+
+### UI Tests (iOS Simulator)
+
+Run UI tests with:
+
+```bash
+# Run all UI tests on iPhone 17 simulator
 xcodebuild test -scheme "Hybrid AIthletics" \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
-  -only-testing:"Hybrid AIthleticsTests"
+  -only-testing:"Hybrid AIthleticsUITests"
+```
+
+UI tests exercise the full app in the simulator and validate multi-step flows like calendar navigation, workout recording, and deletion.
+
+### AICoachCore Package Tests
+
+Test the shared prompt-building library:
+
+```bash
+cd Packages/AICoachCore && swift test
 ```
 
 ## Distance Units

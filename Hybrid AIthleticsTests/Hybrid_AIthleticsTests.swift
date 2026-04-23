@@ -783,6 +783,560 @@ struct WorkoutCSVTests {
         // CSV imports don't populate externalID (no stable row identifier yet).
         #expect(workout.externalID == nil)
     }
+
+    // MARK: Duration Parsing
+
+    @Test func parseDurationPlainIntegerTreatedAsSeconds() {
+        #expect(WorkoutCSV.parseDuration("1800") == 1800)
+    }
+
+    @Test func parseDurationOnlyMinutes() {
+        #expect(WorkoutCSV.parseDuration("40m") == 2400)
+    }
+
+    @Test func parseDurationOnlySeconds() {
+        #expect(WorkoutCSV.parseDuration("120s") == 120)
+    }
+
+    @Test func parseDurationOnlyHours() {
+        #expect(WorkoutCSV.parseDuration("2h") == 7200)
+    }
+
+    @Test func parseDurationHoursAndMinutes() {
+        #expect(WorkoutCSV.parseDuration("2h 30m") == 9000)
+    }
+
+    @Test func parseDurationAllUnits() {
+        #expect(WorkoutCSV.parseDuration("1h 30m 45s") == 5445)
+    }
+
+    @Test func parseDurationMinutesAndSeconds() {
+        #expect(WorkoutCSV.parseDuration("45m 30s") == 2730)
+    }
+
+    @Test func parseDurationUnitsOutOfOrder() {
+        #expect(WorkoutCSV.parseDuration("30m 2h") == 9000)
+    }
+
+    @Test func parseDurationLargeValues() {
+        #expect(WorkoutCSV.parseDuration("160m") == 9600)
+    }
+
+    @Test func parseDurationDecimalFloored() {
+        // 40.5m → floor(40.5) = 40 minutes = 2400 seconds
+        #expect(WorkoutCSV.parseDuration("40.5m") == 2400)
+    }
+
+    @Test func parseDurationInvalidReturnsNil() {
+        #expect(WorkoutCSV.parseDuration("abc") == nil)
+        #expect(WorkoutCSV.parseDuration("") == nil)
+    }
+
+    @Test func parseDurationMixedLargeUnbounded() {
+        // "2h 160m 0s" = 2*3600 + 160*60 + 0 = 16800
+        #expect(WorkoutCSV.parseDuration("2h 160m 0s") == 16800)
+    }
+
+    @Test func parseDurationDecimalSeconds() {
+        // "60.5s" → floor(60.5) = 60 seconds
+        #expect(WorkoutCSV.parseDuration("60.5s") == 60)
+    }
+
+    // MARK: Duration Formatting
+
+    @Test func formatDurationHumanReadable() {
+        #expect(WorkoutCSV.formatDuration(5400) == "1h 30m")
+        #expect(WorkoutCSV.formatDuration(0) == "0s")
+        #expect(WorkoutCSV.formatDuration(90) == "1m 30s")
+        #expect(WorkoutCSV.formatDuration(3600) == "1h")
+        #expect(WorkoutCSV.formatDuration(45) == "45s")
+    }
+
+    @Test func encodeHeaderUsesDurationNotDurationSeconds() {
+        #expect(WorkoutCSV.header.contains("duration"))
+        #expect(!WorkoutCSV.header.contains("duration_seconds"))
+    }
+
+    @Test func encodeDurationUsesHumanReadableFormat() {
+        // 2400 seconds = 40 minutes → "40m" in output
+        let workout = makeWorkout(durationSeconds: 2400)
+        let csv = WorkoutCSV.encode(workouts: [workout], unit: .miles)
+        #expect(csv.contains(",40m,"))
+    }
+
+    // MARK: Date Formats
+
+    @Test func parseDateISO8601Format() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2025-08-04T07:30:00Z,Run,run,1800,4,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+    }
+
+    @Test func parseDateYYYYMMDDFormat() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2025-08-04,Run,run,1800,4,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.skipped.isEmpty)
+    }
+
+    @Test func parseDateMMDDYYYYFormat() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        8/4/2025,Run,run,40m,4,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.skipped.isEmpty)
+    }
+
+    @Test func parseDateMMDDYYYYDoubleDigits() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        12/25/2025,Run,run,40m,4,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.skipped.isEmpty)
+    }
+
+    // MARK: Optional Fields
+
+    @Test func parseEmptyFeltRatingDefaultsToZero() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.rows[0].feltRating == 0)
+    }
+
+    @Test func parseEmptyNotesDefaultsToEmptyString() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,6
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.rows[0].notes == "")
+    }
+
+    @Test func parseRowWithFiveFields() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.rows[0].notes == "")
+        #expect(result.rows[0].feltRating == 0)
+    }
+
+    @Test func parseRowWithSixFields() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,good effort
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.rows[0].notes == "good effort")
+        #expect(result.rows[0].feltRating == 0)
+    }
+
+    // MARK: Type Parsing
+
+    @Test func parseCSVKeyMatchesExerciseType() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,easy,1800,3.00,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].type == .easyRun)
+    }
+
+    @Test func parseCSVKeyCaseInsensitive() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,Easy,1800,3.00,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].type == .easyRun)
+    }
+
+    @Test func parseDisplayNameStillWorks() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,Easy Run,1800,3.00,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].type == .easyRun)
+    }
+
+    @Test func parseCrossAliasMapsToOther() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Incline Walk,cross,1800,3.00,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].type == .other)
+    }
+
+    @Test func parseRaceType() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,5k,race,22m,3.5,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].type == .race)
+    }
+
+    // MARK: Name Inference
+
+    @Test func parseEmptyNameInferredFromType() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,,easy,1800,3.00,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].name == "Easy Run")
+    }
+
+    @Test func parseNonEmptyNamePreserved() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,My Custom Name,easy,1800,3.00,,
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].name == "My Custom Name")
+    }
+
+    // MARK: Exercise Creation
+
+    @Test func toWorkoutWithExerciseCreatesBothModels() {
+        let row = WorkoutCSVRow(
+            date: referenceDate,
+            name: "Test Run",
+            type: .easyRun,
+            durationSeconds: 2400,
+            distance: 4.0,
+            notes: "",
+            feltRating: 0
+        )
+        let (exercise, workout) = WorkoutCSV.toWorkoutWithExercise(row, unit: .miles)
+        #expect(exercise.name == "Test Run")
+        #expect(exercise.type == .easyRun)
+        #expect(exercise.durationSeconds == 2400)
+        #expect(abs(exercise.distanceMiles - 4.0) < 0.001)
+        #expect(exercise.isRepeating == false)
+
+        #expect(workout.name == "Test Run")
+        #expect(workout.type == .easyRun)
+        #expect(workout.durationSeconds == 2400)
+        #expect(workout.source == WorkoutSource.csv.rawValue)
+    }
+
+    @Test func toWorkoutWithExerciseLinksSourceExercise() throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        let existing = try context.fetch(FetchDescriptor<Workout>())
+        for w in existing { context.delete(w) }
+        let existingExercises = try context.fetch(FetchDescriptor<Exercise>())
+        for e in existingExercises { context.delete(e) }
+        try context.save()
+
+        let row = WorkoutCSVRow(
+            date: referenceDate,
+            name: "Linked Run",
+            type: .run,
+            durationSeconds: 1800,
+            distance: 3.0,
+            notes: "",
+            feltRating: 5
+        )
+        let (exercise, workout) = WorkoutCSV.toWorkoutWithExercise(row, unit: .miles)
+        context.insert(exercise)
+        context.insert(workout)
+        try context.save()
+
+        let fetchedWorkouts = try context.fetch(FetchDescriptor<Workout>())
+        let fetchedExercises = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(fetchedWorkouts.count == 1)
+        #expect(fetchedExercises.count == 1)
+        #expect(fetchedWorkouts[0].sourceExercise?.id == fetchedExercises[0].id)
+    }
+
+    // MARK: ExerciseType CSV Key
+
+    @Test func exerciseTypeFromCSVMatchesAllKeys() {
+        for type in ExerciseType.allCases {
+            let resolved = ExerciseType.fromCSV(type.csvKey)
+            #expect(resolved == type, "csvKey '\(type.csvKey)' should resolve to \(type)")
+        }
+    }
+
+    @Test func exerciseTypeFromCSVCrossAlias() {
+        #expect(ExerciseType.fromCSV("cross") == .other)
+    }
+
+    @Test func exerciseTypeRaceHasExpectedProperties() {
+        #expect(ExerciseType.race.rawValue == "Race")
+        #expect(ExerciseType.race.csvKey == "race")
+        #expect(ExerciseType.fromCSV("race") == .race)
+    }
+
+    // MARK: CRLF line endings
+
+    @Test func parseCRLFLineEndings() throws {
+        let csv = "date,name,type,duration,distance,notes,felt_rating\r\n" +
+                  "8/4/2025,Easy Run,easy,40m,4,,\r\n" +
+                  "8/5/2025,Tempo Run,tempo,45m,5,,\r\n"
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 2)
+        #expect(result.skipped.isEmpty)
+        #expect(result.rows[0].name == "Easy Run")
+        #expect(result.rows[1].name == "Tempo Run")
+    }
+
+    @Test func parseCRLFWithoutTrailingNewline() throws {
+        let csv = "date,name,type,duration,distance,notes,felt_rating\r\n" +
+                  "8/4/2025,Easy Run,easy,40m,4,,"
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.count == 1)
+        #expect(result.rows[0].name == "Easy Run")
+    }
+
+    // MARK: Example CSV integration
+
+    @Test func parseExampleCSVFile() throws {
+        let csv = """
+            date,name,type,duration,distance,notes,felt_rating
+            8/4/2025,Easy Run,easy,40m,4,,
+            8/5/2025,Easy Run,easy,40m,4,,
+            8/7/2025,Easy Run,easy,30m,3,,
+            8/7/2025,Tempo Run,tempo,45m,5,,
+            8/8/2025,Easy Run,easy,40m,4,,
+            8/11/2025,Easy Run,easy,40m,4,,
+            8/13/2025,Interval Run,interval,45m,5,,
+            8/14/2025,Easy Run,easy,40m,4,,
+            8/16/2025,Long Run,long,83m,9,,
+            8/18/2025,Walking On Incline,cross,50m,2.5,,
+            8/19/2025,Easy Run,easy,40m,4,,
+            8/20/2025,Easy Run,easy,40m,4,,
+            8/21/2025,Tempo Run,tempo,45m,5,,
+            8/23/2025,Long Run,long,86m,9,,
+            8/25/2025,Tempo Run,tempo,35m,4,,
+            8/26/2025,Walking On Incline,cross,40m,2,,
+            8/27/2025,Tempo Run,tempo,43m,5,,
+            8/28/2025,Easy Run,easy,37m 20s,4,,
+            8/29/2025,Hill Workout,interval,50m,5,,
+            8/30/2025,Easy Run,easy,39m,4,,
+            9/1/2025,Easy Run,easy,52m 45s,5,,
+            9/2/2025,Walking On Incline,cross,40m,2,,
+            9/3/2025,Tempo Run,tempo,42m 30s,5,,
+            9/4/2025,Easy Run,easy,40m,4,,
+            9/5/2025,Practice 5k,tempo,60.5m,6,,
+            9/7/2025,Easy Run,easy,38m 40s,4,,
+            9/8/2025,Walking On Incline,cross,90m,4.5,,
+            9/9/2025,Hill Workout,interval,64m,6.5,,
+            9/10/2025,Easy Run,easy,40m,4,,
+            9/11/2025,Easy Run,easy,35m,3.5,,
+            9/12/2025,Easy Run,easy,38m 30s,4,,
+            9/14/2025,5k,race,22m,3.5,,
+            9/16/2025,Easy Run,easy,50m,5,,
+            9/17/2025,Easy Run,easy,40m,4,,
+            9/18/2025,Easy Run,easy,42m,4,,
+            9/19/2025,Medium-Long Run,run,74m,8,,
+            9/21/2025,Easy Run,easy,40m,4,,
+            9/22/2025,Walking On Incline,cross,30m,1.5,,
+            9/22/2025,Easy Run,easy,22m 30s,2,,
+            9/23/2025,Easy Run,easy,30m,3,,
+            9/24/2025,Tempo Run,tempo,51m 20s,6,,
+            9/25/2025,Easy Run,easy,40m,4,,
+            9/26/2025,Easy Run,easy,42m 30s,4.25,,
+            9/27/2025,Long Run,long,71m 15s,8,,
+            9/29/2025,Walking On Incline,cross,50m,2.5,,
+            9/30/2025,Easy Run,easy,40m 30s,5,,
+            10/1/2025,Easy Run,easy,40m,4,,
+            10/2/2025,Tempo Run,tempo,55m,6,,
+            10/3/2025,Easy Run,easy,52m,5,,
+            10/4/2025,Long Run,long,72m,8,,
+            10/7/2025,Easy Run,easy,48m 30s,5,,
+            10/8/2025,Tempo Run,tempo,49m,6,,
+            10/9/2025,Easy Run,easy,40m,4,,
+            10/10/2025,Easy Run,easy,50m,5,,
+            10/12/2025,Long Run,long,90m,10,,
+            10/13/2025,Hiking,cross,70m,2.5,,
+            10/14/2025,Easy Run,easy,40m,4,,
+            10/15/2025,Easy Run,easy,62m 30s,6,,
+            10/16/2025,Easy Run,easy,60m,6,,
+            10/17/2025,Easy Run,easy,40m,4,,
+            10/18/2025,Easy Run,easy,50m,5,,
+            10/20/2025,Walking On Incline,cross,40m,2,,
+            10/21/2025,Easy Run,easy,48m,5,,
+            10/22/2025,Tempo Run,tempo,52m,6,,
+            10/23/2025,Easy Run,easy,45m,5,,
+            10/24/2025,Easy Run,easy,50m,5,,
+            10/25/2025,Long Run,long,90m,9,,
+            10/28/2025,Easy Run,easy,50m,5,,
+            10/29/2025,Easy Run,easy,50m,5,,
+            10/30/2025,Tempo Run,tempo,54m,6,,
+            10/31/2025,Easy Run,easy,45m,5,,
+            11/1/2025,Long Run,long,90m,9,,
+            11/4/2025,Walking On Incline,cross,40m,2,,
+            11/4/2025,Easy Run,easy,50m,5,,
+            11/5/2025,Tempo Run,tempo,50m,6,,
+            11/6/2025,Easy Run,easy,50m,5,,
+            11/8/2025,Long Run,long,90m,9,,
+            11/9/2025,Easy Run,easy,42m 40s,5,,
+            11/11/2025,Tempo Run,tempo,51m,6,,
+            11/12/2025,Easy Run,easy,30m,3,,
+            11/13/2025,Tempo Run,tempo,52m 40s,6,,
+            11/14/2025,Easy Run,easy,50m,5,,
+            11/15/2025,Long Run,long,87m,10,,
+            11/17/2025,Easy Run,easy,60m,6,,
+            11/18/2025,Easy Run,easy,56m 45s,6,,
+            11/23/2025,Tempo Run,tempo,53m 40s,6,,
+            11/24/2025,Hiking,cross,120m,4.3,,
+            11/28/2025,Easy Run,easy,50m,5,,
+            11/29/2025,Long Run,long,89m 20s,10,,
+            12/2/2025,Easy Run,easy,50m,5,,
+            12/4/2025,Easy Run,easy,60m,6,,
+            12/5/2025,Easy Run,easy,50m,5,,
+            12/6/2025,Long Run,long,82m,9.25,,
+            12/9/2025,Easy Run,easy,50m,5,,
+            12/10/2025,Tempo Run,tempo,50m,6,,
+            12/11/2025,Easy Run,easy,50m,5,,
+            12/12/2025,Easy Run,easy,50m,5,,
+            12/13/2025,Long Run,long,84m,9,,
+            12/16/2025,Easy Run,easy,50m,5,,
+            12/17/2025,Easy Run,easy,50m,5,,
+            12/18/2025,Tempo Run,tempo,51m,6,,
+            12/19/2025,Easy Run,easy,50m,5,,
+            12/20/2025,Long Run,long,90m,9,,
+            12/22/2025,Easy Run,easy,50m,5,,
+            12/23/2025,Easy Run,easy,50m,5,,
+            12/24/2025,Tempo Run,tempo,52m 30s,6,,
+            12/27/2025,Long Run,long,80m,9,,
+            12/30/2025,Easy Run,easy,50m,5,,
+            12/31/2025,Tempo Run,tempo,50m,6,,
+            1/1/2026,Easy Run,easy,50m,5,,
+            1/2/2026,Easy Run,easy,50m,5,,
+            1/3/2026,Long Run,long,85m,9,,
+            1/5/2026,Tempo Run,tempo,52m,6,,
+            1/6/2026,Easy Run,easy,40m,4,,
+            1/9/2026,Easy Run,easy,60m,6,,
+            1/10/2026,Long Run,long,90m,10,,
+            1/11/2026,Easy Run,easy,40m,4,,
+            1/13/2026,Easy Run,easy,36m 40s,4,,
+            1/14/2026,Tempo Run,tempo,42m 30s,5,,
+            1/15/2026,Easy Run,easy,56m,6,,
+            1/17/2026,Easy Run,easy,50m,5,,
+            1/18/2026,Long Run,long,77m,9,,
+            1/20/2026,Easy Run,easy,50m,5,,
+            1/21/2026,Hill Workout,interval,55m 30s,6,,
+            1/22/2026,Easy Run,easy,50m,5,,
+            1/23/2026,Easy Run,easy,50m,5,,
+            1/25/2026,Long Run,long,77m 30s,9,,
+            1/27/2026,Tempo Run,tempo,50m,6,,
+            1/28/2026,Easy Run,easy,50m,5,,
+            1/29/2026,Easy Run,easy,40m,4,,
+            1/30/2026,Easy Run,easy,60m,6,,
+            2/1/2026,Long Run,long,88m 30s,9,,
+            2/3/2026,Easy Run,easy,50m,5,,
+            2/4/2026,Tempo Run,tempo,52m 30s,6,,
+            2/6/2026,Easy Run,easy,50m,5,,
+            2/7/2026,Long Run,long,90m,9,,
+            2/8/2026,Easy Run,easy,49m,5,,
+            2/10/2026,Easy Run,easy,47m,5,,
+            2/11/2026,Easy Run,easy,46m,5,,
+            2/14/2026,Long Run,long,111m 30s,13.1,,
+            2/15/2026,Easy Run,easy,50m,5,,
+            2/17/2026,Easy Run,easy,60m 30s,7,,
+            2/18/2026,Easy Run,easy,36m 30s,4,,
+            2/19/2026,Tempo Run,tempo,49m 30s,6,,
+            2/21/2026,Long Run,long,2h 2m 30s,14,,
+            2/22/2026,Easy Run,easy,40m,4,,
+            2/24/2026,Easy Run,easy,56m,6,,
+            2/25/2026,Easy Run,easy,50m,5,,
+            2/26/2026,Easy Run,easy,74m 15s,8.1,,
+            2/27/2026,Easy Run,easy,40m,4,,
+            2/28/2026,Long Run,long,140m 20s,15.3,,
+            3/3/2026,Tempo Run,tempo,60m,7,,
+            3/4/2026,Easy Run,easy,46m,5,,
+            3/5/2026,Easy Run,easy,74m,8,,
+            3/6/2026,Easy Run,easy,50m,5,,
+            3/8/2026,Long Run,long,141m 20s,16,,
+            3/10/2026,Easy Run,easy,50m,5,,
+            3/11/2026,Easy Run,easy,55m 45s,6,,
+            3/12/2026,Easy Run,easy,74m 20s,8,,
+            3/13/2026,Easy Run,easy,35m 20s,4,,
+            3/16/2026,Tempo Run,tempo,71m 30s,8,,
+            3/19/2026,Medium-Long Run,run,82m 15s,9,,
+            3/19/2026,Easy Run,easy,40m,4,,
+            3/20/2026,Easy Run,easy,60m,6,,
+            3/21/2026,Long Run,long,167m 30s,18.07,,
+            3/24/2026,Easy Run,easy,68m 30s,8,,
+            3/25/2026,Easy Run,easy,54m,6,,
+            3/26/2026,Medium-Long Run,run,97m,10,,
+            3/27/2026,Easy Run,easy,47m,5,,
+            3/29/2026,Long Run,long,3h 2m 30s,20,,
+            4/3/2026,Medium-Long Run,run,106m,12,,
+            4/5/2026,Medium-Long Run,run,80m,8,,
+            4/7/2026,Interval Run,interval,61m,7,,
+            4/8/2026,Easy Run,easy,75m 30s,8,,
+            4/9/2026,Tempo Run,tempo,54m,6,,
+            4/10/2026,Easy Run,easy,62m 15s,7,,
+            4/11/2026,Long Run,long,192m,20,,
+            4/21/2026,Easy Run,easy,64m 40s,7,,
+            4/22/2026,Tempo Run,tempo,60m,7,,
+            """
+        let result = try WorkoutCSV.parse(csv)
+
+        #expect(result.rows.count == 179, "All 179 data rows should parse")
+        #expect(result.skipped.isEmpty, "No rows should be skipped")
+
+        // Verify first row
+        #expect(result.rows[0].name == "Easy Run")
+        #expect(result.rows[0].type == .easyRun)
+        #expect(result.rows[0].durationSeconds == 2400) // 40m
+        #expect(result.rows[0].distance == 4.0)
+
+        // Verify "cross" alias maps to .other
+        let crossRows = result.rows.filter { $0.type == .other }
+        #expect(crossRows.count == 10, "cross alias rows map to .other")
+        #expect(crossRows[0].name == "Walking On Incline")
+
+        // Verify race type
+        let raceRows = result.rows.filter { $0.type == .race }
+        #expect(raceRows.count == 1)
+        #expect(raceRows[0].name == "5k")
+        #expect(raceRows[0].durationSeconds == 1320) // 22m
+
+        // Verify multi-unit durations
+        let longRun2h = result.rows.first { $0.durationSeconds == 7350 } // 2h 2m 30s
+        #expect(longRun2h != nil, "2h 2m 30s should parse to 7350s")
+        #expect(longRun2h?.distance == 14.0)
+
+        let longRun3h = result.rows.first { $0.durationSeconds == 10950 } // 3h 2m 30s
+        #expect(longRun3h != nil, "3h 2m 30s should parse to 10950s")
+        #expect(longRun3h?.distance == 20.0)
+
+        // Verify decimal duration is floored
+        let practice5k = result.rows.first { $0.name == "Practice 5k" }
+        #expect(practice5k?.durationSeconds == 3600) // 60.5m → floor(60.5)*60 = 3600
+
+        // Verify last row
+        #expect(result.rows[178].name == "Tempo Run")
+        #expect(result.rows[178].type == .tempoRun)
+        #expect(result.rows[178].durationSeconds == 3600) // 60m
+        #expect(result.rows[178].distance == 7.0)
+    }
 }
 
 // MARK: - WorkoutSource Tests
