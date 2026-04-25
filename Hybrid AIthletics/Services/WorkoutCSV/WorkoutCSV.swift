@@ -95,7 +95,8 @@ enum WorkoutCSV {
     /// - Returns: A full CSV document ending with a trailing newline.
     static func encode(workouts: [Workout], unit: WorkoutCSVDistanceUnit) -> String {
         var output = header + "\n"
-        for workout in workouts {
+        let sorted = workouts.sorted { $0.date < $1.date }
+        for workout in sorted {
             output += encodeRow(workout: workout, unit: unit) + "\n"
         }
         return output
@@ -103,7 +104,7 @@ enum WorkoutCSV {
 
     /// Serializes a single workout as one CSV row (no trailing newline).
     static func encodeRow(workout: Workout, unit: WorkoutCSVDistanceUnit) -> String {
-        let date = iso8601Formatter.string(from: workout.date)
+        let date = mdyyyyFormatter.string(from: workout.date)
         let distance = unit.fromMiles(workout.distanceMiles)
         let fields: [String] = [
             escape(date),

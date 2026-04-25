@@ -867,6 +867,37 @@ struct WorkoutCSVTests {
         #expect(csv.contains(",40m,"))
     }
 
+    @Test func encodeDateUsesSlashFormat() {
+        let workout = makeWorkout()
+        let csv = WorkoutCSV.encode(workouts: [workout], unit: .miles)
+        // referenceDate is April 9, 2026 — should appear as 4/9/2026
+        #expect(csv.contains("4/9/2026"))
+        #expect(!csv.contains("2026-04-09"))
+    }
+
+    @Test func encodeSortsRowsByDateAscending() {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date())
+        let yesterday = cal.date(byAdding: .day, value: -1, to: today)!
+        let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
+
+        // Create workouts in non-chronological order.
+        let w1 = Workout(name: "Tomorrow", type: .run, durationSeconds: 1800,
+                         distanceMiles: 3.0, date: tomorrow, feltRating: 5)
+        let w2 = Workout(name: "Yesterday", type: .run, durationSeconds: 1800,
+                         distanceMiles: 3.0, date: yesterday, feltRating: 5)
+        let w3 = Workout(name: "Today", type: .run, durationSeconds: 1800,
+                         distanceMiles: 3.0, date: today, feltRating: 5)
+
+        let csv = WorkoutCSV.encode(workouts: [w1, w2, w3], unit: .miles)
+        let lines = csv.split(separator: "\n", omittingEmptySubsequences: true)
+        // Header + 3 data rows.
+        #expect(lines.count == 4)
+        #expect(lines[1].contains("Yesterday"))
+        #expect(lines[2].contains("Today"))
+        #expect(lines[3].contains("Tomorrow"))
+    }
+
     // MARK: Date Formats
 
     @Test func parseDateISO8601Format() throws {
