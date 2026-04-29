@@ -34,6 +34,7 @@ cd Evals && swift run CoachEval inspect --scenario high-rpe --prompt-mode chat
 - **AI Coach service layer**: `AICoachService` protocol with two implementations — `MLXAICoachService` (production, Gemma 3 4B via MLX-Swift) and `StubAICoachService` (previews/tests). Injected via `@Environment(\.aiCoach)`. Default environment value is the stub so previews never load real models. Uses `UserInput(chat:)` with separate system/user roles for proper Gemma 3 chat template formatting.
 - **AI model delivery**: Gemma 3 4B QAT 4-bit weights are **not bundled** — they download from Hugging Face on first use via `ModelConfiguration(id:)` and are cached locally for offline access.
 - **Conditional compilation**: All MLX-specific code is gated behind `#if canImport(MLXLLM)`. The `#else` branches throw `AICoachError.notImplemented` so the app compiles on simulators/CI without the SPM dependency resolved.
+- **Google Sheets Sync**: `GoogleSheetsSyncCoordinator` (`@MainActor @Observable`) debounces workout mutations and exports via the `GoogleSheetsAPI` protocol (`LiveGoogleSheetsAPI` uses GoogleSignIn-iOS + URLSession behind `#if canImport(GoogleSignIn)`; `StubGoogleSheetsAPI` for previews/tests). Injected via `@Environment(\.googleSheetsSync)`. Uses the **`auth/drive.file` scope** (per-file access only — non-sensitive, no Google verification needed); never `auth/spreadsheets`. OAuth client + Info.plist setup is documented in README.
 
 ## Testing Requirements
 
@@ -53,6 +54,7 @@ cd Evals && swift run CoachEval inspect --scenario high-rpe --prompt-mode chat
 - Header doc comments on all public/internal functions
 - `ModelContainerFactory.makePreviewContainer()` for test and preview contexts
 - Cached `DateFormatter` instances (static lets) — never allocate in computed properties
+- **Sheets sync `syncNow()` vs `performSync()` must stay split.** The debounce `Task` calls `performSync()` directly. Calling `syncNow()` from inside the debounce task would `.cancel()` the task on itself, propagating cancellation to the in-flight `URLSession` and surfacing as `CancellationError("cancelled")`. `StubGoogleSheetsAPI.overwriteSheet` calls `Task.checkCancellation()` to catch regressions of this pattern.
 
 ## File Layout
 ```
@@ -83,6 +85,8 @@ Views/
 - `Services/AICoach/AICoachService.swift` — protocol + `AICoachError` enum
 - `Services/AICoach/MLXAICoachService.swift` — production coach; swap model via `modelID` constant
 - `Services/AICoach/CoachTypeConversions.swift` — SwiftData → AICoachCore type bridge
+- `Services/GoogleSheetsSync/GoogleSheetsSyncCoordinator.swift` — debounce + lifecycle + `GoogleSheetsSyncStatus` enum
+- `Services/GoogleSheetsSync/GoogleSheetsAPI.swift` — protocol + Live (GoogleSignIn + URLSession) + Stub implementations
 - `Views/Shared/WorkoutFormFields.swift` — reusable workout form sections shared by `RecordWorkoutSheet` (create) and `WorkoutDetailSheet` (edit)
 - `Views/History/WorkoutDetailSheet.swift` — edit + delete popup for a recorded workout; contains the `WorkoutEditor` helper enum that owns the mutation path (unit-tested)
 - `Views/History/WorkoutListView.swift` — discrete 10-per-page pagination, tappable rows, calendar-driven navigation/highlight, `WorkoutListPagination` helper for testable page math
