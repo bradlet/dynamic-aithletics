@@ -14,6 +14,7 @@ import Foundation
 import AICoachCore
 
 #if canImport(MLXLLM)
+import MLX
 import MLXLLM
 import MLXLMCommon
 import Tokenizers
@@ -82,6 +83,11 @@ final class MLXAICoachService: AICoachService, @unchecked Sendable {
     func loadModel() async throws {
         #if canImport(MLXLLM)
         guard cachedContainer == nil else { return }
+        // Cap MLX's GPU buffer cache so iOS jetsam doesn't kill the app during
+        // generation. Without this, intermediate inference buffers accumulate
+        // until peak RSS crosses the per-process memory limit and the OS
+        // SIGKILLs us mid-token. 20 MB matches MLX's iOS guidance.
+        MLX.Memory.cacheLimit = 20 * 1024 * 1024
         let progressHandler = onDownloadProgress
         cachedContainer = try await LLMModelFactory.shared.loadContainer(
             configuration: configuration
