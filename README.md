@@ -104,32 +104,13 @@ The app's sync code is gated behind `#if canImport(GoogleSignIn)` (mirroring the
 
 #### 3. Configure the OAuth Consent Screen
 
-The Sheets `auth/spreadsheets` scope is classified as a **sensitive** scope. The OAuth consent screen has two relevant publishing modes for a personal app:
-
-| Mode | Refresh token | Setup cost | First-sign-in UX |
-|---|---|---|---|
-| **External + Testing** | Expires every 7 days → user re-signs-in weekly | Minimal (no privacy policy URL required) | Clean — no warning |
-| **External + Production (verified)** | Permanent | Submit for Google review (3–5 business days) + privacy/ToS URLs + demo video | Clean — no warning |
-
-Pick whichever you prefer; the in-app code is identical.
-
-##### Option A — Testing mode (simpler, weekly re-auth)
+The app uses the `auth/drive.file` scope, which grants per-file access only to the spreadsheet the app creates — not the rest of the user's Drive. This is a **non-sensitive** scope, so no Google verification or privacy-policy URL is required and refresh tokens do not expire on the 7-day Testing-mode timer.
 
 1. **APIs & Services → OAuth consent screen** → User type: **External** → Create.
-2. App information: name (e.g. "Hybrid AIthletics"), user support email, developer contact email. The app logo, privacy policy URL, and ToS URL are optional in Testing mode and can be skipped.
-3. **Scopes** step: add `https://www.googleapis.com/auth/spreadsheets`.
+2. App information: name (e.g. "Hybrid AIthletics"), user support email, developer contact email. The app logo, privacy policy URL, ToS URL, and authorized domains can all be left blank.
+3. **Scopes** step: add `https://www.googleapis.com/auth/drive.file`. Do **not** add `auth/spreadsheets` — that scope is broader (full Drive Sheets access) and would trigger sensitive-scope verification.
 4. **Test users** step: add your own Google account email. Only test users can sign in while the app is in Testing mode.
-5. Save. Publishing status stays at **Testing**.
-
-> **Note on the 7-day refresh token expiry:** Google issues refresh tokens that expire after 7 days when the consent screen is in Testing mode and the app requests a sensitive scope. The app handles this gracefully — when a sync fails after a week, the History tab menu icon shows a small red dot and a "Sign in to resume Sheets Sync" item appears. Re-signing in restores sync without losing the spreadsheet.
-
-##### Option B — Production verified (permanent token, one-time review)
-
-1. Complete steps 1–3 from Option A.
-2. Privacy/ToS URLs are required. They can be plain markdown files served from your GitHub Pages or any public URL — example boilerplate is fine for a personal app.
-3. Upload an app logo (120×120 PNG minimum) and add the **authorized domain** that hosts the privacy policy.
-4. **Publishing status**: click **Publish App** → submit for verification. Google reviews sensitive-scope apps in 3–5 business days. They typically request a short demo video showing what the scope is used for; OBS or QuickTime screen recordings work fine.
-5. Once approved, the consent screen has **In production** status. Refresh tokens are permanent. Up to 100 users can sign in without further action; for >100 users you'd need additional verification, but for personal use this is irrelevant.
+5. Save. Publishing status stays at **Testing** indefinitely; no verification needed.
 
 #### 4. Create the iOS OAuth Client ID
 

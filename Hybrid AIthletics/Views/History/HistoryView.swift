@@ -41,6 +41,10 @@ struct HistoryView: View {
     // MARK: Google Sheets Sync state
 
     @State private var isSheetsSyncConfirmationPresented = false
+    /// When non-nil, presents the failure-explanation alert with the given
+    /// reason and a Retry/Cancel pair. Tapping "Retry Google Sheets Sync"
+    /// in the menu sets this to the current `.failed` reason.
+    @State private var pendingFailureRetry: String?
 
     var body: some View {
         NavigationStack {
@@ -79,15 +83,7 @@ struct HistoryView: View {
                     } label: {
                         ZStack(alignment: .topTrailing) {
                             Image(systemName: "ellipsis.circle")
-                            // Tiny red dot when the most recent sync failed,
-                            // so the user knows something needs attention
-                            // without a blocking alert.
-                            if case .failed = sheetsSync.status {
-                                Circle()
-                                    .fill(.red)
-                                    .frame(width: 7, height: 7)
-                                    .offset(x: 4, y: -3)
-                            }
+                            sheetsSyncStatusDot
                         }
                     }
                 }
@@ -154,6 +150,45 @@ struct HistoryView: View {
             } message: {
                 Text("This will create a new Google Sheet and overwrite it every time you add or edit a workout. Sync is one-way: any edits you make in Google Sheets will be wiped on the next save. You can disable sync any time from this menu.")
             }
+            .alert(
+                "Sync failed",
+                isPresented: Binding(
+                    get: { pendingFailureRetry != nil },
+                    set: { if !$0 { pendingFailureRetry = nil } }
+                ),
+                presenting: pendingFailureRetry
+            ) { _ in
+                Button("Cancel", role: .cancel) { pendingFailureRetry = nil }
+                Button("Retry") {
+                    pendingFailureRetry = nil
+                    Task { await sheetsSync.syncNow() }
+                }
+            } message: { reason in
+                Text("Error reason: \(reason)")
+            }
+        }
+    }
+
+    // MARK: Sync status indicators
+
+    /// Small dot shown over the toolbar's ellipsis icon. Yellow while a
+    /// sync is queued or in flight, red on the last sync's failure, hidden
+    /// otherwise.
+    @ViewBuilder
+    private var sheetsSyncStatusDot: some View {
+        switch sheetsSync.status {
+        case .syncing:
+            Circle()
+                .fill(.yellow)
+                .frame(width: 7, height: 7)
+                .offset(x: 4, y: -3)
+        case .failed:
+            Circle()
+                .fill(.red)
+                .frame(width: 7, height: 7)
+                .offset(x: 4, y: -3)
+        default:
+            EmptyView()
         }
     }
 
@@ -166,12 +201,13 @@ struct HistoryView: View {
     @ViewBuilder
     private var sheetsSyncMenuSection: some View {
         if sheetsSync.isEnabled {
+            sheetsSyncStatusMenuRow
             switch sheetsSync.status {
             case .failed(let reason):
                 Button {
-                    Task { await sheetsSync.syncNow() }
+                    pendingFailureRetry = reason
                 } label: {
-                    Label("Retry Google Sheets Sync (\(reason))",
+                    Label("Retry Google Sheets Sync",
                           systemImage: "exclamationmark.arrow.triangle.2.circlepath")
                 }
             case .needsAuth:
@@ -194,6 +230,24 @@ struct HistoryView: View {
             } label: {
                 Label("Google Sheets Sync", systemImage: "tablecells")
             }
+        }
+    }
+
+    /// Non-actionable status row shown at the top of the Sheets Sync menu
+    /// when sync is enabled. Static italic "syncing…" while pending or
+    /// uploading, green "Synced" when idle/successful. Hidden in the
+    /// `.failed` and `.needsAuth` paths since the action buttons under
+    /// those states already carry the signal.
+    @ViewBuilder
+    private var sheetsSyncStatusMenuRow: some View {
+        switch sheetsSync.status {
+        case .syncing:
+            Text("Syncing…")
+                .italic()
+        case .success, .idle:
+            Label("Synced", systemImage: "checkmark.circle.fill")
+        default:
+            EmptyView()
         }
     }
 

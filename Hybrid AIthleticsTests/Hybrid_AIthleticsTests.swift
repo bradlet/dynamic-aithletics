@@ -2649,6 +2649,30 @@ struct GoogleSheetsSyncCoordinatorTests {
         #expect(api.overwriteCount == 0)
     }
 
+    @Test func requestSyncSetsSyncingImmediately() async throws {
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        coordinator.requestSync()
+
+        // Pending state should be visible immediately, before the debounce
+        // sleep elapses, so the History tab can render the yellow dot +
+        // "syncing…" indicator during the wait.
+        #expect(coordinator.status == .syncing)
+
+        try? await Task.sleep(nanoseconds: 1_400_000_000)
+
+        if case .success = coordinator.status {
+            // ok
+        } else {
+            Issue.record("expected status .success after debounce + upload, got \(coordinator.status)")
+        }
+        #expect(api.overwriteCount == 1)
+    }
+
     @Test func multipleRequestSyncCallsCollapseToOneSync() async throws {
         let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
         insertWorkout(in: container)

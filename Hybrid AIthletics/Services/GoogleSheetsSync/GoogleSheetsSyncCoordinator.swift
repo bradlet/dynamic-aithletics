@@ -69,7 +69,7 @@ final class GoogleSheetsSyncCoordinator {
 
     // MARK: - Init
 
-    init(api: GoogleSheetsAPI, debounceSeconds: UInt64 = 30) {
+    init(api: GoogleSheetsAPI, debounceSeconds: UInt64 = 10) {
         self.api = api
         self.debounceSeconds = debounceSeconds
     }
@@ -160,12 +160,21 @@ final class GoogleSheetsSyncCoordinator {
     func requestSync() {
         guard isEnabled, spreadsheetID != nil else { return }
         debounceTask?.cancel()
+        // Surface the pending state immediately so the History tab can show
+        // the yellow toolbar dot + "syncing…" indicator during the debounce
+        // window, not just once the upload starts.
+        status = .syncing
         debounceTask = Task { [weak self] in
             guard let self else { return }
             let nanos = self.debounceSeconds * 1_000_000_000
             try? await Task.sleep(nanoseconds: nanos)
             if Task.isCancelled { return }
-            await self.syncNow()
+            // Drop the self-reference *before* the upload: a subsequent
+            // `requestSync()` from a mutation site during the upload must
+            // not cancel this task (URLSession would throw CancellationError
+            // mid-flight). It can schedule a fresh debounce instead.
+            self.debounceTask = nil
+            await self.performSync()
         }
     }
 
@@ -174,13 +183,24 @@ final class GoogleSheetsSyncCoordinator {
     /// post-batch upload. Also used to flush a pending debounce on app
     /// backgrounding or retry.
     func syncNow() async {
+        // Cancelling here only meaningfully affects *direct* callers (batch
+        // imports, retry button). The debounce task clears its own
+        // `debounceTask` reference before invoking `performSync`, so a
+        // debounce-fired sync never cancels itself here.
+        debounceTask?.cancel()
+        debounceTask = nil
+        await performSync()
+    }
+
+    /// Shared upload path used by both the debounce task and direct
+    /// `syncNow()` callers. Does not touch `debounceTask` so it's safe to
+    /// invoke from inside the debounce task without self-cancelling.
+    private func performSync() async {
         guard isEnabled, let id = spreadsheetID, let modelContainer else { return }
         guard api.isAuthorized else {
             status = .needsAuth
             return
         }
-        debounceTask?.cancel()
-        debounceTask = nil
         status = .syncing
         do {
             let rows = try fetchAndEncodeRows(container: modelContainer)

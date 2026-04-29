@@ -56,9 +56,11 @@ protocol GoogleSheetsAPI: AnyObject {
 @MainActor
 final class LiveGoogleSheetsAPI: GoogleSheetsAPI {
 
-    /// Sheets read+write scope. Sensitive scope; see README for OAuth
-    /// consent screen setup.
-    static let scope = "https://www.googleapis.com/auth/spreadsheets"
+    /// Per-file Drive scope. Grants the app read/write/delete access only
+    /// to files it created (via `createSpreadsheet`) or that the user
+    /// explicitly opens with the app — never the rest of the user's Drive.
+    /// Non-sensitive, so no Google verification is required.
+    static let scope = "https://www.googleapis.com/auth/drive.file"
 
     var isAuthorized: Bool {
         guard let user = GIDSignIn.sharedInstance.currentUser else { return false }
@@ -236,6 +238,10 @@ final class StubGoogleSheetsAPI: GoogleSheetsAPI {
             nextOverwriteError = nil
             throw error
         }
+        // Mirror real URLSession behavior: bail with CancellationError if
+        // the calling task has been cancelled. Catches regressions where
+        // the coordinator accidentally cancels its own in-flight sync.
+        try Task.checkCancellation()
         overwriteCount += 1
         lastWrittenRows = rows
         lastSpreadsheetID = spreadsheetId
