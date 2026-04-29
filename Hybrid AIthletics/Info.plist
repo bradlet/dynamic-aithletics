@@ -2,8 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>UIBackgroundModes</key>
-	<array/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.googleusercontent.apps.194504085959-f1bhbq2bic5qnajo4rcn91p1oe06cjro</string>
+			</array>
+		</dict>
+	</array>
+	<key>GIDClientID</key>
+	<string>194504085959-f1bhbq2bic5qnajo4rcn91p1oe06cjro.apps.googleusercontent.com</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
@@ -15,8 +26,6 @@
 			<string>Exercise Drag Item</string>
 			<key>UTTypeIdentifier</key>
 			<string>com.hybridaithletics.exercise</string>
-			<key>UTTypeTagSpecification</key>
-			<dict/>
 		</dict>
 	</array>
 </dict>

@@ -2392,3 +2392,345 @@ struct ExerciseCascadeDeleteTests {
         #expect(workouts.isEmpty, "Associated workouts deleted")
     }
 }
+
+// MARK: - WorkoutCSV.rows Tests
+
+struct WorkoutCSVRowsTests {
+
+    private func makeWorkout(
+        name: String = "Easy Run",
+        type: ExerciseType = .easyRun,
+        durationSeconds: Int = 1800,
+        distanceMiles: Double = 3.0,
+        notes: String = "",
+        feltRating: Int = 7,
+        date: Date = Date(timeIntervalSince1970: 1_700_000_000)
+    ) -> Workout {
+        Workout(
+            name: name,
+            type: type,
+            durationSeconds: durationSeconds,
+            distanceMiles: distanceMiles,
+            notes: notes,
+            date: date,
+            feltRating: feltRating
+        )
+    }
+
+    @Test func emptyListProducesHeaderOnly() {
+        let rows = WorkoutCSV.rows(workouts: [], unit: .miles)
+        #expect(rows.count == 1)
+        #expect(rows[0] == WorkoutCSV.headerColumns)
+    }
+
+    @Test func headerColumnsMatchCSVHeaderString() {
+        let joined = WorkoutCSV.headerColumns.joined(separator: ",")
+        #expect(joined == WorkoutCSV.header)
+    }
+
+    @Test func singleWorkoutProducesHeaderPlusOneRow() {
+        let workout = makeWorkout(distanceMiles: 3.0)
+        let rows = WorkoutCSV.rows(workouts: [workout], unit: .miles)
+        #expect(rows.count == 2)
+        #expect(rows[0] == WorkoutCSV.headerColumns)
+        // Column order: date, name, type, duration, distance, notes, felt_rating
+        #expect(rows[1].count == 7)
+        #expect(rows[1][1] == "Easy Run")
+        #expect(rows[1][2] == ExerciseType.easyRun.rawValue)
+        #expect(rows[1][4] == "3.00")
+        #expect(rows[1][6] == "7")
+    }
+
+    @Test func distanceConvertedToKilometersWhenRequested() {
+        let workout = makeWorkout(distanceMiles: 1.0)
+        let rowsMiles = WorkoutCSV.rows(workouts: [workout], unit: .miles)
+        let rowsKm = WorkoutCSV.rows(workouts: [workout], unit: .kilometers)
+        #expect(rowsMiles[1][4] == "1.00")
+        #expect(rowsKm[1][4] == "1.61")
+    }
+
+    @Test func sortedOldestFirstRegardlessOfInputOrder() {
+        let cal = Calendar(identifier: .gregorian)
+        let day1 = cal.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let day2 = cal.date(from: DateComponents(year: 2026, month: 1, day: 2))!
+        let day3 = cal.date(from: DateComponents(year: 2026, month: 1, day: 3))!
+        let w1 = makeWorkout(name: "first", date: day1)
+        let w2 = makeWorkout(name: "second", date: day2)
+        let w3 = makeWorkout(name: "third", date: day3)
+        let rows = WorkoutCSV.rows(workouts: [w3, w1, w2], unit: .miles)
+        #expect(rows[1][1] == "first")
+        #expect(rows[2][1] == "second")
+        #expect(rows[3][1] == "third")
+    }
+
+    @Test func notesAndCommasNotEscapedInRowsOutput() {
+        // Sheets API takes raw strings — escaping is only for CSV. The
+        // `rows` matrix must preserve original commas, quotes, newlines.
+        let workout = makeWorkout(notes: "felt great, legs heavy\n\"interval 4\"")
+        let rows = WorkoutCSV.rows(workouts: [workout], unit: .miles)
+        #expect(rows[1][5] == "felt great, legs heavy\n\"interval 4\"")
+    }
+
+    @Test func encodeStringStillProducesEscapedCSV() {
+        // Refactor regression check: the CSV consumer still gets quoted
+        // commas/quotes via `escape`, even though `rows` is now the
+        // shared underlying producer.
+        let workout = makeWorkout(notes: "comma, here")
+        let csv = WorkoutCSV.encode(workouts: [workout], unit: .miles)
+        #expect(csv.contains("\"comma, here\""))
+    }
+}
+
+// MARK: - GoogleSheetsSyncCoordinator Tests
+
+@MainActor
+struct GoogleSheetsSyncCoordinatorTests {
+
+    private func makeContainerWithConfig(
+        enabled: Bool = false,
+        spreadsheetID: String = ""
+    ) -> ModelContainer {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        let config = AppConfiguration(
+            useMetricUnits: false,
+            googleSheetsSyncEnabled: enabled,
+            googleSheetsSpreadsheetID: spreadsheetID
+        )
+        context.insert(config)
+        try? context.save()
+        return container
+    }
+
+    private func insertWorkout(in container: ModelContainer, name: String = "Run") {
+        let context = ModelContext(container)
+        context.insert(Workout(
+            name: name,
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0
+        ))
+        try? context.save()
+    }
+
+    @Test func attachReadsDisabledStateAsIdle() async {
+        let container = makeContainerWithConfig(enabled: false)
+        let api = StubGoogleSheetsAPI(isAuthorized: false)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+
+        await coordinator.attach(modelContainer: container)
+
+        #expect(coordinator.isEnabled == false)
+        #expect(coordinator.spreadsheetID == nil)
+        #expect(coordinator.status == .idle)
+    }
+
+    @Test func attachWithEnabledAndAuthorizedStaysIdle() async {
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+
+        await coordinator.attach(modelContainer: container)
+
+        #expect(coordinator.isEnabled == true)
+        #expect(coordinator.spreadsheetID == "sheet-A")
+        #expect(coordinator.status == .idle)
+    }
+
+    @Test func attachWithEnabledButUnauthorizedSurfacesNeedsAuth() async {
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        let api = StubGoogleSheetsAPI(isAuthorized: false)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+
+        await coordinator.attach(modelContainer: container)
+
+        #expect(coordinator.status == .needsAuth)
+    }
+
+    @Test func enableCreatesSpreadsheetAndSyncsImmediately() async throws {
+        let container = makeContainerWithConfig(enabled: false)
+        insertWorkout(in: container, name: "Initial")
+        let api = StubGoogleSheetsAPI(isAuthorized: false)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        try await coordinator.enable()
+
+        #expect(coordinator.isEnabled == true)
+        #expect(coordinator.spreadsheetID != nil)
+        #expect(api.createdSpreadsheetIDs.count == 1)
+        #expect(api.overwriteCount == 1)
+        // First row is header, second row is the inserted workout.
+        #expect(api.lastWrittenRows?.count == 2)
+        if case .success = coordinator.status {
+            // ok
+        } else {
+            Issue.record("expected status .success after enable, got \(coordinator.status)")
+        }
+
+        // Persisted state should reflect enable so a fresh container/process
+        // restores correctly via `attach`.
+        let context = ModelContext(container)
+        let config = try context.fetch(FetchDescriptor<AppConfiguration>()).first
+        #expect(config?.googleSheetsSyncEnabled == true)
+        #expect(config?.googleSheetsSpreadsheetID == coordinator.spreadsheetID)
+    }
+
+    @Test func reauthorizeRunsAuthorizeAndImmediateSync() async throws {
+        // Simulates a CloudKit-restored device: enabled=true and
+        // spreadsheetID set in AppConfiguration, but the API starts
+        // unauthorized (no Keychain token). The user taps the
+        // "Sign in to resume" menu item which calls `reauthorize`.
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-restored")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: false)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+        #expect(coordinator.status == .needsAuth)
+
+        try await coordinator.reauthorize()
+
+        #expect(api.isAuthorized == true)
+        #expect(api.overwriteCount == 1)
+        #expect(api.lastSpreadsheetID == "sheet-restored",
+                "reauthorize must reuse the existing spreadsheet, not create a new one")
+        #expect(api.createdSpreadsheetIDs.isEmpty,
+                "reauthorize must not create a new spreadsheet")
+        if case .success = coordinator.status {
+            // ok
+        } else {
+            Issue.record("expected status .success after reauthorize, got \(coordinator.status)")
+        }
+    }
+
+    @Test func reauthorizeThrowsWhenSyncNotEnabled() async {
+        let container = makeContainerWithConfig(enabled: false)
+        let api = StubGoogleSheetsAPI(isAuthorized: false)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        do {
+            try await coordinator.reauthorize()
+            Issue.record("expected reauthorize to throw when not enabled")
+        } catch {
+            // expected
+        }
+    }
+
+    @Test func disableClearsStateAndSignsOut() async throws {
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        coordinator.disable()
+
+        #expect(coordinator.isEnabled == false)
+        #expect(coordinator.spreadsheetID == nil)
+        #expect(coordinator.status == .idle)
+        #expect(api.isAuthorized == false)
+
+        // Persisted state cleared.
+        let context = ModelContext(container)
+        let config = try context.fetch(FetchDescriptor<AppConfiguration>()).first
+        #expect(config?.googleSheetsSyncEnabled == false)
+        #expect(config?.googleSheetsSpreadsheetID == "")
+    }
+
+    @Test func requestSyncIsNoOpWhenDisabled() async {
+        let container = makeContainerWithConfig(enabled: false)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        coordinator.requestSync()
+        try? await Task.sleep(nanoseconds: 1_500_000_000)
+
+        #expect(api.overwriteCount == 0)
+    }
+
+    @Test func multipleRequestSyncCallsCollapseToOneSync() async throws {
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        // Use a 1-second debounce so the test runs in ~1.5 seconds rather than 30.
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        coordinator.requestSync()
+        coordinator.requestSync()
+        coordinator.requestSync()
+        // Wait past the debounce window plus a small safety margin.
+        try? await Task.sleep(nanoseconds: 1_400_000_000)
+
+        #expect(api.overwriteCount == 1, "3 rapid requestSync calls should produce 1 upload")
+    }
+
+    @Test func syncNowBypassesDebounce() async throws {
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 30)
+        await coordinator.attach(modelContainer: container)
+
+        await coordinator.syncNow()
+
+        #expect(api.overwriteCount == 1)
+        if case .success = coordinator.status {
+            // ok
+        } else {
+            Issue.record("expected status .success after syncNow")
+        }
+    }
+
+    @Test func syncNowFailureSurfacesAsFailedStatus() async throws {
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        api.nextOverwriteError = GoogleSheetsSyncError.invalidResponse("test failure")
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        await coordinator.syncNow()
+
+        if case .failed = coordinator.status {
+            // ok
+        } else {
+            Issue.record("expected .failed status after API error, got \(coordinator.status)")
+        }
+    }
+
+    @Test func syncNowSurfacesNeedsAuthWhenAPIDeauthorized() async {
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        let api = StubGoogleSheetsAPI(isAuthorized: false)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        await coordinator.syncNow()
+
+        #expect(coordinator.status == .needsAuth)
+        #expect(api.overwriteCount == 0)
+    }
+}
+
+// MARK: - AppConfiguration Sheets Sync Defaults
+
+struct AppConfigurationSheetsSyncDefaultsTests {
+
+    @Test func defaultsHaveSyncDisabledAndEmptyID() {
+        let config = AppConfiguration()
+        #expect(config.googleSheetsSyncEnabled == false)
+        #expect(config.googleSheetsSpreadsheetID == "")
+    }
+
+    @Test func explicitInitPreservesValues() {
+        let config = AppConfiguration(
+            useMetricUnits: true,
+            googleSheetsSyncEnabled: true,
+            googleSheetsSpreadsheetID: "abc-123"
+        )
+        #expect(config.useMetricUnits == true)
+        #expect(config.googleSheetsSyncEnabled == true)
+        #expect(config.googleSheetsSpreadsheetID == "abc-123")
+    }
+}

@@ -81,41 +81,57 @@ struct WorkoutCSVParseResult: Equatable {
 /// Stateless CSV codec for `Workout` history.
 enum WorkoutCSV {
 
-    /// Fixed schema header. Column order is authoritative; header names
+    /// Fixed schema column names. Column order is authoritative; header names
     /// are written on export but ignored on import (the schema is fixed).
-    static let header = "date,name,type,duration,distance,notes,felt_rating"
+    static let headerColumns = ["date", "name", "type", "duration", "distance", "notes", "felt_rating"]
+
+    /// CSV header line (joined `headerColumns`).
+    static let header = headerColumns.joined(separator: ",")
 
     // MARK: - Encoding
 
-    /// Encodes workouts to a CSV string with the fixed schema.
-    /// - Parameters:
-    ///   - workouts: Workouts to serialize, in the order they should appear.
-    ///   - unit: Unit to use for the `distance` column. Values are converted
-    ///           from the internal miles storage before being written.
-    /// - Returns: A full CSV document ending with a trailing newline.
-    static func encode(workouts: [Workout], unit: WorkoutCSVDistanceUnit) -> String {
-        var output = header + "\n"
+    /// Encodes workouts as a 2D matrix with the fixed schema. The first row
+    /// is the header. Distance values are converted from internal miles to
+    /// `unit`. Workouts are sorted oldest-first to match the natural row
+    /// order in a spreadsheet.
+    ///
+    /// Used by both CSV export (after escape+join) and the Google Sheets
+    /// sync (which sends raw rows to the API).
+    static func rows(workouts: [Workout], unit: WorkoutCSVDistanceUnit) -> [[String]] {
+        var output: [[String]] = [headerColumns]
         let sorted = workouts.sorted { $0.date < $1.date }
         for workout in sorted {
-            output += encodeRow(workout: workout, unit: unit) + "\n"
+            output.append(rowColumns(workout: workout, unit: unit))
         }
         return output
     }
 
+    /// Encodes workouts to a CSV string with the fixed schema.
+    /// - Returns: A full CSV document ending with a trailing newline.
+    static func encode(workouts: [Workout], unit: WorkoutCSVDistanceUnit) -> String {
+        rows(workouts: workouts, unit: unit)
+            .map { $0.map(escape).joined(separator: ",") }
+            .joined(separator: "\n") + "\n"
+    }
+
     /// Serializes a single workout as one CSV row (no trailing newline).
     static func encodeRow(workout: Workout, unit: WorkoutCSVDistanceUnit) -> String {
+        rowColumns(workout: workout, unit: unit).map(escape).joined(separator: ",")
+    }
+
+    /// Raw column values for a single workout, in schema order, with no escaping.
+    private static func rowColumns(workout: Workout, unit: WorkoutCSVDistanceUnit) -> [String] {
         let date = mdyyyyFormatter.string(from: workout.date)
         let distance = unit.fromMiles(workout.distanceMiles)
-        let fields: [String] = [
-            escape(date),
-            escape(workout.name),
-            escape(workout.type.rawValue),
+        return [
+            date,
+            workout.name,
+            workout.type.rawValue,
             formatDuration(workout.durationSeconds),
             formatDistance(distance),
-            escape(workout.notes),
+            workout.notes,
             String(workout.feltRating)
         ]
-        return fields.joined(separator: ",")
     }
 
     // MARK: - Decoding

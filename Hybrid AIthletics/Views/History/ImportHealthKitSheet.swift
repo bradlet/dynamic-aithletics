@@ -25,6 +25,7 @@ struct ImportHealthKitSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.googleSheetsSync) private var sheetsSync
 
     @State private var loadState: LoadState = .loading
     @State private var selection = Set<String>()
@@ -171,6 +172,9 @@ struct ImportHealthKitSheet: View {
             return
         }
 
+        // Batch imports skip the per-mutation debounce and sync once after
+        // every selected row has been inserted. Fire-and-forget; UI proceeds.
+        Task { await sheetsSync.syncNow() }
         dismiss()
     }
 

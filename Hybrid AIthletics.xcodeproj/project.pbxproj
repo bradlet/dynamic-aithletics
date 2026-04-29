@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		1C8169042F83FE0700E33EF9 /* CLAUDE.md in Resources */ = {isa = PBXBuildFile; fileRef = 1C8168F82F83FE0700E33EF9 /* CLAUDE.md */; };
+		1C9E36B92FA2550C0022393D /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 1C9E36B82FA2550C0022393D /* GoogleSignIn */; };
+		1C9E36BB2FA2550C0022393D /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 1C9E36BA2FA2550C0022393D /* GoogleSignInSwift */; };
 		1CCF39D82F88A594009D4D21 /* AICoachCore in Frameworks */ = {isa = PBXBuildFile; productRef = AA0001032FA6B00000000001 /* AICoachCore */; };
 		1CD325422F849D6D00F2A1B5 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD325412F849D6D00F2A1B5 /* MLXLLM */; };
 		1CD325442F849D6D00F2A1B5 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 1CD325432F849D6D00F2A1B5 /* MLXLMCommon */; };
@@ -75,7 +77,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				1C9E36BB2FA2550C0022393D /* GoogleSignInSwift in Frameworks */,
 				1CD325442F849D6D00F2A1B5 /* MLXLMCommon in Frameworks */,
+				1C9E36B92FA2550C0022393D /* GoogleSignIn in Frameworks */,
 				1CD325422F849D6D00F2A1B5 /* MLXLLM in Frameworks */,
 				AA0001012FA6B00000000001 /* AICoachCore in Frameworks */,
 			);
@@ -107,6 +111,7 @@
 				1C1476D32F817B6800DCF85D /* Hybrid AIthletics */,
 				1C1476E52F817B6900DCF85D /* Hybrid AIthleticsTests */,
 				1C1476EF2F817B6900DCF85D /* Hybrid AIthleticsUITests */,
+				1C9E36B72FA2550C0022393D /* Frameworks */,
 				1C1476D22F817B6800DCF85D /* Products */,
 			);
 			sourceTree = "<group>";
@@ -119,6 +124,13 @@
 				1C1476EC2F817B6900DCF85D /* Hybrid AIthleticsUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		1C9E36B72FA2550C0022393D /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -144,6 +156,8 @@
 				1CD325412F849D6D00F2A1B5 /* MLXLLM */,
 				1CD325432F849D6D00F2A1B5 /* MLXLMCommon */,
 				AA0001022FA6B00000000001 /* AICoachCore */,
+				1C9E36B82FA2550C0022393D /* GoogleSignIn */,
+				1C9E36BA2FA2550C0022393D /* GoogleSignInSwift */,
 			);
 			productName = "Hybrid AIthletics";
 			productReference = 1C1476D12F817B6800DCF85D /* Hybrid AIthletics.app */;
@@ -231,6 +245,7 @@
 			packageReferences = (
 				1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 				AA0001042FA6B00000000001 /* XCLocalSwiftPackageReference "Packages/AICoachCore" */,
+				1C9E36B62FA24CDB0022393D /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1C1476D22F817B6800DCF85D /* Products */;
@@ -314,7 +329,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Hybrid AIthletics/Hybrid_AIthletics.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = CB9HS9S84R;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -332,7 +347,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "bradlet.Hybrid-AIthletics";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -352,7 +367,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = "Hybrid AIthletics/Hybrid_AIthletics.entitlements";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = CB9HS9S84R;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -370,7 +385,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.1.1;
+				MARKETING_VERSION = 0.1.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "bradlet.Hybrid-AIthletics";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -635,6 +650,14 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		1C9E36B62FA24CDB0022393D /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 9.1.0;
+			};
+		};
 		1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/ml-explore/mlx-swift-lm";
@@ -646,6 +669,16 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		1C9E36B82FA2550C0022393D /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1C9E36B62FA24CDB0022393D /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
+		1C9E36BA2FA2550C0022393D /* GoogleSignInSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 1C9E36B62FA24CDB0022393D /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignInSwift;
+		};
 		1CD325412F849D6D00F2A1B5 /* MLXLLM */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 1CD325402F849D6D00F2A1B5 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;

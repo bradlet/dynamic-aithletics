@@ -15,6 +15,7 @@ struct RecordWorkoutSheet: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.useMetricUnits) private var useMetricUnits
+    @Environment(\.googleSheetsSync) private var sheetsSync
 
     /// The exercise template to pre-fill defaults from, or nil for quick add.
     let exercise: Exercise?
@@ -126,6 +127,10 @@ struct RecordWorkoutSheet: View {
             sourceExercise: sourceExercise
         )
         modelContext.insert(workout)
+        // Explicit save so the Google Sheets sync trigger sees the new
+        // workout immediately when it fetches via a fresh ModelContext.
+        try? modelContext.save()
+        sheetsSync.requestSync()
         dismiss()
     }
 }

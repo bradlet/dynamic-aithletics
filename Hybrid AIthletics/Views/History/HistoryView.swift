@@ -14,6 +14,7 @@ import UniformTypeIdentifiers
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.useMetricUnits) private var useMetricUnits
+    @Environment(\.googleSheetsSync) private var sheetsSync
 
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
     @State private var selectedMonth: Date = Date()
@@ -36,6 +37,10 @@ struct HistoryView: View {
     // MARK: HealthKit Import state
 
     @State private var isHealthKitImporterPresented = false
+
+    // MARK: Google Sheets Sync state
+
+    @State private var isSheetsSyncConfirmationPresented = false
 
     var body: some View {
         NavigationStack {
@@ -70,8 +75,20 @@ struct HistoryView: View {
                         } label: {
                             Label("Import from Apple Health", systemImage: "heart.text.square")
                         }
+                        sheetsSyncMenuSection
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "ellipsis.circle")
+                            // Tiny red dot when the most recent sync failed,
+                            // so the user knows something needs attention
+                            // without a blocking alert.
+                            if case .failed = sheetsSync.status {
+                                Circle()
+                                    .fill(.red)
+                                    .frame(width: 7, height: 7)
+                                    .offset(x: 4, y: -3)
+                            }
+                        }
                     }
                 }
             }
@@ -128,6 +145,80 @@ struct HistoryView: View {
             } message: { message in
                 Text(message)
             }
+            .alert(
+                "Enable Google Sheets Sync?",
+                isPresented: $isSheetsSyncConfirmationPresented
+            ) {
+                Button("Cancel", role: .cancel) { }
+                Button("Enable") { startEnableSheetsSync() }
+            } message: {
+                Text("This will create a new Google Sheet and overwrite it every time you add or edit a workout. Sync is one-way: any edits you make in Google Sheets will be wiped on the next save. You can disable sync any time from this menu.")
+            }
+        }
+    }
+
+    // MARK: Google Sheets Sync menu
+
+    /// Menu items for the Google Sheets Sync feature. Adapts to the current
+    /// coordinator state: not enabled → enable button; failed → retry +
+    /// disable; needs auth → re-sign-in + disable; enabled and healthy →
+    /// disable only.
+    @ViewBuilder
+    private var sheetsSyncMenuSection: some View {
+        if sheetsSync.isEnabled {
+            switch sheetsSync.status {
+            case .failed(let reason):
+                Button {
+                    Task { await sheetsSync.syncNow() }
+                } label: {
+                    Label("Retry Google Sheets Sync (\(reason))",
+                          systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                }
+            case .needsAuth:
+                Button {
+                    Task { await reauthorizeSheetsSync() }
+                } label: {
+                    Label("Sign in to resume Sheets Sync", systemImage: "person.crop.circle.badge.questionmark")
+                }
+            default:
+                EmptyView()
+            }
+            Button(role: .destructive) {
+                sheetsSync.disable()
+            } label: {
+                Label("Disable Google Sheets Sync", systemImage: "tablecells.badge.ellipsis")
+            }
+        } else {
+            Button {
+                isSheetsSyncConfirmationPresented = true
+            } label: {
+                Label("Google Sheets Sync", systemImage: "tablecells")
+            }
+        }
+    }
+
+    /// Kicks off the OAuth + sheet creation + initial sync flow. Failures
+    /// surface via the shared `errorMessage` alert, and the menu icon's
+    /// red dot shows on subsequent debounced syncs.
+    private func startEnableSheetsSync() {
+        Task {
+            do {
+                try await sheetsSync.enable()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    /// Re-presents OAuth on a device where sync is enabled in
+    /// AppConfiguration but no token exists locally (e.g. fresh device
+    /// joined via CloudKit). Reuses the existing spreadsheet ID rather
+    /// than creating a new one.
+    private func reauthorizeSheetsSync() async {
+        do {
+            try await sheetsSync.reauthorize()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -218,6 +309,11 @@ struct HistoryView: View {
         }
         do {
             try modelContext.save()
+            // Batch imports skip the per-mutation debounce and sync once
+            // after every parsed row has been inserted. Only fired on
+            // successful save so a partial-failure path doesn't trigger
+            // an upload of inconsistent state.
+            Task { await sheetsSync.syncNow() }
         } catch {
             errorMessage = "Saved partial import: \(error.localizedDescription)"
         }
