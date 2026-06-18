@@ -3,8 +3,8 @@
 //  Hybrid AIthletics
 //
 //  Protocol for items that can appear as dots on a monthly calendar grid.
-//  Both Exercise and Workout conform, enabling the shared MonthlyCalendarView
-//  to display either planned or recorded activity.
+//  Exercise conforms (via its single `date`), enabling the shared
+//  MonthlyCalendarView to display planned or recorded activity uniformly.
 //
 
 import Foundation
@@ -20,10 +20,6 @@ protocol CalendarDisplayable {
 // MARK: - Model Conformances
 
 extension Exercise: CalendarDisplayable {
-    var displayDate: Date { scheduledDate }
-}
-
-extension Workout: CalendarDisplayable {
     var displayDate: Date { date }
 }
 

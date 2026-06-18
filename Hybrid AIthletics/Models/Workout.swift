@@ -2,98 +2,72 @@
 //  Workout.swift
 //  Hybrid AIthletics
 //
-//  A recorded instance of a completed exercise session.
-//  Workouts track actual performance and can optionally reference
-//  the Exercise template they were created from.
+//  Recorded-instance data for an `Exercise`. This is a plain Codable value
+//  type (NOT a SwiftData @Model) stored inline on `Exercise.workout`, so an
+//  exercise and its recorded performance are a single entity. The activity's
+//  date lives on `Exercise.date`; this type carries only the data that exists
+//  once the activity has actually been performed.
 //
 
 import Foundation
-import SwiftData
 
-@Model
-final class Workout {
-    /// Unique identifier.
-    var id: UUID = UUID()
-    /// Name of the workout as recorded.
-    var name: String = ""
-    /// The activity category.
-    var type: ExerciseType = ExerciseType.run
+/// Recorded performance for an `Exercise`. Persisted as a Codable composite
+/// attribute on `Exercise.workout` (CloudKit-compatible, no separate table).
+struct Workout: Codable, Hashable, Sendable {
     /// Actual duration in seconds.
     var durationSeconds: Int = 0
     /// Actual distance in miles (internal storage unit).
     var distanceMiles: Double = 0.0
-    /// User notes about the completed workout.
+    /// Post-workout notes about the completed session.
     var notes: String = ""
-    /// The date and time the workout was performed.
-    var date: Date = Date()
-    /// User's subjective Rate of Perceived Exertion after completing the workout
-    /// on a 1–10 scale. A value of `0` means the user did not record a rating.
-    /// Feeds the on-device AI Coach's training-load assessment.
+    /// User's subjective Rate of Perceived Exertion on a 1–10 scale. A value
+    /// of `0` means the user did not record a rating. Feeds the AI Coach.
     var feltRating: Int = 0
-
-    /// Provenance of this workout record. Stores the raw value of a
+    /// Provenance of this recorded workout. Stores the raw value of a
     /// `WorkoutSource` (e.g. "Manual", "CSV", "Apple Exercise App"). Stored
-    /// as String for CloudKit compatibility and forward-extensibility.
+    /// as String for forward-extensibility.
     var source: String = WorkoutSource.manual.rawValue
-
     /// Stable identifier from the external source that produced this record
     /// (e.g. `HKWorkout.uuid.uuidString`). Used for deduplication on re-import.
-    /// `nil` for manual entries and legacy records created before this field existed.
+    /// `nil` for manual entries.
     var externalID: String? = nil
 
-    /// The exercise template this workout was recorded from, if any.
-    var sourceExercise: Exercise?
-
-    /// Creates a new recorded workout.
+    /// Creates a recorded workout.
     /// - Parameters:
-    ///   - name: Workout name.
-    ///   - type: Activity type.
     ///   - durationSeconds: Actual duration in seconds.
     ///   - distanceMiles: Actual distance in miles.
-    ///   - notes: Optional notes.
-    ///   - date: When the workout was performed.
+    ///   - notes: Optional post-workout notes.
     ///   - feltRating: Subjective 1–10 effort rating. `0` means not recorded.
     ///   - source: Provenance string. Defaults to `WorkoutSource.manual`.
     ///   - externalID: External source identifier for dedup. Defaults to `nil`.
-    ///   - sourceExercise: The planned exercise this was recorded from, if any.
     init(
-        name: String,
-        type: ExerciseType,
-        durationSeconds: Int,
-        distanceMiles: Double,
+        durationSeconds: Int = 0,
+        distanceMiles: Double = 0.0,
         notes: String = "",
-        date: Date = Date(),
         feltRating: Int = 0,
         source: String = WorkoutSource.manual.rawValue,
-        externalID: String? = nil,
-        sourceExercise: Exercise? = nil
+        externalID: String? = nil
     ) {
-        self.id = UUID()
-        self.name = name
-        self.type = type
         self.durationSeconds = durationSeconds
         self.distanceMiles = distanceMiles
         self.notes = notes
-        self.date = date
         self.feltRating = feltRating
         self.source = source
         self.externalID = externalID
-        self.sourceExercise = sourceExercise
     }
 
-    /// Creates a draft workout pre-filled from an exercise template.
-    /// The user can edit all fields before saving.
-    /// - Parameter exercise: The exercise to copy defaults from.
-    /// - Returns: A new unsaved Workout with fields copied from the exercise.
-    static func draft(from exercise: Exercise) -> Workout {
-        Workout(
-            name: exercise.name,
-            type: exercise.type,
+    /// Creates a draft workout pre-filled with the actuals from a planned
+    /// exercise's targets. The user can edit all fields before saving. Starts
+    /// unrated (`feltRating == 0`) with empty notes and a manual source.
+    /// - Parameter exercise: The exercise to copy target metrics from.
+    init(draftFrom exercise: Exercise) {
+        self.init(
             durationSeconds: exercise.durationSeconds,
             distanceMiles: exercise.distanceMiles,
             notes: "",
-            date: Date(),
-            sourceExercise: exercise
+            feltRating: 0,
+            source: WorkoutSource.manual.rawValue,
+            externalID: nil
         )
     }
 }
