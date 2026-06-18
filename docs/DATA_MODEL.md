@@ -13,34 +13,46 @@ Hybrid AIthletics uses **SwiftData**, Apple's ORM framework built on top of Core
 ## Entity-Relationship Diagram
 
 ```
-┌─────────────────────────┐       ┌─────────────────────────┐
-│        Exercise          │       │         Workout          │
-│─────────────────────────│       │─────────────────────────│
-│ id: UUID                 │       │ id: UUID                 │
-│ name: String             │       │ name: String             │
-│ type: ExerciseType       │  1:N  │ type: ExerciseType       │
-│ durationSeconds: Int     │◄──────│ durationSeconds: Int     │
-│ distanceMiles: Double    │       │ distanceMiles: Double    │
-│ notes: String            │       │ notes: String            │
-│ scheduledDate: Date      │       │ date: Date               │
-│ isRepeating: Bool        │       │ feltRating: Int (0–10)   │
-│ workouts: [Workout]      │       │ sourceExercise: Exercise? │
-└─────────────────────────┘       └─────────────────────────┘
-                                   ┌─────────────────────────┐
-                                   │    AppConfiguration      │
-                                   │─────────────────────────│
-                                   │ useMetricUnits: Bool     │
-                                   └─────────────────────────┘
+There is a single persisted entity, Exercise. Recorded-instance data lives in a
+nested Workout value struct (not a table) stored inline on Exercise.workout. An
+exercise with workout == nil is planned only; a non-nil workout means it was
+recorded.
 
-                                   ┌─────────────────────────┐
-                                   │     ExerciseType         │
-                                   │─────────────────────────│
-                                   │ (enum, not a table)      │
-                                   │ 12 cases: run, longRun,  │
-                                   │ tempoRun, intervalRun,   │
-                                   │ easyRun, recoveryRun,    │
+┌──────────────────────────────────┐
+│             Exercise               │  @Model (the only persisted entity)
+│────────────────────────────────────│
+│ id: UUID                           │
+│ name: String                       │
+│ type: ExerciseType                 │
+│ durationSeconds: Int               │  planned target
+│ distanceMiles: Double              │  planned target
+│ notes: String                      │  planning notes
+│ date: Date                         │  single date (planned and/or performed)
+│ isRepeating: Bool                  │
+│ workout: Workout?                  │──┐ embedded value struct (nil = planned)
+│ isCompleted: Bool { workout != nil }│  │
+└──────────────────────────────────┘  │
+                                       ▼
+                          ┌──────────────────────────┐
+                          │     Workout (Codable)     │  value type, no table
+                          │──────────────────────────│
+                          │ durationSeconds: Int      │  actual
+                          │ distanceMiles: Double     │  actual
+                          │ notes: String             │  post-workout notes
+                          │ feltRating: Int (0–10)    │
+                          │ source: String            │
+                          │ externalID: String?       │
+                          └──────────────────────────┘
+
+┌─────────────────────────┐       ┌─────────────────────────┐
+│    AppConfiguration      │       │     ExerciseType         │
+│─────────────────────────│       │─────────────────────────│
+│ useMetricUnits: Bool     │       │ (enum, not a table)      │
+│ googleSheetsSyncEnabled  │       │ 13 cases: run, longRun,  │
+│ googleSheetsSpreadsheetID│       │ tempoRun, intervalRun,   │
+└─────────────────────────┘       │ easyRun, recoveryRun,    │
                                    │ walk, bike, swim, hike,  │
-                                   │ elliptical, other        │
+                                   │ elliptical, race, other  │
                                    └─────────────────────────┘
 ```
 
@@ -50,21 +62,22 @@ Hybrid AIthletics uses **SwiftData**, Apple's ORM framework built on top of Core
 
 **File:** `Models/Exercise.swift`
 
-An Exercise represents a **planned workout** on the user's weekly training calendar. Think of it as a calendar event — "5K Run on Monday" — that may or may not be completed.
+An Exercise represents a **single training activity** — planned, recorded, or both. The planning fields always apply; once the activity has been performed, the recorded-only data lives in the nested `workout` value object. Think of it as a calendar event ("5K Run on Monday") that carries its own completion record once done.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `id` | `UUID` | Auto-generated | Primary key. Also used as the drag-and-drop transfer payload (only the UUID is serialized during drag, not the full object). |
+| `id` | `UUID` | Auto-generated | Primary key. Also used as the drag-and-drop transfer payload (only the UUID is serialized during drag, not the full object) and as the list-row / navigation identity. |
 | `name` | `String` | `""` | User-facing label, e.g. "Morning 5K", "Tempo Thursday". |
 | `type` | `ExerciseType` | `.run` | Activity category. Stored as the enum's `String` raw value in the database (e.g. `"Tempo Run"`). See [ExerciseType](#exercisetype) below. |
-| `durationSeconds` | `Int` | `0` | Planned duration. Stored in seconds to avoid floating-point precision issues. The UI decomposes this into hours/minutes/seconds for display and editing. |
-| `distanceMiles` | `Double` | `0.0` | Planned distance in **miles**. This is the canonical storage unit regardless of user preference. Conversion to kilometers happens at the view layer only. See [Distance Convention](#distance-convention). |
-| `notes` | `String` | `""` | Free-text field for user notes about the planned exercise. |
-| `scheduledDate` | `Date` | `Date()` | The day this exercise is assigned to. **Always normalized to midnight** (start of day) via `Date.startOfDay` in the initializer. This ensures date-range queries work correctly — comparing `scheduledDate >= mondayMidnight && scheduledDate <= sundayMidnight` captures all exercises for a week without time-of-day edge cases. |
+| `durationSeconds` | `Int` | `0` | **Planned (target)** duration. Stored in seconds to avoid floating-point precision issues. The UI decomposes this into hours/minutes/seconds for display and editing. The *actual* recorded duration lives in `workout.durationSeconds`. |
+| `distanceMiles` | `Double` | `0.0` | **Planned (target)** distance in **miles** — the canonical storage unit regardless of user preference. The *actual* recorded distance lives in `workout.distanceMiles`. See [Distance Convention](#distance-convention). |
+| `notes` | `String` | `""` | Free-text notes about the *planned* exercise. Post-workout notes live in `workout.notes`. |
+| `date` | `Date` | `Date()` | The **single** date for this activity — the day it is planned and/or performed (renamed from the old `scheduledDate`). Preserves the full timestamp so the History tab can show time-of-day. **Not** normalized to midnight; day/week grouping flows through `Date+Week` helpers (`startOfDay`, `startOfWeek`, `isSameDay`), which compare calendar components. If an activity is performed on a different day than planned, it is treated as a separate `Exercise` — there is no plan-date / done-date split. |
 | `isRepeating` | `Bool` | `false` | When `true`, this exercise acts as a template that appears "virtually" on the same day-of-week every future week. See [Repeating Exercises](#repeating-exercises). |
-| `workouts` | `[Workout]` | `[]` | Inverse relationship. All `Workout` records that were created from this exercise. See [Exercise-Workout Relationship](#exercise-workout-relationship). |
+| `workout` | `Workout?` | `nil` | Recorded-instance data, present once the activity has been performed. `nil` means *planned only*. Stored inline as a Codable composite attribute — no second table. See [Workout](#workout) below. |
+| `isCompleted` | `Bool` (computed) | — | `workout != nil`. The single source of truth for "has this been recorded?". |
 
-**Initialization behavior:** The initializer normalizes `scheduledDate` to midnight. This means if you create `Exercise(scheduledDate: "2026-04-04 at 3:30 PM")`, the stored date will be `2026-04-04 at 00:00:00`. This is intentional — exercises are day-level entities, not time-level.
+**Initialization behavior:** The initializer stores `date` as provided (no midnight normalization). Planned-creation flows pass a day-level date; recorded flows (record sheet, imports) pass the real performed date/timestamp.
 
 ---
 
@@ -72,35 +85,28 @@ An Exercise represents a **planned workout** on the user's weekly training calen
 
 **File:** `Models/Workout.swift`
 
-A Workout represents a **completed exercise session** — the user actually ran, biked, swam, etc. It is a separate entity from Exercise because:
-
-1. A user may complete an exercise with different values than planned (ran 4 miles instead of 3).
-2. A user may record a workout without any prior plan.
-3. Multiple workouts can be recorded from the same exercise template (e.g., recording a morning and evening session).
+A Workout holds the **recorded-instance data** for an Exercise — the metrics that only exist once the activity has actually been performed. It is **not** a SwiftData `@Model`: it is a plain `Codable` value `struct` persisted inline on `Exercise.workout` (a Codable composite attribute, CloudKit-compatible, no separate table). The activity's date, name, and type live on the owning `Exercise`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `id` | `UUID` | Auto-generated | Primary key. |
-| `name` | `String` | `""` | Name as recorded. Pre-filled from the source exercise but editable. |
-| `type` | `ExerciseType` | `.run` | Activity category. Same enum as Exercise. |
-| `durationSeconds` | `Int` | `0` | Actual duration in seconds. |
-| `distanceMiles` | `Double` | `0.0` | Actual distance in miles. Same storage convention as Exercise. |
+| `durationSeconds` | `Int` | `0` | **Actual** recorded duration in seconds. |
+| `distanceMiles` | `Double` | `0.0` | **Actual** recorded distance in miles. Same storage convention as Exercise. |
 | `notes` | `String` | `""` | Post-workout notes (e.g. "felt great", "knee pain at mile 2"). |
-| `date` | `Date` | `Date()` | When the workout was performed. Unlike Exercise, this **preserves the full timestamp** (not normalized to midnight) so the app can display time-of-day. |
 | `feltRating` | `Int` | `0` | Subjective Rate of Perceived Exertion on a 1–10 scale recorded after the session (1 = brutal, 10 = amazing). A value of `0` means the user did not record a rating. Feeds the on-device AI Coach's training-load assessment — see [AI Coach Input](#ai-coach-input) below. |
-| `sourceExercise` | `Exercise?` | `nil` | Optional back-reference to the planned exercise this workout was recorded from. `nil` if the workout was logged independently. |
+| `source` | `String` | `"Manual"` | Provenance — the raw value of a `WorkoutSource` (`"Manual"`, `"CSV"`, `"Apple Exercise App"`). Stored as String for forward-extensibility. Read type-safely via `workout.workoutSource`. |
+| `externalID` | `String?` | `nil` | Stable identifier from the external source (e.g. `HKWorkout.uuid.uuidString`). Used for deduplication on re-import. `nil` for manual and CSV entries. |
 
-**Editable surface:** All Workout fields except `source` and `externalID` are user-editable from the History tab via `WorkoutDetailSheet`. `source` and `externalID` are intentionally hidden because they are provenance/dedup metadata owned by the import pipeline (`WorkoutCSV`, HealthKit import) — mutating them would break dedup on re-import and corrupt import-status reporting. The mutation logic is factored out into a stateless `WorkoutEditor` helper (`Views/History/WorkoutDetailSheet.swift`) so the field mapping is unit-testable without instantiating a SwiftUI view.
+**Editable surface:** When editing a recorded exercise from the History tab (`WorkoutDetailSheet`), the user can change name/type/date plus the recorded actuals (duration, distance, notes, felt rating). `source` and `externalID` are intentionally hidden — they are import-pipeline provenance/dedup metadata; mutating them would break dedup on re-import. The mutation logic is factored into a stateless `WorkoutEditor` helper (`Views/History/WorkoutDetailSheet.swift`): `WorkoutEditor.apply(_:to:)` writes the identity fields onto the `Exercise` and **rebuilds** its `workout` struct from the edited actuals while **preserving** `source` and `externalID`. It is unit-testable without a SwiftUI view.
 
-**Factory method: `Workout.draft(from:)`**
+**Initializer: `Workout(draftFrom:)`**
 
-Creates a new Workout pre-filled from an Exercise template. This is the entry point when a user taps "Record Workout" on a planned exercise. The draft copies `name`, `type`, `durationSeconds`, and `distanceMiles` from the exercise, sets `sourceExercise` to establish the relationship, and leaves `notes` empty and `feltRating` at `0` (the user provides fresh notes and a rating for each workout). The user can edit every field before saving.
+Creates a recorded workout pre-filled with the actuals copied from a planned exercise's targets (`durationSeconds`, `distanceMiles`), starting unrated (`feltRating == 0`), with empty notes and a `manual` source. This is the entry point when a user taps "Record Workout" on a planned exercise; the recorded `workout` is then attached to that exercise. The user can edit every field before saving.
 
 #### AI Coach Input
 
 The `feltRating` field is the primary input that lets the on-device AI Coach distinguish between *planned* workload and *experienced* workload. Two athletes can run the same 5-mile tempo at the same pace and have very different felt ratings — the coach uses the RPE signal together with distance, duration, and session type to assess whether the athlete is absorbing their training or accumulating fatigue.
 
-When the coach serializes recent workouts into its prompt (see `Packages/AICoachCore/Sources/AICoachCore/AICoachPromptBuilder.swift`), a workout with `feltRating == 0` simply omits the RPE line — the model is explicitly told these sessions are unrated rather than assuming a default. See [docs/adrs/1-use-lightweight-onboard-llm.md](adrs/1-use-lightweight-onboard-llm.md) for the broader architectural decision.
+When the coach serializes recent workouts into its prompt (see `Packages/AICoachCore/Sources/AICoachCore/AICoachPromptBuilder.swift`), a workout with `feltRating == 0` simply omits the RPE line — the model is explicitly told these sessions are unrated rather than assuming a default. The app builds the coach's "recent workouts" from completed exercises (`isCompleted`) and its "upcoming exercises" from planned-only ones; `CoachWorkout(from:)` reads the exercise's `date`/`type` plus the recorded `workout` metrics. See [docs/adrs/1-use-lightweight-onboard-llm.md](adrs/1-use-lightweight-onboard-llm.md) for the broader architectural decision.
 
 ---
 
@@ -113,6 +119,8 @@ A **singleton** preferences record. The app creates exactly one instance on firs
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `useMetricUnits` | `Bool` | `false` | When `true`, distances display in kilometers. When `false`, miles. |
+| `googleSheetsSyncEnabled` | `Bool` | `false` | Whether one-way Google Sheets export sync is enabled. |
+| `googleSheetsSpreadsheetID` | `String` | `""` | The spreadsheet written to; empty until first enable. |
 
 **Singleton pattern:** `AppConfiguration.current(in:)` is a fetch-or-create method. It queries SwiftData for an existing record; if none exists, it inserts a new one with defaults. In the actual app, `ContentView` uses SwiftData's `@Query` macro to observe the configuration reactively and injects the value into SwiftUI's environment system so any view in the hierarchy can read it without its own database query.
 
@@ -124,7 +132,7 @@ A **singleton** preferences record. The app creates exactly one instance on firs
 
 **File:** `Models/ExerciseType.swift`
 
-This is a Swift `enum` — **not a database table**. It's stored inline as a `String` column in both the Exercise and Workout tables.
+This is a Swift `enum` — **not a database table**. It's stored inline as a `String` column on the Exercise table.
 
 ```
 ExerciseType: String (raw values)
@@ -139,6 +147,7 @@ ExerciseType: String (raw values)
 ├── swim         → "Swim"
 ├── hike         → "Hike"
 ├── elliptical   → "Elliptical"
+├── race         → "Race"
 └── other        → "Other"
 ```
 
@@ -154,38 +163,43 @@ A mirror enum, `CoachExerciseType`, lives in the `AICoachCore` package with iden
 
 ## Relationships
 
-### Exercise-Workout Relationship
+### Exercise ↔ Workout (embedded value, no relationship)
 
-This is a **one-to-many** relationship: one Exercise can have many Workouts, but each Workout references at most one Exercise.
+There is **no** SwiftData relationship. `Workout` is an **embedded value object** —
+a `Codable` struct stored inline on `Exercise.workout`. One exercise owns at most
+one recorded workout; deleting the exercise deletes its workout (it's part of the
+same record). This replaces the old one-to-many `Exercise.workouts` /
+`Workout.sourceExercise` relationship.
 
-```
-Exercise (1) ──────── (0..N) Workout
-             workouts ◄──── sourceExercise
-```
-
-**Ownership and lifecycle:**
-
-The relationship is declared on the Exercise side:
-
-```swift
-@Relationship(deleteRule: .nullify, inverse: \Workout.sourceExercise)
-var workouts: [Workout] = []
-```
-
-Key aspects for non-Swift developers:
-
-- **`deleteRule: .nullify`** — When an Exercise is deleted, its associated Workouts are **not deleted**. Instead, their `sourceExercise` field is set to `nil`. This preserves workout history even if the user removes the plan. This is equivalent to `ON DELETE SET NULL` in SQL.
-- **`inverse: \Workout.sourceExercise`** — Tells SwiftData that the `workouts` array on Exercise and the `sourceExercise` property on Workout are two sides of the same relationship. SwiftData maintains referential integrity automatically — inserting a Workout with `sourceExercise = someExercise` also appends it to `someExercise.workouts`.
-- The relationship is **optional on the Workout side** (`Exercise?`). Workouts can exist independently (logged without a plan).
+This was a deliberate merge: previously a planned `Exercise` and a recorded
+`Workout` were separate `@Model` entities that drifted out of sync, and imported
+workouts never appeared in the training plan. Collapsing them means there is one
+timeline — an imported workout simply becomes a completed `Exercise`.
 
 **Querying patterns:**
 
 ```
-"What workouts came from this exercise?"     → exercise.workouts
-"Was this exercise completed this week?"     → exercise.workouts.contains { ... }
-"Which exercise was this workout based on?"  → workout.sourceExercise
-"Is this a standalone workout?"              → workout.sourceExercise == nil
+"Is this exercise recorded?"                 → exercise.isCompleted   (workout != nil)
+"What are the recorded metrics?"             → exercise.workout?.distanceMiles, etc.
+"All recorded exercises"                     → allExercises.filter { $0.workout != nil }
+"All planned-only exercises"                 → allExercises.filter { $0.workout == nil }
 ```
+
+#### Querying completed vs planned
+
+A `#Predicate`/`@Query` cannot reach into a Codable composite attribute, so
+filtering by `workout != nil` (or by any nested field) is **not** expressed at the
+database level. Instead the views run an **unfiltered** `@Query private var
+allExercises: [Exercise]` and derive `completed` / `planned` in memory:
+
+```swift
+@Query private var allExercises: [Exercise]
+var completed: [Exercise] { allExercises.filter { $0.workout != nil } }
+var planned:   [Exercise] { allExercises.filter { $0.workout == nil } }
+```
+
+This matches the app's existing "unfiltered `@Query`, derive in computed vars"
+pattern (`AerobicTrainingView`) and is trivially cheap at single-user scale.
 
 ---
 
@@ -197,9 +211,9 @@ Exercises with `isRepeating = true` behave as **templates** that appear on the s
 
 The system uses a **virtual display with on-demand materialization** pattern:
 
-1. **No records are pre-created.** A single Exercise with `isRepeating = true` and `scheduledDate = Monday April 6` is the only database record.
+1. **No records are pre-created.** A single Exercise with `isRepeating = true` and `date = Monday April 6` is the only database record.
 
-2. **Virtual display:** When the user views a future week (e.g., April 13-19), the app's query logic checks: "Are there any repeating exercises whose day-of-week matches a day in this week?" If `scheduledDate` falls on a Monday (index 0), the exercise appears on every future Monday.
+2. **Virtual display:** When the user views a future week (e.g., April 13-19), the app's query logic checks: "Are there any repeating exercises whose day-of-week matches a day in this week?" If `date` falls on a Monday (index 0), the exercise appears on every future Monday.
 
 3. **Duplicate suppression:** If a concrete Exercise with the same `name`, `type`, and day-of-week already exists for the target week, the virtual instance is not shown. This prevents duplicates after materialization.
 
@@ -210,8 +224,8 @@ The system uses a **virtual display with on-demand materialization** pattern:
 ### Data flow example
 
 ```
-Week 1: User creates "Monday Run" with isRepeating=true, scheduledDate=Apr 6
-         → Database: 1 Exercise record
+Week 1: User creates "Monday Run" with isRepeating=true, date=Apr 6
+         → Database: 1 Exercise record (planned only, workout == nil)
 
 Week 2: User views Apr 13-19
          → App finds the repeating exercise, mondayBasedWeekdayIndex=0
@@ -219,9 +233,9 @@ Week 2: User views Apr 13-19
          → Virtual instance displayed on Monday Apr 13
 
 Week 2: User taps "Record Workout" on the virtual Monday Run
-         → App materializes: creates new Exercise(scheduledDate=Apr 13, isRepeating=false)
-         → Workout created with sourceExercise pointing to the new concrete Exercise
-         → Database: 2 Exercise records, 1 Workout record
+         → App materializes: creates new Exercise(date=Apr 13, isRepeating=false)
+         → That exercise's .workout is populated with the recorded actuals
+         → Database: 2 Exercise records (one planned template, one completed)
 
 Week 3: User views Apr 20-26
          → Virtual instance displayed on Monday Apr 20 (no concrete exists yet)
@@ -259,7 +273,7 @@ A factory enum (no instances, only static methods) that creates SwiftData's `Mod
 | `makeContainer()` | On-disk (SQLite) | Enabled (`.automatic`) | Production app |
 | `makePreviewContainer()` | In-memory only | Disabled | Unit tests and SwiftUI previews |
 
-The schema is explicitly defined as `[Exercise.self, Workout.self, AppConfiguration.self]`. All three entities are registered regardless of which container type is created.
+The schema is explicitly defined as `[Exercise.self, AppConfiguration.self]`. `Workout` is **not** in the schema — it is a Codable value embedded on `Exercise`, not a separate `@Model`.
 
 ### UnitEnvironment
 
@@ -277,9 +291,9 @@ This avoids each view needing its own database query for the unit preference. Th
 
 ## Schema Versioning and Migration
 
-SwiftData handles **lightweight migrations** automatically when properties are added with default values. The addition of `isRepeating: Bool = false` to Exercise is a backward-compatible change — existing records get `false` automatically, and no explicit migration code is needed.
+SwiftData handles **lightweight migrations** automatically when properties are added with default values.
 
-If a future change requires a non-trivial migration (renaming a column, changing a relationship's cardinality, splitting a table), SwiftData provides `VersionedSchema` and `MigrationPlan` APIs for explicit migration steps.
+The Exercise/Workout merge (collapsing two `@Model` entities into one, with `Workout` becoming an embedded Codable value) is **not** a lightweight migration. Because the app has a single user/tester, no `VersionedSchema`/`MigrationPlan` was written — the local app + CloudKit data was wiped and re-imported from CSV. If a future change requires a non-trivial migration of real user data, SwiftData provides `VersionedSchema` and `MigrationPlan` APIs for explicit migration steps.
 
 ---
 
@@ -291,6 +305,12 @@ All model properties **must have default values** in their declarations (not jus
 var name: String = ""           // Not var name: String (would crash on partial sync)
 var distanceMiles: Double = 0.0
 var isRepeating: Bool = false
+var workout: Workout? = nil     // optional → defaults to nil
 ```
 
-Optional relationships (`sourceExercise: Exercise?`) are inherently compatible since they default to `nil`.
+**Embedded Codable values.** The nested `Workout` is stored as a Codable composite
+attribute. SwiftData persists it as a single encoded field and CloudKit mirrors it as
+that encoded blob — no separate record type. The property is optional with a `nil`
+default, which satisfies the "every property has a default" rule. The trade-off is
+that the nested fields are **not** queryable from a `#Predicate` (see
+[Querying completed vs planned](#querying-completed-vs-planned)).
