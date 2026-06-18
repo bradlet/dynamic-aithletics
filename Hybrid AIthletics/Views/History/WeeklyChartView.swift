@@ -69,8 +69,8 @@ struct WeeklyChartConfiguration {
     let title: String
     /// Whether the y-axis is clamped to `0...10` (felt rating).
     let fixedYScaleZeroToTen: Bool
-    /// Projects raw workouts into weekly points.
-    let projection: (_ workouts: [Workout], _ weekCount: Int, _ anchor: Date) -> [WeeklyMetricPoint]
+    /// Projects recorded exercises into weekly points.
+    let projection: (_ exercises: [Exercise], _ weekCount: Int, _ anchor: Date) -> [WeeklyMetricPoint]
     /// Whether the y value represents a distance in miles. When `true`
     /// the chart applies metric conversion and shows a unit axis label.
     let isDistance: Bool
@@ -93,7 +93,7 @@ struct WeeklyChartConfiguration {
 /// Parameterized line chart for a weekly metric. Shows the Performance
 /// Hub's mileage and felt-rating charts via `WeeklyChartConfiguration`.
 struct WeeklyChartView: View {
-    let workouts: [Workout]
+    let exercises: [Exercise]
     let configuration: WeeklyChartConfiguration
 
     @Environment(\.useMetricUnits) private var useMetricUnits
@@ -103,7 +103,7 @@ struct WeeklyChartView: View {
     /// we materialize a converted copy when metric is on so `LineMark`
     /// positions and the axis label stay aligned.
     private var points: [WeeklyMetricPoint] {
-        let raw = configuration.projection(workouts, selectedWindow.weekCount, Date())
+        let raw = configuration.projection(exercises, selectedWindow.weekCount, Date())
         guard configuration.isDistance, useMetricUnits else { return raw }
         return raw.map {
             WeeklyMetricPoint(weekStart: $0.weekStart, value: $0.value)
@@ -193,13 +193,13 @@ struct WeeklyChartView: View {
 }
 
 #Preview("Mileage") {
-    WeeklyChartView(workouts: [], configuration: .mileage)
+    WeeklyChartView(exercises: [], configuration: .mileage)
         .padding()
         .modelContainer(ModelContainerFactory.makePreviewContainer())
 }
 
 #Preview("Felt Rating") {
-    WeeklyChartView(workouts: [], configuration: .feltRating)
+    WeeklyChartView(exercises: [], configuration: .feltRating)
         .padding()
         .modelContainer(ModelContainerFactory.makePreviewContainer())
 }

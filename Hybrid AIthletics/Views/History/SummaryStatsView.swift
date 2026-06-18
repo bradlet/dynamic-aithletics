@@ -14,34 +14,34 @@ import SwiftData
 /// Layout is a 3-row VStack: a full-width All Time card on top, then two
 /// rows of two cards each. Sits on page 1 of `PerformanceHubView`.
 struct SummaryStatsView: View {
-    /// All recorded workouts (pre-fetched by parent).
-    let workouts: [Workout]
+    /// Recorded exercises (pre-filtered to completed by parent).
+    let exercises: [Exercise]
     @Environment(\.useMetricUnits) private var useMetricUnits
 
-    /// Total mileage across all recorded workouts.
+    /// Total recorded mileage across all exercises.
     private var allTimeMiles: Double {
-        workouts.reduce(0) { $0 + $1.distanceMiles }
+        exercises.reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Total mileage for the current calendar year.
+    /// Total recorded mileage for the current calendar year.
     private var yearMiles: Double {
         let startOfYear = Date().startOfYear
-        return workouts
+        return exercises
             .filter { $0.date >= startOfYear }
-            .reduce(0) { $0 + $1.distanceMiles }
+            .reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Total mileage for the current calendar month.
+    /// Total recorded mileage for the current calendar month.
     private var monthMiles: Double {
         let startOfMonth = Date().startOfMonth
-        return workouts
+        return exercises
             .filter { $0.date >= startOfMonth }
-            .reduce(0) { $0 + $1.distanceMiles }
+            .reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Total mileage for the current Mon-Sun week.
+    /// Total recorded mileage for the current Mon-Sun week.
     private var thisWeekMiles: Double {
-        WorkoutAggregations.currentWeekMileage(workouts: workouts, anchor: Date())
+        WorkoutAggregations.currentWeekMileage(exercises: exercises, anchor: Date())
     }
 
     /// Floor of the current week's average felt rating. `0` when no
@@ -49,7 +49,7 @@ struct SummaryStatsView: View {
     /// `face.dashed` placeholder via `FeltRatingVisuals`.
     private var avgFeltRatingFloored: Int {
         guard let avg = WorkoutAggregations
-            .currentWeekAverageFeltRating(workouts: workouts, anchor: Date()) else {
+            .currentWeekAverageFeltRating(exercises: exercises, anchor: Date()) else {
             return 0
         }
         return Int(avg.rounded(.down))
@@ -130,7 +130,7 @@ private struct IconStatCard: View {
 }
 
 #Preview {
-    SummaryStatsView(workouts: [])
+    SummaryStatsView(exercises: [])
         .padding()
         .modelContainer(ModelContainerFactory.makePreviewContainer())
 }

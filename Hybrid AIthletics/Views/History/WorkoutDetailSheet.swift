@@ -2,10 +2,11 @@
 //  WorkoutDetailSheet.swift
 //  Hybrid AIthletics
 //
-//  Edit/delete sheet for a recorded workout. Opens directly in editable mode,
-//  shows every user-facing Workout field (intentionally omitting the `source`
-//  and `externalID` provenance columns owned by the import pipeline), and
-//  supports destructive delete via a confirmation dialog.
+//  Edit/delete sheet for a recorded exercise (one whose `workout` is set).
+//  Opens directly in editable mode, shows every user-facing field
+//  (intentionally omitting the `source` and `externalID` provenance fields
+//  owned by the import pipeline), and supports destructive delete via a
+//  confirmation dialog.
 //
 //  Shares its form layout with `RecordWorkoutSheet` via `WorkoutFormFields`.
 //
@@ -20,8 +21,8 @@ struct WorkoutDetailSheet: View {
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Environment(\.googleSheetsSync) private var sheetsSync
 
-    /// The workout being edited. Mutated in-place on save.
-    let workout: Workout
+    /// The recorded exercise being edited. Mutated in-place on save.
+    let exercise: Exercise
 
     @State private var name: String
     @State private var type: ExerciseType
@@ -38,20 +39,24 @@ struct WorkoutDetailSheet: View {
     /// not available during `init`, so the conversion runs once in `.onAppear`.
     @State private var hasConvertedDistance = false
 
-    init(workout: Workout) {
-        self.workout = workout
-        _name = State(initialValue: workout.name)
-        _type = State(initialValue: workout.type)
-        let total = workout.durationSeconds
+    /// The recorded actuals miles seed used for the display-unit conversion.
+    private var recordedMiles: Double { exercise.workout?.distanceMiles ?? exercise.distanceMiles }
+
+    init(exercise: Exercise) {
+        self.exercise = exercise
+        let workout = exercise.workout
+        _name = State(initialValue: exercise.name)
+        _type = State(initialValue: exercise.type)
+        let total = workout?.durationSeconds ?? exercise.durationSeconds
         _hours = State(initialValue: total / 3600)
         _minutes = State(initialValue: (total % 3600) / 60)
         _seconds = State(initialValue: total % 60)
         // Seed with raw miles; converted to display units in .onAppear once
         // `useMetricUnits` is available from the environment.
-        _distance = State(initialValue: workout.distanceMiles)
-        _date = State(initialValue: workout.date)
-        _notes = State(initialValue: workout.notes)
-        _feltRating = State(initialValue: workout.feltRating)
+        _distance = State(initialValue: workout?.distanceMiles ?? exercise.distanceMiles)
+        _date = State(initialValue: exercise.date)
+        _notes = State(initialValue: workout?.notes ?? "")
+        _feltRating = State(initialValue: workout?.feltRating ?? 0)
     }
 
     /// Whether the form has enough data to save.
@@ -89,7 +94,7 @@ struct WorkoutDetailSheet: View {
             }
             .onAppear { convertDistanceForDisplayIfNeeded() }
             .alert(
-                "Delete \(workout.name)?",
+                "Delete \(exercise.name)?",
                 isPresented: $showDeleteConfirmation
             ) {
                 // Ordering matters: SwiftUI renders the cancel role button
@@ -144,11 +149,11 @@ struct WorkoutDetailSheet: View {
         guard !hasConvertedDistance else { return }
         hasConvertedDistance = true
         if useMetricUnits {
-            distance = workout.distanceMiles.toDisplayDistance(metric: true)
+            distance = recordedMiles.toDisplayDistance(metric: true)
         }
     }
 
-    /// Persists all edits back to the workout via `WorkoutEditor.apply`.
+    /// Persists all edits back to the exercise via `WorkoutEditor.apply`.
     private func save() {
         let distanceMiles = useMetricUnits ? distance / 1.60934 : distance
         let edits = WorkoutEditor.EditedValues(
@@ -160,7 +165,7 @@ struct WorkoutDetailSheet: View {
             notes: notes,
             feltRating: feltRating
         )
-        WorkoutEditor.apply(edits, to: workout)
+        WorkoutEditor.apply(edits, to: exercise)
         // Explicit save so the Google Sheets sync trigger sees the edit
         // immediately when it fetches via a fresh ModelContext.
         try? modelContext.save()
@@ -168,24 +173,25 @@ struct WorkoutDetailSheet: View {
         dismiss()
     }
 
-    /// Removes the workout from the SwiftData context and dismisses the sheet.
+    /// Removes the exercise from the SwiftData context and dismisses the sheet.
     /// An explicit `save()` ensures the deletion is flushed to persistent
     /// state before `@Query` in the parent view re-evaluates — autosave
     /// timing is not reliable enough for an immediate list refresh.
     private func performDelete() {
-        modelContext.delete(workout)
+        modelContext.delete(exercise)
         try? modelContext.save()
         sheetsSync.requestSync()
         dismiss()
     }
 }
 
-/// Stateless helper that applies a set of edited values to a `Workout`.
-/// Extracted from `WorkoutDetailSheet.save()` so the mutation logic can be
-/// unit-tested without instantiating a SwiftUI view hierarchy.
+/// Stateless helper that applies a set of edited values to a recorded
+/// `Exercise`. Extracted from `WorkoutDetailSheet.save()` so the mutation
+/// logic can be unit-tested without instantiating a SwiftUI view hierarchy.
 enum WorkoutEditor {
-    /// The full set of user-editable fields on a `Workout`. Intentionally
-    /// excludes `source` and `externalID` (import-pipeline provenance).
+    /// The full set of user-editable fields for a recorded exercise.
+    /// Intentionally excludes `source` and `externalID` (import-pipeline
+    /// provenance), which are preserved across edits.
     struct EditedValues: Equatable {
         var name: String
         var type: ExerciseType
@@ -198,31 +204,43 @@ enum WorkoutEditor {
         var feltRating: Int
     }
 
-    /// Writes every field from `edits` onto `workout`. Does not touch
-    /// `id`, `source`, `externalID`, or `sourceExercise`.
-    static func apply(_ edits: EditedValues, to workout: Workout) {
-        workout.name = edits.name
-        workout.type = edits.type
-        workout.durationSeconds = edits.durationSeconds
-        workout.distanceMiles = edits.distanceMiles
-        workout.date = edits.date
-        workout.notes = edits.notes
-        workout.feltRating = edits.feltRating
+    /// Writes the edited identity fields (`name`, `type`, `date`) onto the
+    /// exercise and rebuilds its nested `workout` from the edited actuals,
+    /// preserving the existing `source` / `externalID`. Does not touch the
+    /// exercise `id` or its planned target metrics.
+    static func apply(_ edits: EditedValues, to exercise: Exercise) {
+        exercise.name = edits.name
+        exercise.type = edits.type
+        exercise.date = edits.date
+        let existing = exercise.workout
+        exercise.workout = Workout(
+            durationSeconds: edits.durationSeconds,
+            distanceMiles: edits.distanceMiles,
+            notes: edits.notes,
+            feltRating: edits.feltRating,
+            source: existing?.source ?? WorkoutSource.manual.rawValue,
+            externalID: existing?.externalID
+        )
     }
 }
 
 #Preview {
     let container = ModelContainerFactory.makePreviewContainer()
-    let workout = Workout(
+    let exercise = Exercise(
         name: "Tempo Run",
         type: .tempoRun,
         durationSeconds: 1800,
         distanceMiles: 4.0,
-        notes: "Legs felt springy today.",
+        notes: "Tempo Thursday.",
         date: Date(),
-        feltRating: 8
+        workout: Workout(
+            durationSeconds: 1800,
+            distanceMiles: 4.0,
+            notes: "Legs felt springy today.",
+            feltRating: 8
+        )
     )
-    container.mainContext.insert(workout)
-    return WorkoutDetailSheet(workout: workout)
+    container.mainContext.insert(exercise)
+    return WorkoutDetailSheet(exercise: exercise)
         .modelContainer(container)
 }

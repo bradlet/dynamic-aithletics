@@ -144,20 +144,21 @@ struct ImportHealthKitSheet: View {
         }
     }
 
-    /// Transforms the selected DTOs into `Workout` records, filtering out
-    /// any whose `externalID` already exists in SwiftData, and persists them.
+    /// Transforms the selected DTOs into completed `Exercise` records,
+    /// filtering out any whose `externalID` already exists in SwiftData, and
+    /// persists them.
     private func commitImport() {
         guard case .loaded(let workouts) = loadState else { return }
         let selected = workouts.filter { selection.contains($0.id) }
 
-        // Dedup against any Workout already carrying an externalID.
+        // Dedup against any recorded exercise already carrying an externalID.
         let existingIDs = fetchExistingExternalIDs()
         let deduped = selected.filter { !existingIDs.contains($0.id) }
         let skippedCount = selected.count - deduped.count
 
         for dto in deduped {
-            let workout = HealthKitWorkoutMapper.toWorkout(dto)
-            modelContext.insert(workout)
+            let exercise = HealthKitWorkoutMapper.toExercise(dto)
+            modelContext.insert(exercise)
         }
         do {
             try modelContext.save()
@@ -178,14 +179,15 @@ struct ImportHealthKitSheet: View {
         dismiss()
     }
 
-    /// Snapshots the set of all `externalID` values currently in SwiftData
-    /// so the commit step can skip anything that's already been imported.
+    /// Snapshots the set of all recorded-workout `externalID` values currently
+    /// in SwiftData so the commit step can skip anything that's already been
+    /// imported. The `externalID` lives inside the nested `workout` Codable
+    /// value, which can't be reached from a `#Predicate`, so we fetch all
+    /// exercises and collect in memory.
     private func fetchExistingExternalIDs() -> Set<String> {
-        let descriptor = FetchDescriptor<Workout>(
-            predicate: #Predicate { $0.externalID != nil }
-        )
-        guard let workouts = try? modelContext.fetch(descriptor) else { return [] }
-        return Set(workouts.compactMap { $0.externalID })
+        let descriptor = FetchDescriptor<Exercise>()
+        guard let exercises = try? modelContext.fetch(descriptor) else { return [] }
+        return Set(exercises.compactMap { $0.workout?.externalID })
     }
 }
 

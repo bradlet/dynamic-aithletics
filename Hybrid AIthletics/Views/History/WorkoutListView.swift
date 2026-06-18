@@ -12,8 +12,9 @@
 import SwiftUI
 import SwiftData
 
-/// A request to focus a specific workout inside the list. A fresh `id` is
-/// generated per tap so repeat taps of the same day still fire `.onChange`.
+/// A request to focus a specific recorded exercise inside the list. A fresh
+/// `id` is generated per tap so repeat taps of the same day still fire
+/// `.onChange`. `workoutID` carries the `Exercise.id` of the target.
 struct WorkoutNavigationRequest: Equatable, Identifiable {
     let id: UUID
     let workoutID: UUID
@@ -24,39 +25,39 @@ struct WorkoutNavigationRequest: Equatable, Identifiable {
     }
 }
 
-/// Displays recorded workouts in discrete pages, newest first. 10 per page.
+/// Displays recorded exercises in discrete pages, newest first. 10 per page.
 struct WorkoutListView: View {
-    /// Pre-sorted workouts (descending by date) from parent.
-    let workouts: [Workout]
+    /// Pre-sorted completed exercises (descending by date) from parent.
+    let exercises: [Exercise]
     /// Navigation focus request from the monthly calendar. A new value jumps
-    /// the list to the page containing `workoutID` and briefly highlights
-    /// that row.
+    /// the list to the page containing the target exercise and briefly
+    /// highlights that row.
     let navigationRequest: WorkoutNavigationRequest?
 
     @Environment(\.useMetricUnits) private var useMetricUnits
 
     @State private var currentPage = 0
-    @State private var selectedWorkout: Workout?
+    @State private var selectedExercise: Exercise?
     @State private var highlightedID: UUID?
 
-    /// Workouts per page.
+    /// Exercises per page.
     private let pageSize = 10
 
     private var totalPages: Int {
-        WorkoutListPagination.totalPages(count: workouts.count, pageSize: pageSize)
+        WorkoutListPagination.totalPages(count: exercises.count, pageSize: pageSize)
     }
 
-    /// The slice of `workouts` visible on the current page.
-    private var pageWorkouts: [Workout] {
+    /// The slice of `exercises` visible on the current page.
+    private var pageExercises: [Exercise] {
         let start = currentPage * pageSize
-        guard start < workouts.count else { return [] }
-        let end = min(start + pageSize, workouts.count)
-        return Array(workouts[start..<end])
+        guard start < exercises.count else { return [] }
+        let end = min(start + pageSize, exercises.count)
+        return Array(exercises[start..<end])
     }
 
     var body: some View {
         Group {
-            if workouts.isEmpty {
+            if exercises.isEmpty {
                 ContentUnavailableView(
                     "No Workouts Yet",
                     systemImage: "figure.run",
@@ -65,14 +66,14 @@ struct WorkoutListView: View {
             } else {
                 VStack(spacing: 12) {
                     LazyVStack(spacing: 8) {
-                        ForEach(pageWorkouts) { workout in
+                        ForEach(pageExercises) { exercise in
                             Button {
-                                selectedWorkout = workout
+                                selectedExercise = exercise
                             } label: {
                                 WorkoutRow(
-                                    workout: workout,
+                                    exercise: exercise,
                                     useMetricUnits: useMetricUnits,
-                                    isHighlighted: highlightedID == workout.id
+                                    isHighlighted: highlightedID == exercise.id
                                 )
                             }
                             .buttonStyle(.plain)
@@ -83,13 +84,13 @@ struct WorkoutListView: View {
                 .padding(.horizontal)
             }
         }
-        .sheet(item: $selectedWorkout) { workout in
-            WorkoutDetailSheet(workout: workout)
+        .sheet(item: $selectedExercise) { exercise in
+            WorkoutDetailSheet(exercise: exercise)
         }
         .onChange(of: navigationRequest) { _, newValue in
             handleNavigation(newValue)
         }
-        .onChange(of: workouts.count) { _, _ in
+        .onChange(of: exercises.count) { _, _ in
             clampPage()
         }
     }
@@ -146,7 +147,7 @@ struct WorkoutListView: View {
     /// so `.onChange` re-fires even with the same workout id.
     private func handleNavigation(_ request: WorkoutNavigationRequest?) {
         guard let request,
-              let index = workouts.firstIndex(where: { $0.id == request.workoutID })
+              let index = exercises.firstIndex(where: { $0.id == request.workoutID })
         else { return }
         let targetPage = WorkoutListPagination.pageIndex(forItemAt: index, pageSize: pageSize)
         withAnimation(.easeInOut(duration: 0.25)) {
@@ -176,35 +177,40 @@ struct WorkoutListView: View {
 
 // MARK: - Row
 
-/// A single row displaying a workout's key details: name, date, distance,
-/// duration, and derived pace.
+/// A single row displaying a recorded exercise's key details: name, date,
+/// and the recorded distance, duration, and derived pace.
 private struct WorkoutRow: View {
-    let workout: Workout
+    let exercise: Exercise
     let useMetricUnits: Bool
     let isHighlighted: Bool
 
+    /// Recorded actuals. Falls back to planned values if `workout` is nil
+    /// (shouldn't happen — this list is filtered to completed exercises).
+    private var distanceMiles: Double { exercise.workout?.distanceMiles ?? exercise.distanceMiles }
+    private var durationSeconds: Int { exercise.workout?.durationSeconds ?? exercise.durationSeconds }
+
     var body: some View {
         HStack {
-            Image(systemName: workout.type.systemImage)
-                .foregroundStyle(workout.type.color)
+            Image(systemName: exercise.type.systemImage)
+                .foregroundStyle(exercise.type.color)
                 .frame(width: 30)
             VStack(alignment: .leading, spacing: 2) {
-                Text(workout.name)
+                Text(exercise.name)
                     .font(.headline)
                     .foregroundStyle(.primary)
-                Text(workout.date, style: .date)
+                Text(exercise.date, style: .date)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
-                Text(workout.distanceMiles.formattedDistance(metric: useMetricUnits))
+                Text(distanceMiles.formattedDistance(metric: useMetricUnits))
                     .font(.subheadline.bold())
-                Text(workout.durationSeconds.formattedDuration)
+                Text(durationSeconds.formattedDuration)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text(workout.durationSeconds.formattedPace(
-                    distanceMiles: workout.distanceMiles,
+                Text(durationSeconds.formattedPace(
+                    distanceMiles: distanceMiles,
                     metric: useMetricUnits
                 ))
                     .font(.caption2)
@@ -230,14 +236,14 @@ private struct WorkoutRow: View {
         .contentShape(RoundedRectangle(cornerRadius: 10))
         .animation(.easeInOut(duration: 0.3), value: isHighlighted)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("workoutRow.\(workout.id.uuidString)")
-        .accessibilityLabel(workout.name)
+        .accessibilityIdentifier("workoutRow.\(exercise.id.uuidString)")
+        .accessibilityLabel(exercise.name)
     }
 }
 
 #Preview {
     ScrollView {
-        WorkoutListView(workouts: [], navigationRequest: nil)
+        WorkoutListView(exercises: [], navigationRequest: nil)
     }
     .modelContainer(ModelContainerFactory.makePreviewContainer())
 }

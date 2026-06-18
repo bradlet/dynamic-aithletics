@@ -21,23 +21,23 @@ import SwiftData
 /// custom `PageIndicator` below the TabView so they don't overlap the
 /// chart x-axis.
 struct PerformanceHubView: View {
-    /// All recorded workouts (pre-fetched by parent).
-    let workouts: [Workout]
+    /// Recorded exercises (pre-filtered to completed by parent).
+    let exercises: [Exercise]
 
     @State private var selectedPage: Int = 0
 
     var body: some View {
         VStack(spacing: 8) {
             TabView(selection: $selectedPage) {
-                SummaryStatsView(workouts: workouts)
+                SummaryStatsView(exercises: exercises)
                     .padding(.horizontal)
                     .tag(0)
 
-                WeeklyChartView(workouts: workouts, configuration: .mileage)
+                WeeklyChartView(exercises: exercises, configuration: .mileage)
                     .padding(.horizontal)
                     .tag(1)
 
-                WeeklyChartView(workouts: workouts, configuration: .feltRating)
+                WeeklyChartView(exercises: exercises, configuration: .feltRating)
                     .padding(.horizontal)
                     .tag(2)
             }
@@ -73,6 +73,6 @@ private struct PageIndicator: View {
 }
 
 #Preview {
-    PerformanceHubView(workouts: [])
+    PerformanceHubView(exercises: [])
         .modelContainer(ModelContainerFactory.makePreviewContainer())
 }

@@ -16,8 +16,17 @@ struct HistoryView: View {
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Environment(\.googleSheetsSync) private var sheetsSync
 
-    @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
+    @Query private var allExercises: [Exercise]
     @State private var selectedMonth: Date = Date()
+
+    /// Recorded exercises (those with a `workout`), most recent first.
+    /// `workout != nil` cannot be expressed in a `#Predicate` over a Codable
+    /// composite attribute, so the filter + sort run in memory here.
+    private var completedExercises: [Exercise] {
+        allExercises
+            .filter(\.isCompleted)
+            .sorted { $0.date > $1.date }
+    }
 
     /// Drives `WorkoutListView` to jump to a specific workout's page and
     /// highlight it briefly. A new request (fresh `id`) is constructed on
@@ -50,10 +59,10 @@ struct HistoryView: View {
         NavigationStack {
             ScrollView {
                 LazyVStack(spacing: 20) {
-                    PerformanceHubView(workouts: allWorkouts)
+                    PerformanceHubView(exercises: completedExercises)
                     MonthlyCalendarView(
                         selectedMonth: $selectedMonth,
-                        items: allWorkouts,
+                        items: completedExercises,
                         onDayTap: handleCalendarDayTap
                     )
                     workoutListSection
@@ -283,7 +292,7 @@ struct HistoryView: View {
                 .font(.headline)
                 .padding(.horizontal)
             WorkoutListView(
-                workouts: allWorkouts,
+                exercises: completedExercises,
                 navigationRequest: navigationRequest
             )
         }
@@ -295,7 +304,7 @@ struct HistoryView: View {
     /// workout list. Since `allWorkouts` is sorted descending by date, the
     /// first match on a day is the most recent workout for that day.
     private func handleCalendarDayTap(_ day: Date) {
-        guard let match = allWorkouts.first(where: { $0.date.isSameDay(as: day) }) else {
+        guard let match = completedExercises.first(where: { $0.date.isSameDay(as: day) }) else {
             return
         }
         navigationRequest = WorkoutNavigationRequest(workoutID: match.id)
@@ -306,7 +315,7 @@ struct HistoryView: View {
     /// Builds the CSV document from the current workouts and triggers the exporter.
     private func startExport() {
         let unit: WorkoutCSVDistanceUnit = useMetricUnits ? .kilometers : .miles
-        let csv = WorkoutCSV.encode(workouts: allWorkouts, unit: unit)
+        let csv = WorkoutCSV.encode(exercises: completedExercises, unit: unit)
         exportDocument = WorkoutCSVDocument(text: csv)
         isExporterPresented = true
     }
@@ -354,12 +363,11 @@ struct HistoryView: View {
         }
     }
 
-    /// Inserts all successfully parsed rows as new workouts with parent exercises.
+    /// Inserts all successfully parsed rows as new completed exercises.
     private func commitImport(_ result: WorkoutCSVParseResult) {
         for row in result.rows {
-            let (exercise, workout) = WorkoutCSV.toWorkoutWithExercise(row, unit: importUnit)
+            let exercise = WorkoutCSV.toExercise(row, unit: importUnit)
             modelContext.insert(exercise)
-            modelContext.insert(workout)
         }
         do {
             try modelContext.save()
