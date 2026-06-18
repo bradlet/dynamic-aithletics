@@ -2,8 +2,8 @@
 //  CoachTypeConversions.swift
 //  Hybrid AIthletics
 //
-//  Extensions to convert the app's SwiftData models (Workout, Exercise,
-//  ExerciseType) into AICoachCore's plain types for prompt building.
+//  Extensions to convert the app's SwiftData `Exercise` model (and its nested
+//  `Workout` value) into AICoachCore's plain types for prompt building.
 //
 
 import Foundation
@@ -20,25 +20,29 @@ extension CoachExerciseType {
 
 extension CoachWorkout {
 
-    /// Creates a coaching workout from the app's SwiftData `Workout` model.
-    init(from workout: Workout) {
+    /// Creates a coaching workout from a completed `Exercise` (one whose
+    /// `workout` is non-nil). Date and type come from the exercise; the
+    /// metrics and RPE come from the recorded `workout`. Falls back to the
+    /// planned metrics if `workout` is unexpectedly nil.
+    init(from exercise: Exercise) {
         self.init(
-            date: workout.date,
-            type: CoachExerciseType(from: workout.type),
-            distanceMiles: workout.distanceMiles,
-            durationSeconds: workout.durationSeconds,
-            feltRating: workout.feltRating,
-            notes: workout.notes
+            date: exercise.date,
+            type: CoachExerciseType(from: exercise.type),
+            distanceMiles: exercise.workout?.distanceMiles ?? exercise.distanceMiles,
+            durationSeconds: exercise.workout?.durationSeconds ?? exercise.durationSeconds,
+            feltRating: exercise.workout?.feltRating ?? 0,
+            notes: exercise.workout?.notes ?? ""
         )
     }
 }
 
 extension CoachExercise {
 
-    /// Creates a coaching exercise from the app's SwiftData `Exercise` model.
+    /// Creates a coaching exercise from the app's SwiftData `Exercise` model,
+    /// reading its planned (target) metrics.
     init(from exercise: Exercise) {
         self.init(
-            scheduledDate: exercise.scheduledDate,
+            scheduledDate: exercise.date,
             type: CoachExerciseType(from: exercise.type),
             distanceMiles: exercise.distanceMiles,
             durationSeconds: exercise.durationSeconds

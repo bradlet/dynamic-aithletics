@@ -219,16 +219,17 @@ final class GoogleSheetsSyncCoordinator {
 
     // MARK: - Internals
 
-    /// Reads workouts + unit preference from SwiftData and produces the row
-    /// matrix for the Sheets API. Pure read; never mutates the context.
+    /// Reads recorded exercises + unit preference from SwiftData and produces
+    /// the row matrix for the Sheets API. Pure read; never mutates the context.
+    /// `WorkoutCSV.rows` filters to completed exercises and sorts by date.
     private func fetchAndEncodeRows(container: ModelContainer) throws -> [[String]] {
         let context = ModelContext(container)
         let configDescriptor = FetchDescriptor<AppConfiguration>()
         let useMetric = (try? context.fetch(configDescriptor).first?.useMetricUnits) ?? false
-        let workoutDescriptor = FetchDescriptor<Workout>(sortBy: [SortDescriptor(\.date)])
-        let workouts = try context.fetch(workoutDescriptor)
+        let exerciseDescriptor = FetchDescriptor<Exercise>(sortBy: [SortDescriptor(\.date)])
+        let exercises = try context.fetch(exerciseDescriptor)
         let unit: WorkoutCSVDistanceUnit = useMetric ? .kilometers : .miles
-        return WorkoutCSV.rows(workouts: workouts, unit: unit)
+        return WorkoutCSV.rows(exercises: exercises, unit: unit)
     }
 
     /// Pulls `googleSheetsSyncEnabled` and `googleSheetsSpreadsheetID` from
