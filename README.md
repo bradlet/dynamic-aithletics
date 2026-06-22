@@ -13,7 +13,7 @@ We don't withhold any features from the free app. Upgrade one time only to suppo
 ## Features
 
 ### Aerobic Training (Tab 1)
-- **Weekly calendar** with Monday-Sunday swimlanes showing planned exercises
+- **Weekly calendar** with Sunday-Saturday swimlanes showing planned exercises
 - **Drag-and-drop** to reschedule exercises between days
 - **Mileage header** showing planned vs. completed miles for the current week with progress indicator
 - **Record workouts** via the checkmark button on any exercise — pre-fills from the plan, all fields editable

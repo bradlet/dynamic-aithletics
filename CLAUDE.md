@@ -28,7 +28,7 @@ cd Evals && swift run CoachEval inspect --scenario high-rpe --prompt-mode chat
 - **No ViewModels** — `@Query` in top-level views only (`AerobicTrainingView`, `HistoryView`, `ContentView`). Child views receive data as `let` parameters.
 - **Models**: `Exercise` (planned), `Workout` (recorded), `AppConfiguration` (preferences), `ExerciseType` (enum)
 - **Distance storage**: Always miles internally. Display conversion via `Double.formattedDistance(metric:)`. Unit preference via `@Environment(\.useMetricUnits)`.
-- **Week start**: Monday always (hardcoded in `Date+Week.swift` via `mondayCalendar`).
+- **Week start**: Sunday — standard `Calendar.current` week (no custom first-weekday override). See `Date+Week.swift`.
 - **CloudKit**: All model properties must have default values for CloudKit compatibility.
 - **AICoachCore local package**: `Packages/AICoachCore/` — shared library containing prompt builder, coaching types (`CoachWorkout`, `CoachExercise`, `CoachingRequest`, `CoachingResponse`), formatters, and `GenerationConfig`. Used by both the iOS app and the `Evals/` CLI. The app converts SwiftData models to AICoachCore types via `CoachTypeConversions.swift`.
 - **AI Coach service layer**: `AICoachService` protocol with two implementations — `MLXAICoachService` (production, Gemma 3 4B via MLX-Swift) and `StubAICoachService` (previews/tests). Injected via `@Environment(\.aiCoach)`. Default environment value is the stub so previews never load real models. Uses `UserInput(chat:)` with separate system/user roles for proper Gemma 3 chat template formatting.
