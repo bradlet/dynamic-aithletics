@@ -163,7 +163,7 @@ struct AddExerciseSheet: View {
             seconds = total % 60
             distance = useMetricUnits ? exercise.distanceMiles.toDisplayDistance(metric: true) : exercise.distanceMiles
             notes = exercise.notes
-            scheduledDate = exercise.scheduledDate
+            scheduledDate = exercise.date
             isRepeating = exercise.isRepeating
         } else {
             name = type.rawValue
@@ -182,7 +182,7 @@ struct AddExerciseSheet: View {
             exercise.durationSeconds = durationSec
             exercise.distanceMiles = distanceMiles
             exercise.notes = notes
-            exercise.scheduledDate = scheduledDate.startOfDay
+            exercise.date = scheduledDate.startOfDay
             exercise.isRepeating = isRepeating
         } else {
             let newExercise = Exercise(
@@ -191,7 +191,7 @@ struct AddExerciseSheet: View {
                 durationSeconds: durationSec,
                 distanceMiles: distanceMiles,
                 notes: notes,
-                scheduledDate: scheduledDate,
+                date: scheduledDate,
                 isRepeating: isRepeating
             )
             modelContext.insert(newExercise)

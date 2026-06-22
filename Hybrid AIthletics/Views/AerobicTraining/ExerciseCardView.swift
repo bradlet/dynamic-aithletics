@@ -155,15 +155,13 @@ struct ExerciseCardView: View {
         .background(Color.red)
     }
 
-    /// Deletes this exercise and all associated workouts, or stops recurrence for virtual repeating instances.
+    /// Deletes this exercise (its nested workout record goes with it), or
+    /// stops recurrence for virtual repeating instances.
     private func deleteExerciseAndWorkouts() {
         withAnimation {
             if isVirtual {
                 exercise.isRepeating = false
             } else {
-                for workout in exercise.workouts {
-                    modelContext.delete(workout)
-                }
                 modelContext.delete(exercise)
             }
             swipeDeleteActiveID = nil
@@ -178,7 +176,7 @@ struct ExerciseCardView: View {
         type: .run,
         durationSeconds: 1800,
         distanceMiles: 3.0,
-        scheduledDate: Date()
+        date: Date()
     )
     return ExerciseCardView(
         exercise: exercise,

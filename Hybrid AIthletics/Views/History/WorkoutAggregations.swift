@@ -3,9 +3,10 @@
 //  Hybrid AIthletics
 //
 //  Pure, stateless aggregation helpers used by the History tab's
-//  Performance Hub. Groups workouts into Monday-start weekly buckets
-//  and computes mileage / felt-rating summaries. Extracted so the math
-//  can be unit-tested without spinning up SwiftUI.
+//  Performance Hub. Groups recorded exercises into Monday-start weekly
+//  buckets and computes mileage / felt-rating summaries. Each exercise's
+//  placement uses its `date`; its metrics come from the nested `workout`.
+//  Extracted so the math can be unit-tested without spinning up SwiftUI.
 //
 
 import Foundation
@@ -29,18 +30,18 @@ enum WorkoutAggregations {
 
     // MARK: - Bucketing primitive
 
-    /// Groups `workouts` into the last `weekCount` Monday-start weeks,
+    /// Groups `exercises` into the last `weekCount` Monday-start weeks,
     /// ending in the week containing `anchor`. Empty weeks are present
-    /// with an empty workout array. Returned chronologically (oldest first).
+    /// with an empty array. Returned chronologically (oldest first).
     /// - Parameters:
-    ///   - workouts: Source workouts. Order irrelevant.
+    ///   - exercises: Source recorded exercises. Order irrelevant.
     ///   - weekCount: Number of weeks in the rolling window. Must be > 0.
     ///   - anchor: Date whose week becomes the tail of the window.
     static func weeklyBuckets(
-        workouts: [Workout],
+        exercises: [Exercise],
         weekCount: Int,
         anchor: Date
-    ) -> [(weekStart: Date, workouts: [Workout])] {
+    ) -> [(weekStart: Date, exercises: [Exercise])] {
         guard weekCount > 0 else { return [] }
 
         let calendar = Calendar.current
@@ -52,50 +53,50 @@ enum WorkoutAggregations {
             return calendar.date(byAdding: .weekOfYear, value: -weeksBack, to: tailMonday)
         }
 
-        // Group all workouts by their own week start for O(n) lookup.
-        let grouped = Dictionary(grouping: workouts) { $0.date.startOfWeek }
+        // Group all exercises by their own week start for O(n) lookup.
+        let grouped = Dictionary(grouping: exercises) { $0.date.startOfWeek }
 
         return weekStarts.map { start in
-            (weekStart: start, workouts: grouped[start] ?? [])
+            (weekStart: start, exercises: grouped[start] ?? [])
         }
     }
 
     // MARK: - Mileage projections
 
-    /// Sums `distanceMiles` per week across the rolling window. Empty
-    /// weeks yield `0`. Values are always in miles; callers apply metric
-    /// conversion at the display layer.
+    /// Sums recorded `distanceMiles` per week across the rolling window.
+    /// Empty weeks yield `0`. Values are always in miles; callers apply
+    /// metric conversion at the display layer.
     static func weeklyMileage(
-        workouts: [Workout],
+        exercises: [Exercise],
         weekCount: Int,
         anchor: Date
     ) -> [WeeklyMetricPoint] {
-        weeklyBuckets(workouts: workouts, weekCount: weekCount, anchor: anchor)
+        weeklyBuckets(exercises: exercises, weekCount: weekCount, anchor: anchor)
             .map { bucket in
-                let total = bucket.workouts.reduce(0.0) { $0 + $1.distanceMiles }
+                let total = bucket.exercises.reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
                 return WeeklyMetricPoint(weekStart: bucket.weekStart, value: total)
             }
     }
 
     // MARK: - Felt-rating projections
 
-    /// Averages `feltRating` per week, excluding workouts with
-    /// `feltRating == 0` (unrecorded). Empty weeks and weeks with only
-    /// unrated workouts both yield `0` per product spec.
+    /// Averages recorded `feltRating` per week, excluding exercises whose
+    /// workout has `feltRating == 0` (unrecorded). Empty weeks and weeks with
+    /// only unrated workouts both yield `0` per product spec.
     static func weeklyAverageFeltRating(
-        workouts: [Workout],
+        exercises: [Exercise],
         weekCount: Int,
         anchor: Date
     ) -> [WeeklyMetricPoint] {
-        weeklyBuckets(workouts: workouts, weekCount: weekCount, anchor: anchor)
+        weeklyBuckets(exercises: exercises, weekCount: weekCount, anchor: anchor)
             .map { bucket in
-                let rated = bucket.workouts.filter { $0.feltRating > 0 }
+                let ratings = bucket.exercises.compactMap { $0.workout?.feltRating }.filter { $0 > 0 }
                 let average: Double
-                if rated.isEmpty {
+                if ratings.isEmpty {
                     average = 0
                 } else {
-                    let sum = rated.reduce(0) { $0 + $1.feltRating }
-                    average = Double(sum) / Double(rated.count)
+                    let sum = ratings.reduce(0, +)
+                    average = Double(sum) / Double(ratings.count)
                 }
                 return WeeklyMetricPoint(weekStart: bucket.weekStart, value: average)
             }
@@ -103,30 +104,31 @@ enum WorkoutAggregations {
 
     // MARK: - Stat-card helpers
 
-    /// Total miles recorded in the Monday-Sunday week containing `anchor`.
+    /// Total recorded miles in the Monday-Sunday week containing `anchor`.
     static func currentWeekMileage(
-        workouts: [Workout],
+        exercises: [Exercise],
         anchor: Date
     ) -> Double {
         let weekStart = anchor.startOfWeek
-        return workouts
+        return exercises
             .filter { $0.date.startOfWeek == weekStart }
-            .reduce(0.0) { $0 + $1.distanceMiles }
+            .reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Average `feltRating` in the Mon-Sun week containing `anchor`,
+    /// Average recorded `feltRating` in the Mon-Sun week containing `anchor`,
     /// excluding workouts with `feltRating == 0`. Returns `nil` when no
     /// workouts in the week have a recorded rating (caller displays "—").
     static func currentWeekAverageFeltRating(
-        workouts: [Workout],
+        exercises: [Exercise],
         anchor: Date
     ) -> Double? {
         let weekStart = anchor.startOfWeek
-        let rated = workouts.filter {
-            $0.date.startOfWeek == weekStart && $0.feltRating > 0
-        }
-        guard !rated.isEmpty else { return nil }
-        let sum = rated.reduce(0) { $0 + $1.feltRating }
-        return Double(sum) / Double(rated.count)
+        let ratings = exercises
+            .filter { $0.date.startOfWeek == weekStart }
+            .compactMap { $0.workout?.feltRating }
+            .filter { $0 > 0 }
+        guard !ratings.isEmpty else { return nil }
+        let sum = ratings.reduce(0, +)
+        return Double(sum) / Double(ratings.count)
     }
 }

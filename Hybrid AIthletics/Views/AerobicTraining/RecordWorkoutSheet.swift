@@ -3,8 +3,10 @@
 //  Hybrid AIthletics
 //
 //  Form sheet for recording a completed workout.
-//  When given a source exercise, pre-fills from its defaults.
-//  When exercise is nil (quick add), creates both an Exercise and Workout on save.
+//  When given a planned exercise, pre-fills from its targets and attaches the
+//  recorded actuals to that exercise's nested `workout`. When exercise is nil
+//  (quick add), creates a new completed Exercise whose planned targets mirror
+//  the recorded actuals.
 //
 
 import SwiftUI
@@ -93,15 +95,28 @@ struct RecordWorkoutSheet: View {
         workoutDate = defaultDate
     }
 
-    /// Creates and saves the workout record. When no source exercise exists,
-    /// also creates a matching exercise so every workout has a source.
+    /// Records the workout. When recording a planned exercise, its planned
+    /// targets are left intact and the form values become the recorded
+    /// actuals on `exercise.workout`. On quick add, a new completed exercise
+    /// is created with planned targets mirroring the actuals.
     private func save() {
         let durationSec = hours * 3600 + minutes * 60 + seconds
         let distanceMiles = useMetricUnits ? distance / 1.60934 : distance
 
-        let sourceExercise: Exercise
+        let workout = Workout(
+            durationSeconds: durationSec,
+            distanceMiles: distanceMiles,
+            notes: notes,
+            feltRating: feltRating,
+            source: WorkoutSource.manual.rawValue
+        )
+
         if let exercise {
-            sourceExercise = exercise
+            // Keep planned targets; attach actuals and update identity/date.
+            exercise.name = name
+            exercise.type = type
+            exercise.date = workoutDate
+            exercise.workout = workout
         } else {
             let newExercise = Exercise(
                 name: name,
@@ -109,26 +124,14 @@ struct RecordWorkoutSheet: View {
                 durationSeconds: durationSec,
                 distanceMiles: distanceMiles,
                 notes: notes,
-                scheduledDate: workoutDate,
-                isRepeating: false
+                date: workoutDate,
+                isRepeating: false,
+                workout: workout
             )
             modelContext.insert(newExercise)
-            sourceExercise = newExercise
         }
-
-        let workout = Workout(
-            name: name,
-            type: type,
-            durationSeconds: durationSec,
-            distanceMiles: distanceMiles,
-            notes: notes,
-            date: workoutDate.startOfDay,
-            feltRating: feltRating,
-            sourceExercise: sourceExercise
-        )
-        modelContext.insert(workout)
         // Explicit save so the Google Sheets sync trigger sees the new
-        // workout immediately when it fetches via a fresh ModelContext.
+        // record immediately when it fetches via a fresh ModelContext.
         try? modelContext.save()
         sheetsSync.requestSync()
         dismiss()
@@ -142,7 +145,7 @@ struct RecordWorkoutSheet: View {
         type: .run,
         durationSeconds: 1800,
         distanceMiles: 3.0,
-        scheduledDate: Date()
+        date: Date()
     )
     return RecordWorkoutSheet(exercise: exercise, defaultDate: Date())
         .modelContainer(container)

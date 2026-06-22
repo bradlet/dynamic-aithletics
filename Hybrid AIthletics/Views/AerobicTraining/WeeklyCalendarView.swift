@@ -27,8 +27,6 @@ struct WeeklyCalendarView: View {
     let days: [Date]
     /// Exercises for the current week, including virtual repeating exercises (pre-filtered by parent).
     let exercises: [Exercise]
-    /// Workouts recorded this week (pre-filtered by parent).
-    let workouts: [Workout]
     /// Called when the user taps the schedule button on a specific day.
     let onAdd: (Date) -> Void
     /// Called when the user taps the quick-add button on a specific day.
@@ -97,14 +95,14 @@ struct WeeklyCalendarView: View {
     /// Returns exercises scheduled for the given day, including virtual repeating exercises.
     private func exercisesForDay(_ day: Date) -> [Exercise] {
         exercises.filter { exercise in
-            exercise.scheduledDate.isSameDay(as: day)
-            || (exercise.isRepeating && exercise.scheduledDate.mondayBasedWeekdayIndex == day.mondayBasedWeekdayIndex)
+            exercise.date.isSameDay(as: day)
+            || (exercise.isRepeating && exercise.date.mondayBasedWeekdayIndex == day.mondayBasedWeekdayIndex)
         }
     }
 
     /// Returns true if the exercise is a virtual repeating instance (template from another week).
     private func isVirtual(_ exercise: Exercise) -> Bool {
-        exercise.isRepeating && !days.contains(where: { exercise.scheduledDate.isSameDay(as: $0) })
+        exercise.isRepeating && !days.contains(where: { exercise.date.isSameDay(as: $0) })
     }
 
     /// Materializes a virtual repeating exercise into a concrete instance for the given day. Returns the original if already concrete.
@@ -117,19 +115,19 @@ struct WeeklyCalendarView: View {
             durationSeconds: exercise.durationSeconds,
             distanceMiles: exercise.distanceMiles,
             notes: exercise.notes,
-            scheduledDate: day,
+            date: day,
             isRepeating: false
         )
         modelContext.insert(concrete)
         return concrete
     }
 
-    /// Checks whether any workout has been recorded for this exercise this week.
+    /// Checks whether this exercise has been recorded.
     private func hasRecordedWorkout(for exercise: Exercise) -> Bool {
-        workouts.contains { $0.sourceExercise == exercise }
+        exercise.isCompleted
     }
 
-    /// Moves an exercise to a new day by updating its scheduledDate and any linked workout dates.
+    /// Moves an exercise to a new day by updating its date.
     /// Blocks repeating exercises with an alert instead of rescheduling.
     private func rescheduleExercise(id: UUID, to day: Date) {
         guard let exercise = exercises.first(where: { $0.id == id }) else { return }
@@ -138,11 +136,7 @@ struct WeeklyCalendarView: View {
             return
         }
         withAnimation {
-            let newDate = day.startOfDay
-            exercise.scheduledDate = newDate
-            for workout in exercise.workouts {
-                workout.date = newDate
-            }
+            exercise.date = day.startOfDay
         }
     }
 
@@ -244,7 +238,7 @@ private struct DaySwimlane: View {
                     onEdit: { onEdit(exercise) },
                     hasRecordedWorkout: hasWorkoutsRecorded(exercise),
                     swipeDeleteActiveID: $swipeDeleteActiveID,
-                    isVirtual: exercise.isRepeating && !exercise.scheduledDate.isSameDay(as: day)
+                    isVirtual: exercise.isRepeating && !exercise.date.isSameDay(as: day)
                 )
                 // Checkmark indicator if a workout has been recorded.
                 if hasWorkoutsRecorded(exercise) {
@@ -262,7 +256,6 @@ private struct DaySwimlane: View {
     WeeklyCalendarView(
         days: days,
         exercises: [],
-        workouts: [],
         onAdd: { _ in },
         onQuickAdd: { _ in },
         onRecord: { _ in },

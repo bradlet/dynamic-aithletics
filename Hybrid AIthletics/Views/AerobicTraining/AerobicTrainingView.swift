@@ -16,7 +16,6 @@ struct AerobicTrainingView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Query private var allExercises: [Exercise]
-    @Query(sort: \Workout.date) private var allWorkouts: [Workout]
 
     /// The month displayed in the monthly calendar.
     @State private var selectedMonth: Date = Date()
@@ -43,7 +42,7 @@ struct AerobicTrainingView: View {
         let end = selectedWeek.endOfWeek
 
         // Concrete exercises scheduled this week
-        let concrete = allExercises.filter { $0.scheduledDate >= start && $0.scheduledDate <= end }
+        let concrete = allExercises.filter { $0.date >= start && $0.date <= end }
 
         // Only show virtual repeating exercises for current week and future
         guard selectedWeek >= Date().startOfWeek else { return concrete }
@@ -51,14 +50,14 @@ struct AerobicTrainingView: View {
         // Repeating exercises from other weeks
         let repeating = allExercises.filter { exercise in
             exercise.isRepeating
-            && !(exercise.scheduledDate >= start && exercise.scheduledDate <= end)
+            && !(exercise.date >= start && exercise.date <= end)
         }
 
         // Include repeating exercises whose day-of-week has no matching concrete instance
         let virtual = repeating.filter { template in
-            let targetDayIndex = template.scheduledDate.mondayBasedWeekdayIndex
+            let targetDayIndex = template.date.mondayBasedWeekdayIndex
             let alreadyExists = concrete.contains { concreteExercise in
-                concreteExercise.scheduledDate.mondayBasedWeekdayIndex == targetDayIndex
+                concreteExercise.date.mondayBasedWeekdayIndex == targetDayIndex
                 && concreteExercise.name == template.name
                 && concreteExercise.type == template.type
             }
@@ -68,11 +67,9 @@ struct AerobicTrainingView: View {
         return concrete + virtual
     }
 
-    /// Workouts recorded within the currently displayed week.
-    private var weekWorkouts: [Workout] {
-        let start = selectedWeek.startOfDay
-        let end = selectedWeek.endOfWeek
-        return allWorkouts.filter { $0.date >= start && $0.date <= end }
+    /// Recorded (completed) exercises within the currently displayed week.
+    private var weekCompletedExercises: [Exercise] {
+        weekExercises.filter(\.isCompleted)
     }
 
     /// Calendar display items for the monthly overview.
@@ -85,9 +82,9 @@ struct AerobicTrainingView: View {
         weekExercises.reduce(0) { $0 + $1.distanceMiles }
     }
 
-    /// Sum of recorded workout distances for the current week.
+    /// Sum of recorded (actual) distances for the current week.
     private var completedMiles: Double {
-        weekWorkouts.reduce(0) { $0 + $1.distanceMiles }
+        weekCompletedExercises.reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
     var body: some View {
@@ -106,7 +103,6 @@ struct AerobicTrainingView: View {
                     WeeklyCalendarView(
                         days: selectedWeek.daysInWeek(),
                         exercises: weekExercises,
-                        workouts: weekWorkouts,
                         onAdd: { date in
                             addExerciseRequest = AddExerciseRequest(date: date)
                         },
@@ -136,10 +132,10 @@ struct AerobicTrainingView: View {
                     }
             }
             .sheet(item: $recordingExercise) { exercise in
-                RecordWorkoutSheet(exercise: exercise, defaultDate: exercise.scheduledDate)
+                RecordWorkoutSheet(exercise: exercise, defaultDate: exercise.date)
             }
             .sheet(item: $editingExercise) { exercise in
-                AddExerciseSheet(exercise: exercise, defaultDate: exercise.scheduledDate)
+                AddExerciseSheet(exercise: exercise, defaultDate: exercise.date)
             }
             .sheet(item: $quickAddRequest) { request in
                 RecordWorkoutSheet(exercise: nil, defaultDate: request.date)
@@ -202,14 +198,14 @@ struct AerobicTrainingView: View {
         let fourWeeksAgo = calendar.date(byAdding: .weekOfYear, value: -4, to: now) ?? now
         let twoWeeksAhead = calendar.date(byAdding: .weekOfYear, value: 2, to: now) ?? now
 
-        let recent = allWorkouts
-            .filter { $0.date >= fourWeeksAgo && $0.date <= now }
+        let recent = allExercises
+            .filter { $0.isCompleted && $0.date >= fourWeeksAgo && $0.date <= now }
             .sorted { $0.date < $1.date }
             .map { CoachWorkout(from: $0) }
 
         let upcoming = allExercises
-            .filter { $0.scheduledDate >= now.startOfDay && $0.scheduledDate <= twoWeeksAhead }
-            .sorted { $0.scheduledDate < $1.scheduledDate }
+            .filter { !$0.isCompleted && $0.date >= now.startOfDay && $0.date <= twoWeeksAhead }
+            .sorted { $0.date < $1.date }
             .map { CoachExercise(from: $0) }
 
         return CoachingRequest(

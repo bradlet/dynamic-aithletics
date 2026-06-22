@@ -14,7 +14,7 @@ enum ModelContainerFactory {
 
     /// The full schema used by the app.
     private static var schema: Schema {
-        Schema([Exercise.self, Workout.self, AppConfiguration.self])
+        Schema([Exercise.self, AppConfiguration.self])
     }
 
     /// Creates the production ModelContainer with CloudKit sync enabled.

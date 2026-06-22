@@ -40,25 +40,34 @@ enum HealthKitWorkoutMapper {
         }
     }
 
-    /// Converts a `HealthKitWorkout` DTO into a new `Workout` model instance
-    /// ready for insertion into SwiftData. Sets `source` to
-    /// `"Apple Exercise App"` and seeds `externalID` with the HealthKit UUID
-    /// so repeat imports can be deduplicated.
+    /// Converts a `HealthKitWorkout` DTO into a new completed `Exercise`
+    /// instance ready for insertion into SwiftData. The exercise's date/type
+    /// and planned metrics mirror the imported activity; its nested `workout`
+    /// records the actuals with `source = "Apple Exercise App"` and
+    /// `externalID` seeded from the HealthKit UUID so repeat imports can be
+    /// deduplicated.
     /// - Parameter dto: The HealthKit workout DTO to transform.
-    /// - Returns: A new unsaved `Workout` instance.
-    static func toWorkout(_ dto: HealthKitWorkout) -> Workout {
+    /// - Returns: A new unsaved completed `Exercise` instance.
+    static func toExercise(_ dto: HealthKitWorkout) -> Exercise {
         let type = exerciseType(for: dto.activityType)
-        return Workout(
+        let seconds = Int(dto.duration)
+        let miles = dto.distanceMiles ?? 0.0
+        return Exercise(
             name: type.rawValue,
             type: type,
-            durationSeconds: Int(dto.duration),
-            distanceMiles: dto.distanceMiles ?? 0.0,
+            durationSeconds: seconds,
+            distanceMiles: miles,
             notes: "",
             date: dto.startDate,
-            feltRating: 0,
-            source: WorkoutSource.appleHealth.rawValue,
-            externalID: dto.id,
-            sourceExercise: nil
+            isRepeating: false,
+            workout: Workout(
+                durationSeconds: seconds,
+                distanceMiles: miles,
+                notes: "",
+                feltRating: 0,
+                source: WorkoutSource.appleHealth.rawValue,
+                externalID: dto.id
+            )
         )
     }
 }

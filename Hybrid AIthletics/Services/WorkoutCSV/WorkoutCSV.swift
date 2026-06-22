@@ -2,9 +2,9 @@
 //  WorkoutCSV.swift
 //  Hybrid AIthletics
 //
-//  Pure CSV encoding and parsing for the Workout model.
-//  Deliberately has no SwiftData or SwiftUI dependencies so it is fully
-//  unit-testable. The schema is fixed (see `header`) and column order is
+//  Pure CSV encoding and parsing for recorded exercises (Exercise + nested
+//  Workout). Deliberately has no SwiftData or SwiftUI dependencies so it is
+//  fully unit-testable. The schema is fixed (see `header`) and column order is
 //  never inferred from headers on import.
 //
 
@@ -90,47 +90,54 @@ enum WorkoutCSV {
 
     // MARK: - Encoding
 
-    /// Encodes workouts as a 2D matrix with the fixed schema. The first row
-    /// is the header. Distance values are converted from internal miles to
-    /// `unit`. Workouts are sorted oldest-first to match the natural row
+    /// Encodes recorded exercises as a 2D matrix with the fixed schema. The
+    /// first row is the header. Only completed exercises (those with a
+    /// `workout`) are emitted. Distance values are converted from internal
+    /// miles to `unit`. Rows are sorted oldest-first to match the natural row
     /// order in a spreadsheet.
     ///
     /// Used by both CSV export (after escape+join) and the Google Sheets
     /// sync (which sends raw rows to the API).
-    static func rows(workouts: [Workout], unit: WorkoutCSVDistanceUnit) -> [[String]] {
+    static func rows(exercises: [Exercise], unit: WorkoutCSVDistanceUnit) -> [[String]] {
         var output: [[String]] = [headerColumns]
-        let sorted = workouts.sorted { $0.date < $1.date }
-        for workout in sorted {
-            output.append(rowColumns(workout: workout, unit: unit))
+        let sorted = exercises.filter(\.isCompleted).sorted { $0.date < $1.date }
+        for exercise in sorted {
+            output.append(rowColumns(exercise: exercise, unit: unit))
         }
         return output
     }
 
-    /// Encodes workouts to a CSV string with the fixed schema.
+    /// Encodes recorded exercises to a CSV string with the fixed schema.
     /// - Returns: A full CSV document ending with a trailing newline.
-    static func encode(workouts: [Workout], unit: WorkoutCSVDistanceUnit) -> String {
-        rows(workouts: workouts, unit: unit)
+    static func encode(exercises: [Exercise], unit: WorkoutCSVDistanceUnit) -> String {
+        rows(exercises: exercises, unit: unit)
             .map { $0.map(escape).joined(separator: ",") }
             .joined(separator: "\n") + "\n"
     }
 
-    /// Serializes a single workout as one CSV row (no trailing newline).
-    static func encodeRow(workout: Workout, unit: WorkoutCSVDistanceUnit) -> String {
-        rowColumns(workout: workout, unit: unit).map(escape).joined(separator: ",")
+    /// Serializes a single recorded exercise as one CSV row (no trailing
+    /// newline). The exercise must be completed (`workout != nil`).
+    static func encodeRow(exercise: Exercise, unit: WorkoutCSVDistanceUnit) -> String {
+        rowColumns(exercise: exercise, unit: unit).map(escape).joined(separator: ",")
     }
 
-    /// Raw column values for a single workout, in schema order, with no escaping.
-    private static func rowColumns(workout: Workout, unit: WorkoutCSVDistanceUnit) -> [String] {
-        let date = mdyyyyFormatter.string(from: workout.date)
-        let distance = unit.fromMiles(workout.distanceMiles)
+    /// Raw column values for a single recorded exercise, in schema order, with
+    /// no escaping. The date/name/type come from the exercise; the recorded
+    /// metrics come from its nested `workout` (falling back to planned values
+    /// if absent).
+    private static func rowColumns(exercise: Exercise, unit: WorkoutCSVDistanceUnit) -> [String] {
+        let workout = exercise.workout
+        let date = mdyyyyFormatter.string(from: exercise.date)
+        let distanceMiles = workout?.distanceMiles ?? exercise.distanceMiles
+        let distance = unit.fromMiles(distanceMiles)
         return [
             date,
-            workout.name,
-            workout.type.rawValue,
-            formatDuration(workout.durationSeconds),
+            exercise.name,
+            exercise.type.rawValue,
+            formatDuration(workout?.durationSeconds ?? exercise.durationSeconds),
             formatDistance(distance),
-            workout.notes,
-            String(workout.feltRating)
+            workout?.notes ?? exercise.notes,
+            String(workout?.feltRating ?? 0)
         ]
     }
 
@@ -171,55 +178,29 @@ enum WorkoutCSV {
         return WorkoutCSVParseResult(rows: rows, skipped: skipped)
     }
 
-    /// Converts a parsed row to a `Workout`, applying the distance unit
-    /// conversion to produce the internal miles storage value. Tags the
-    /// resulting workout with `source = WorkoutSource.csv` for provenance.
-    static func toWorkout(_ row: WorkoutCSVRow, unit: WorkoutCSVDistanceUnit) -> Workout {
-        Workout(
-            name: row.name,
-            type: row.type,
-            durationSeconds: row.durationSeconds,
-            distanceMiles: unit.toMiles(row.distance),
-            notes: row.notes,
-            date: row.date,
-            feltRating: row.feltRating,
-            source: WorkoutSource.csv.rawValue
-        )
-    }
-
-    /// Creates an `Exercise` from a parsed CSV row. Used during import so
-    /// workouts are not orphaned without a parent exercise.
+    /// Converts a parsed CSV row into a single completed `Exercise`, applying
+    /// the distance unit conversion to produce the internal miles storage
+    /// value. The row's metrics populate both the planned targets and the
+    /// nested `workout` actuals; the workout is tagged with
+    /// `source = WorkoutSource.csv` for provenance (no `externalID`).
     static func toExercise(_ row: WorkoutCSVRow, unit: WorkoutCSVDistanceUnit) -> Exercise {
-        Exercise(
+        let miles = unit.toMiles(row.distance)
+        return Exercise(
             name: row.name,
             type: row.type,
             durationSeconds: row.durationSeconds,
-            distanceMiles: unit.toMiles(row.distance),
-            notes: row.notes,
-            scheduledDate: row.date,
-            isRepeating: false
-        )
-    }
-
-    /// Creates both an `Exercise` and a linked `Workout` from a parsed CSV
-    /// row, mirroring the quick-add flow in `RecordWorkoutSheet`.
-    static func toWorkoutWithExercise(
-        _ row: WorkoutCSVRow,
-        unit: WorkoutCSVDistanceUnit
-    ) -> (exercise: Exercise, workout: Workout) {
-        let exercise = toExercise(row, unit: unit)
-        let workout = Workout(
-            name: row.name,
-            type: row.type,
-            durationSeconds: row.durationSeconds,
-            distanceMiles: unit.toMiles(row.distance),
+            distanceMiles: miles,
             notes: row.notes,
             date: row.date,
-            feltRating: row.feltRating,
-            source: WorkoutSource.csv.rawValue,
-            sourceExercise: exercise
+            isRepeating: false,
+            workout: Workout(
+                durationSeconds: row.durationSeconds,
+                distanceMiles: miles,
+                notes: row.notes,
+                feltRating: row.feltRating,
+                source: WorkoutSource.csv.rawValue
+            )
         )
-        return (exercise, workout)
     }
 
     // MARK: - Duration Parsing
