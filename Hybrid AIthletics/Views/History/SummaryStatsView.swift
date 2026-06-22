@@ -39,7 +39,7 @@ struct SummaryStatsView: View {
             .reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Total recorded mileage for the current Mon-Sun week.
+    /// Total recorded mileage for the current Sun-Sat week.
     private var thisWeekMiles: Double {
         WorkoutAggregations.currentWeekMileage(exercises: exercises, anchor: Date())
     }

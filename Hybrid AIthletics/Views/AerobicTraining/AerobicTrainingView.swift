@@ -19,7 +19,7 @@ struct AerobicTrainingView: View {
 
     /// The month displayed in the monthly calendar.
     @State private var selectedMonth: Date = Date()
-    /// The Monday of the currently displayed week.
+    /// The first day (Sunday) of the currently displayed week.
     @State private var selectedWeek: Date = Date().startOfWeek
     /// The request passed to the schedule exercise sheet (nil = hidden).
     @State private var addExerciseRequest: AddExerciseRequest?
@@ -55,9 +55,9 @@ struct AerobicTrainingView: View {
 
         // Include repeating exercises whose day-of-week has no matching concrete instance
         let virtual = repeating.filter { template in
-            let targetDayIndex = template.date.mondayBasedWeekdayIndex
+            let targetDayIndex = template.date.weekdayIndex
             let alreadyExists = concrete.contains { concreteExercise in
-                concreteExercise.date.mondayBasedWeekdayIndex == targetDayIndex
+                concreteExercise.date.weekdayIndex == targetDayIndex
                 && concreteExercise.name == template.name
                 && concreteExercise.type == template.type
             }

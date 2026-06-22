@@ -3,37 +3,28 @@
 //  Hybrid AIthletics
 //
 //  Calendar arithmetic helpers for week and month boundaries.
-//  Uses Monday as the first day of the week regardless of locale.
+//  Uses the standard Sunday-start week via `Calendar.current`.
 //
 
 import Foundation
 
 extension Date {
 
-    /// A calendar configured with Monday as the first weekday.
-    private static var mondayCalendar: Calendar {
-        var calendar = Calendar.current
-        calendar.firstWeekday = 2 // Monday
-        return calendar
-    }
-
     /// Returns this date normalized to midnight (start of day).
     var startOfDay: Date {
         Calendar.current.startOfDay(for: self)
     }
 
-    /// Returns midnight on Monday of the week containing this date.
+    /// Returns midnight on Sunday of the week containing this date.
     var startOfWeek: Date {
-        let cal = Date.mondayCalendar
-        let components = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: self)
-        return cal.date(from: components) ?? self
+        Calendar.current.dateInterval(of: .weekOfYear, for: self)?.start ?? startOfDay
     }
 
-    /// Returns 23:59:59 on Sunday of the week containing this date.
+    /// Returns 23:59:59 on Saturday of the week containing this date.
     var endOfWeek: Date {
-        let cal = Date.mondayCalendar
-        guard let sunday = cal.date(byAdding: .day, value: 6, to: startOfWeek) else { return self }
-        return cal.date(bySettingHour: 23, minute: 59, second: 59, of: sunday) ?? sunday
+        let cal = Calendar.current
+        guard let saturday = cal.date(byAdding: .day, value: 6, to: startOfWeek) else { return self }
+        return cal.date(bySettingHour: 23, minute: 59, second: 59, of: saturday) ?? saturday
     }
 
     /// Returns midnight on the first day of the month containing this date.
@@ -56,11 +47,11 @@ extension Date {
         return Calendar.current.date(from: components) ?? self
     }
 
-    /// Returns an array of 7 dates (Mon through Sun) for the week containing this date.
+    /// Returns an array of 7 dates (Sun through Sat) for the week containing this date.
     func daysInWeek() -> [Date] {
-        let monday = startOfWeek
+        let sunday = startOfWeek
         return (0..<7).compactMap {
-            Calendar.current.date(byAdding: .day, value: $0, to: monday)
+            Calendar.current.date(byAdding: .day, value: $0, to: sunday)
         }
     }
 
@@ -103,7 +94,7 @@ extension Date {
         Calendar.current.isDate(self, inSameDayAs: other)
     }
 
-    /// Whether this date falls within the same calendar week (Mon-Sun) as another date.
+    /// Whether this date falls within the same calendar week (Sun-Sat) as another date.
     func isSameWeek(as other: Date) -> Bool {
         startOfWeek == other.startOfWeek
     }
@@ -115,12 +106,9 @@ extension Date {
             && cal.component(.month, from: self) == cal.component(.month, from: other)
     }
 
-    /// The weekday index with Monday=0 through Sunday=6.
-    var mondayBasedWeekdayIndex: Int {
-        let cal = Date.mondayCalendar
-        let weekday = cal.component(.weekday, from: self)
+    /// The weekday index with Sunday=0 through Saturday=6.
+    var weekdayIndex: Int {
         // Calendar weekday: 1=Sun, 2=Mon, ..., 7=Sat
-        // We want: Mon=0, Tue=1, ..., Sun=6
-        return (weekday + 5) % 7
+        Calendar.current.component(.weekday, from: self) - 1
     }
 }

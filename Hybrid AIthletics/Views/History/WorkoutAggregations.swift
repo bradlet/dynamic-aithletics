@@ -3,7 +3,7 @@
 //  Hybrid AIthletics
 //
 //  Pure, stateless aggregation helpers used by the History tab's
-//  Performance Hub. Groups recorded exercises into Monday-start weekly
+//  Performance Hub. Groups recorded exercises into Sunday-start weekly
 //  buckets and computes mileage / felt-rating summaries. Each exercise's
 //  placement uses its `date`; its metrics come from the nested `workout`.
 //  Extracted so the math can be unit-tested without spinning up SwiftUI.
@@ -12,11 +12,11 @@
 import Foundation
 
 /// A single weekly data point for chart or stat-card consumption.
-/// `weekStart` is Monday midnight for the week containing the data
+/// `weekStart` is Sunday midnight for the week containing the data
 /// and also serves as the Chart x-axis value. `value` is either total
 /// miles or an average felt rating depending on the projection used.
 struct WeeklyMetricPoint: Identifiable, Equatable {
-    /// Monday midnight at the start of this week.
+    /// Sunday midnight at the start of this week.
     let weekStart: Date
     /// Metric value for this week: total miles or average felt rating.
     /// Empty buckets always carry `0` per product spec.
@@ -30,7 +30,7 @@ enum WorkoutAggregations {
 
     // MARK: - Bucketing primitive
 
-    /// Groups `exercises` into the last `weekCount` Monday-start weeks,
+    /// Groups `exercises` into the last `weekCount` Sunday-start weeks,
     /// ending in the week containing `anchor`. Empty weeks are present
     /// with an empty array. Returned chronologically (oldest first).
     /// - Parameters:
@@ -45,12 +45,12 @@ enum WorkoutAggregations {
         guard weekCount > 0 else { return [] }
 
         let calendar = Calendar.current
-        let tailMonday = anchor.startOfWeek
+        let tailWeekStart = anchor.startOfWeek
 
-        // Build the ordered list of week-start Mondays, oldest first.
+        // Build the ordered list of week starts, oldest first.
         let weekStarts: [Date] = (0..<weekCount).compactMap { offset in
             let weeksBack = weekCount - 1 - offset
-            return calendar.date(byAdding: .weekOfYear, value: -weeksBack, to: tailMonday)
+            return calendar.date(byAdding: .weekOfYear, value: -weeksBack, to: tailWeekStart)
         }
 
         // Group all exercises by their own week start for O(n) lookup.
@@ -104,7 +104,7 @@ enum WorkoutAggregations {
 
     // MARK: - Stat-card helpers
 
-    /// Total recorded miles in the Monday-Sunday week containing `anchor`.
+    /// Total recorded miles in the Sunday-Saturday week containing `anchor`.
     static func currentWeekMileage(
         exercises: [Exercise],
         anchor: Date
@@ -115,7 +115,7 @@ enum WorkoutAggregations {
             .reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Average recorded `feltRating` in the Mon-Sun week containing `anchor`,
+    /// Average recorded `feltRating` in the Sun-Sat week containing `anchor`,
     /// excluding workouts with `feltRating == 0`. Returns `nil` when no
     /// workouts in the week have a recorded rating (caller displays "—").
     static func currentWeekAverageFeltRating(

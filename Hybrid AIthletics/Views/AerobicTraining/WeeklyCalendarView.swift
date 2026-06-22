@@ -2,7 +2,7 @@
 //  WeeklyCalendarView.swift
 //  Hybrid AIthletics
 //
-//  Renders 7 day swimlanes (Mon-Sun) for the selected week.
+//  Renders 7 day swimlanes (Sun-Sat) for the selected week.
 //  Each lane shows exercises for that day and accepts drops for rescheduling.
 //  Supports virtual repeating exercises that are materialized on interaction.
 //
@@ -23,7 +23,7 @@ struct ExerciseNavigationRequest: Equatable, Identifiable {
 
 /// A weekly view with vertical swimlanes for each day, showing planned exercises.
 struct WeeklyCalendarView: View {
-    /// The 7 dates (Mon-Sun) for the displayed week.
+    /// The 7 dates (Sun-Sat) for the displayed week.
     let days: [Date]
     /// Exercises for the current week, including virtual repeating exercises (pre-filtered by parent).
     let exercises: [Exercise]
@@ -96,7 +96,7 @@ struct WeeklyCalendarView: View {
     private func exercisesForDay(_ day: Date) -> [Exercise] {
         exercises.filter { exercise in
             exercise.date.isSameDay(as: day)
-            || (exercise.isRepeating && exercise.date.mondayBasedWeekdayIndex == day.mondayBasedWeekdayIndex)
+            || (exercise.isRepeating && exercise.date.weekdayIndex == day.weekdayIndex)
         }
     }
 

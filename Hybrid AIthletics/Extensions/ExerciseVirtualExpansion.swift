@@ -41,9 +41,9 @@ enum ExerciseVirtualExpansion {
         let repeating = allExercises.filter { $0.isRepeating }
 
         for template in repeating {
-            let targetDayIndex = template.date.mondayBasedWeekdayIndex
+            let targetDayIndex = template.date.weekdayIndex
             for day in monthDays {
-                guard day.mondayBasedWeekdayIndex == targetDayIndex,
+                guard day.weekdayIndex == targetDayIndex,
                       day >= template.date.startOfDay else { continue }
                 let alreadyExists = concrete.contains { existing in
                     existing.date.isSameDay(as: day)

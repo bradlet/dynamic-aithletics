@@ -64,20 +64,20 @@ struct DateWeekTests {
         #expect(cal.component(.second, from: start) == 0)
     }
 
-    @Test func startOfWeekIsMonday() {
+    @Test func startOfWeekIsSunday() {
         // April 4, 2026 is a Saturday
         let saturday = makeDate(year: 2026, month: 4, day: 4)
         let startOfWeek = saturday.startOfWeek
-        #expect(startOfWeek.weekdayName == "Monday")
+        #expect(startOfWeek.weekdayName == "Sunday")
     }
 
     @Test func daysInWeekReturnsSevenDays() {
         let date = makeDate(year: 2026, month: 4, day: 4)
         let days = date.daysInWeek()
         #expect(days.count == 7)
-        #expect(days.first!.weekdayName == "Monday")
-        // Last day should be Sunday
-        #expect(days.last!.shortWeekdayName == "Sun")
+        #expect(days.first!.weekdayName == "Sunday")
+        // Last day should be Saturday
+        #expect(days.last!.shortWeekdayName == "Sat")
     }
 
     @Test func daysInMonthCorrectCount() {
@@ -98,13 +98,13 @@ struct DateWeekTests {
     }
 
     @Test func isSameWeekComparison() {
-        // Mon Mar 30 and Sun Apr 5 are in the same week (Mon-Sun)
-        let monday = makeDate(year: 2026, month: 3, day: 30)
-        let sunday = makeDate(year: 2026, month: 4, day: 5)
-        #expect(monday.isSameWeek(as: sunday))
-        // The next Monday is a different week
-        let nextMonday = makeDate(year: 2026, month: 4, day: 6)
-        #expect(!monday.isSameWeek(as: nextMonday))
+        // Sun Mar 29 and Sat Apr 4 are in the same week (Sun-Sat)
+        let sunday = makeDate(year: 2026, month: 3, day: 29)
+        let saturday = makeDate(year: 2026, month: 4, day: 4)
+        #expect(sunday.isSameWeek(as: saturday))
+        // The next Sunday is a different week
+        let nextSunday = makeDate(year: 2026, month: 4, day: 5)
+        #expect(!sunday.isSameWeek(as: nextSunday))
     }
 
     @Test func isSameMonthComparison() {
@@ -115,16 +115,16 @@ struct DateWeekTests {
         #expect(!early.isSameMonth(as: nextMonth))
     }
 
-    @Test func mondayBasedWeekdayIndex() {
-        // Create a known Monday
-        let monday = makeDate(year: 2026, month: 3, day: 30)
-        #expect(monday.mondayBasedWeekdayIndex == 0)
-        // Tuesday
-        let tuesday = makeDate(year: 2026, month: 3, day: 31)
-        #expect(tuesday.mondayBasedWeekdayIndex == 1)
-        // Sunday
+    @Test func weekdayIndex() {
+        // Create a known Sunday
         let sunday = makeDate(year: 2026, month: 4, day: 5)
-        #expect(sunday.mondayBasedWeekdayIndex == 6)
+        #expect(sunday.weekdayIndex == 0)
+        // Monday
+        let monday = makeDate(year: 2026, month: 3, day: 30)
+        #expect(monday.weekdayIndex == 1)
+        // Saturday
+        let saturday = makeDate(year: 2026, month: 4, day: 4)
+        #expect(saturday.weekdayIndex == 6)
     }
 
     @Test func startOfYearIsJanuaryFirst() {
@@ -482,14 +482,14 @@ struct ExerciseRepeatTests {
     }
 
     @Test func repeatingExerciseMatchesDayOfWeek() {
-        // March 30, 2026 is a Monday
-        let monday = makeDate(year: 2026, month: 3, day: 30)
+        // April 5, 2026 is a Sunday
+        let sunday = makeDate(year: 2026, month: 4, day: 5)
         let exercise = Exercise(
-            name: "Monday Run", type: .run,
+            name: "Sunday Run", type: .run,
             durationSeconds: 1800, distanceMiles: 3.0,
-            date: monday, isRepeating: true
+            date: sunday, isRepeating: true
         )
-        #expect(exercise.date.mondayBasedWeekdayIndex == 0)
+        #expect(exercise.date.weekdayIndex == 0)
         #expect(exercise.isRepeating == true)
     }
 
@@ -1973,7 +1973,7 @@ struct WorkoutAggregationsTests {
         )
     }
 
-    // 2026-04-08 is a Wednesday; its Monday is 2026-04-06.
+    // 2026-04-08 is a Wednesday; its week starts Sunday 2026-04-05.
     private var anchorWednesday: Date { makeDate(year: 2026, month: 4, day: 8) }
 
     @Test func weeklyMileageReturnsAllWeeksEvenWhenEmpty() {
@@ -1990,11 +1990,11 @@ struct WorkoutAggregationsTests {
     }
 
     @Test func weeklyMileageBucketsWorkoutsIntoCorrectWeek() {
-        // Current week (Mon Apr 6 – Sun Apr 12): workout on Mon Apr 6 = 5.0 mi
-        // Previous week (Mar 30 – Apr 5): workout on Sun Apr 5 = 3.0 mi
+        // Current week (Sun Apr 5 – Sat Apr 11): workout on Mon Apr 6 = 5.0 mi
+        // Previous week (Mar 29 – Apr 4): workout on Sat Apr 4 = 3.0 mi
         let workouts = [
             makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 5.0),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 3.0)
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 4), miles: 3.0)
         ]
         let points = WorkoutAggregations.weeklyMileage(
             exercises: workouts,
@@ -2075,12 +2075,12 @@ struct WorkoutAggregationsTests {
     }
 
     @Test func currentWeekMileageSumsWorkoutsInAnchorWeek() {
-        // Mon + Tue + Wed of the current week plus a workout on prior Sun (must be excluded).
+        // Mon + Tue + Wed of the current week plus a workout on prior Sat (must be excluded).
         let workouts = [
             makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 2.0),
             makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0),
             makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 4.0),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 99.0) // previous Sunday
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 4), miles: 99.0) // previous Saturday
         ]
         let total = WorkoutAggregations.currentWeekMileage(
             exercises: workouts,
@@ -2089,28 +2089,28 @@ struct WorkoutAggregationsTests {
         #expect(total == 9.0)
     }
 
-    @Test func currentWeekMileageBoundaryMondayStart() {
-        // Anchor Monday at 00:00:00, workout at same instant — must count.
-        let monday = makeDate(year: 2026, month: 4, day: 6, hour: 0, minute: 0, second: 0)
-        let workouts = [makeExercise(date: monday, miles: 5.0)]
+    @Test func currentWeekMileageBoundarySundayStart() {
+        // Anchor Sunday at 00:00:00, workout at same instant — must count.
+        let sunday = makeDate(year: 2026, month: 4, day: 5, hour: 0, minute: 0, second: 0)
+        let workouts = [makeExercise(date: sunday, miles: 5.0)]
         let total = WorkoutAggregations.currentWeekMileage(
             exercises: workouts,
-            anchor: monday
+            anchor: sunday
         )
         #expect(total == 5.0)
     }
 
-    @Test func currentWeekMileageBoundarySundayEnd() {
-        // Sunday 23:59:59 workout is in the same week; Mon 00:00 of next week is not.
-        let sundayNight = makeDate(year: 2026, month: 4, day: 12, hour: 23, minute: 59, second: 59)
-        let nextMondayStart = makeDate(year: 2026, month: 4, day: 13, hour: 0, minute: 0, second: 0)
+    @Test func currentWeekMileageBoundarySaturdayEnd() {
+        // Saturday 23:59:59 workout is in the same week; Sun 00:00 of next week is not.
+        let saturdayNight = makeDate(year: 2026, month: 4, day: 11, hour: 23, minute: 59, second: 59)
+        let nextSundayStart = makeDate(year: 2026, month: 4, day: 12, hour: 0, minute: 0, second: 0)
         let workouts = [
-            makeExercise(date: sundayNight, miles: 5.0),
-            makeExercise(date: nextMondayStart, miles: 99.0)
+            makeExercise(date: saturdayNight, miles: 5.0),
+            makeExercise(date: nextSundayStart, miles: 99.0)
         ]
         let total = WorkoutAggregations.currentWeekMileage(
             exercises: workouts,
-            anchor: sundayNight
+            anchor: saturdayNight
         )
         #expect(total == 5.0)
     }
@@ -2251,11 +2251,12 @@ struct ExerciseVirtualExpansionTests {
             month: april
         )
         // Should produce dots for each Monday in April
-        let mondays = april.daysInMonth().filter { $0.mondayBasedWeekdayIndex == 0 }
+        let targetIndex = mondayExercise.date.weekdayIndex
+        let mondays = april.daysInMonth().filter { $0.weekdayIndex == targetIndex }
         #expect(items.count == mondays.count)
         for item in items {
             #expect(item.type == .run)
-            #expect(item.displayDate.mondayBasedWeekdayIndex == 0)
+            #expect(item.displayDate.weekdayIndex == targetIndex)
         }
     }
 
@@ -2284,7 +2285,7 @@ struct ExerciseVirtualExpansionTests {
             month: april
         )
         // Concrete should count + remaining Mondays get virtual dots
-        let mondays = april.daysInMonth().filter { $0.mondayBasedWeekdayIndex == 0 }
+        let mondays = april.daysInMonth().filter { $0.weekdayIndex == repeating.date.weekdayIndex }
         #expect(items.count == mondays.count, "One concrete + (N-1) virtual = N total Mondays")
         // Verify the April 6 item is the concrete exercise, not a CalendarDot
         let april6Items = items.filter { $0.displayDate.isSameDay(as: makeDate(year: 2026, month: 4, day: 6)) }
@@ -2359,19 +2360,19 @@ struct ExerciseRescheduleTests {
         // With the merged model the recorded data is inline, so rescheduling
         // is just a write to the exercise's single `date`.
         let context = try makeContext()
-        let monday = Date().startOfWeek
+        let weekStart = Date().startOfWeek
         let exercise = Exercise(
             name: "Easy Run",
             type: .run,
             durationSeconds: 1800,
             distanceMiles: 3.0,
-            date: monday,
+            date: weekStart,
             workout: Workout(durationSeconds: 1800, distanceMiles: 3.0, feltRating: 6)
         )
         context.insert(exercise)
         try context.save()
 
-        let wednesday = Calendar.current.date(byAdding: .day, value: 2, to: monday)!.startOfDay
+        let wednesday = Calendar.current.date(byAdding: .day, value: 2, to: weekStart)!.startOfDay
         exercise.date = wednesday
         try context.save()
 
@@ -2383,13 +2384,13 @@ struct ExerciseRescheduleTests {
 
     @Test func repeatingExerciseShouldNotBeRescheduled() throws {
         let context = try makeContext()
-        let monday = Date().startOfWeek
+        let weekStart = Date().startOfWeek
         let exercise = Exercise(
             name: "Repeating Run",
             type: .run,
             durationSeconds: 1800,
             distanceMiles: 3.0,
-            date: monday,
+            date: weekStart,
             isRepeating: true
         )
         context.insert(exercise)
@@ -2400,7 +2401,7 @@ struct ExerciseRescheduleTests {
         // The view's rescheduleExercise returns early; date is unchanged.
         // The init no longer normalizes to midnight, so compare against the
         // exact stored value.
-        #expect(exercise.date == monday)
+        #expect(exercise.date == weekStart)
     }
 }
 

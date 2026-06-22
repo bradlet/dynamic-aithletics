@@ -21,7 +21,7 @@ enum PerformanceTimeWindow: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// Number of Monday-start weeks this window covers.
+    /// Number of Sunday-start weeks this window covers.
     var weekCount: Int {
         switch self {
         case .oneMonth:   return 4
@@ -111,9 +111,8 @@ struct WeeklyChartView: View {
     }
 
     /// Subset of `points` dates used for x-axis tick marks and labels.
-    /// Filtered from the actual Monday-anchored data dates so ticks align
-    /// exactly with plotted points rather than the system calendar's week
-    /// start (Sunday in the US locale).
+    /// Filtered from the actual week-start data dates so ticks align
+    /// exactly with plotted points.
     private var labelDates: [Date] {
         let dates = points.map(\.weekStart)
         guard let first = dates.first else { return [] }

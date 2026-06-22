@@ -22,7 +22,7 @@ struct MonthlyCalendarView: View {
     let onDayTap: (Date) -> Void
 
     /// Weekday header labels.
-    private let weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    private let weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     /// Grid columns: 7 days.
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 7)
     /// The edge new content slides in from during a swipe transition.
@@ -91,7 +91,7 @@ struct MonthlyCalendarView: View {
     /// The grid of day cells for the current month.
     private var calendarGrid: some View {
         let days = selectedMonth.daysInMonth()
-        let firstDayOffset = days.first?.mondayBasedWeekdayIndex ?? 0
+        let firstDayOffset = days.first?.weekdayIndex ?? 0
 
         return LazyVGrid(columns: columns, spacing: 2) {
             // Empty cells for days before the month starts.
