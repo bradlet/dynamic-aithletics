@@ -33,7 +33,17 @@ protocol GoogleSheetsAPI: AnyObject {
 
     /// Presents the OAuth flow if needed and ensures the Sheets scope is
     /// granted. May present UI. Throws on cancellation or denied scope.
+    /// Prefers a valid cached session and only presents UI when none can be
+    /// silently refreshed — used by the first-time enable flow.
     func authorize() async throws
+
+    /// Forces a fresh interactive sign-in, discarding any cached session
+    /// first. Used by the "Sign in to resume" reconnect flow: a silent
+    /// refresh can't detect a server-side revoke while the local access token
+    /// is still within its ~1h lifetime, so reconnect must always present the
+    /// Google sign-in UI to obtain a genuinely fresh grant. Throws on
+    /// cancellation or denied scope.
+    func reauthorizeInteractively() async throws
 
     /// Forgets the current user, clearing tokens from Keychain.
     func signOut()
@@ -78,25 +88,56 @@ final class LiveGoogleSheetsAPI: GoogleSheetsAPI {
     }
 
     func authorize() async throws {
-        let user: GIDGoogleUser
-        if let existing = GIDSignIn.sharedInstance.currentUser {
-            user = existing
-        } else if GIDSignIn.sharedInstance.hasPreviousSignIn() {
-            user = try await GIDSignIn.sharedInstance.restorePreviousSignIn()
-        } else {
-            guard let presenter = Self.topViewController() else {
-                throw GoogleSheetsSyncError.noPresenterAvailable
-            }
-            let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter)
-            user = result.user
+        // Silent path: reuse an existing or restorable session, but only if
+        // its refresh token still produces a fresh access token. When the
+        // refresh token has expired or been revoked (e.g. the 7-day
+        // Testing-mode timer), `refreshTokensIfNeeded()` throws — in which
+        // case we must fall through to a fresh interactive sign-in rather
+        // than dead-ending. (Reusing the stale `currentUser` here was the
+        // original reconnect bug: scope is still granted, so re-consent was
+        // skipped and the throw left no recovery path.)
+        var cached = GIDSignIn.sharedInstance.currentUser
+        if cached == nil, GIDSignIn.sharedInstance.hasPreviousSignIn() {
+            cached = try? await GIDSignIn.sharedInstance.restorePreviousSignIn()
         }
-        if user.grantedScopes?.contains(Self.scope) != true {
-            guard let presenter = Self.topViewController() else {
-                throw GoogleSheetsSyncError.noPresenterAvailable
-            }
-            _ = try await user.addScopes([Self.scope], presenting: presenter)
+        if let user = cached, (try? await user.refreshTokensIfNeeded()) != nil {
+            try await ensureScope(on: user)
+            return
         }
-        try await user.refreshTokensIfNeeded()
+
+        // No session, or the cached session's token can no longer refresh.
+        try await interactiveSignIn()
+    }
+
+    func reauthorizeInteractively() async throws {
+        // Always re-present sign-in. Unlike `authorize()`, this never trusts a
+        // cached session: a revoked grant can still look valid locally until
+        // the access token expires, so silently reusing it would loop the user
+        // back to `.needsAuth` without ever fixing the connection.
+        try await interactiveSignIn()
+    }
+
+    /// Discards any cached session and presents a fresh Google sign-in,
+    /// re-granting the Sheets scope and priming an access token. Shared by
+    /// `authorize()`'s fallback and `reauthorizeInteractively()`.
+    private func interactiveSignIn() async throws {
+        GIDSignIn.sharedInstance.signOut()
+        guard let presenter = Self.topViewController() else {
+            throw GoogleSheetsSyncError.noPresenterAvailable
+        }
+        let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: presenter)
+        try await ensureScope(on: result.user)
+        try await result.user.refreshTokensIfNeeded()
+    }
+
+    /// Requests the Sheets scope interactively if the user has not yet
+    /// granted it. No-op when the scope is already present.
+    private func ensureScope(on user: GIDGoogleUser) async throws {
+        guard user.grantedScopes?.contains(Self.scope) != true else { return }
+        guard let presenter = Self.topViewController() else {
+            throw GoogleSheetsSyncError.noPresenterAvailable
+        }
+        _ = try await user.addScopes([Self.scope], presenting: presenter)
     }
 
     func signOut() {
@@ -139,7 +180,15 @@ final class LiveGoogleSheetsAPI: GoogleSheetsAPI {
         guard let user = GIDSignIn.sharedInstance.currentUser else {
             throw GoogleSheetsSyncError.notAuthorized
         }
-        try await user.refreshTokensIfNeeded()
+        do {
+            try await user.refreshTokensIfNeeded()
+        } catch {
+            // The refresh token has expired or been revoked (e.g. the 7-day
+            // Testing-mode timer). Surface this as `.notAuthorized` so the
+            // coordinator can route it to `.needsAuth` and prompt re-sign-in,
+            // rather than showing a generic "retry" that would just fail again.
+            throw GoogleSheetsSyncError.notAuthorized
+        }
         return user.accessToken.tokenString
     }
 
@@ -185,6 +234,7 @@ final class LiveGoogleSheetsAPI: GoogleSheetsAPI {
     var isAuthorized: Bool { false }
     func restoreAuthorizationIfPossible() async -> Bool { false }
     func authorize() async throws { throw GoogleSheetsSyncError.notImplemented }
+    func reauthorizeInteractively() async throws { throw GoogleSheetsSyncError.notImplemented }
     func signOut() {}
     func createSpreadsheet(title: String) async throws -> String { throw GoogleSheetsSyncError.notImplemented }
     func overwriteSheet(spreadsheetId: String, rows: [[String]]) async throws { throw GoogleSheetsSyncError.notImplemented }
@@ -220,6 +270,15 @@ final class StubGoogleSheetsAPI: GoogleSheetsAPI {
     func restoreAuthorizationIfPossible() async -> Bool { isAuthorized }
 
     func authorize() async throws { isAuthorized = true }
+
+    /// Number of `reauthorizeInteractively()` calls, so tests can assert the
+    /// reconnect path forces a fresh sign-in instead of reusing a cached one.
+    private(set) var reauthorizeInteractivelyCount = 0
+
+    func reauthorizeInteractively() async throws {
+        reauthorizeInteractivelyCount += 1
+        isAuthorized = true
+    }
 
     func signOut() {
         isAuthorized = false

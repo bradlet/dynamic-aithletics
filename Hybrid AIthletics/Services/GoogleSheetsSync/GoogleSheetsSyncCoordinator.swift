@@ -129,7 +129,11 @@ final class GoogleSheetsSyncCoordinator {
         }
         status = .syncing
         do {
-            try await api.authorize()
+            // Force a fresh interactive sign-in rather than `authorize()`: a
+            // revoked/expired grant can still look valid locally (the access
+            // token outlives the revoke by up to ~1h), so a silent refresh
+            // would no-op and loop the user straight back to `.needsAuth`.
+            try await api.reauthorizeInteractively()
             await syncNow()
         } catch {
             status = .failed(error.localizedDescription)
@@ -213,7 +217,29 @@ final class GoogleSheetsSyncCoordinator {
             status = .success(Date())
         } catch {
             guard isEnabled else { return }
-            status = .failed(error.localizedDescription)
+            // An expired/revoked token surfaces as `.notAuthorized` (from the
+            // API layer's refresh attempt) or a 401/403 from the REST call.
+            // Route these to `.needsAuth` so the menu offers "Sign in to
+            // resume" (which re-auths and reuses the existing sheet) instead
+            // of a "Retry" that would just fail again.
+            if Self.isAuthError(error) {
+                status = .needsAuth
+            } else {
+                status = .failed(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Whether `error` indicates the OAuth session is no longer valid and the
+    /// user must re-authenticate, as opposed to a transient network/API error.
+    private static func isAuthError(_ error: Error) -> Bool {
+        switch error {
+        case GoogleSheetsSyncError.notAuthorized:
+            return true
+        case GoogleSheetsSyncError.httpError(let status, _):
+            return status == 401 || status == 403
+        default:
+            return false
         }
     }
 
