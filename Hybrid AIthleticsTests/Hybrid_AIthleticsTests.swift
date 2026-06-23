@@ -2898,6 +2898,105 @@ struct GoogleSheetsSyncCoordinatorTests {
         #expect(coordinator.status == .needsAuth)
         #expect(api.overwriteCount == 0)
     }
+
+    @Test func syncNowMapsNotAuthorizedMidSyncToNeedsAuth() async {
+        // Token expired *after* `isAuthorized` passed (the API layer's refresh
+        // attempt throws `.notAuthorized` from inside `overwriteSheet`). This
+        // must surface as `.needsAuth` so the menu offers "Sign in to resume",
+        // not a "Retry" that would just fail again.
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        api.nextOverwriteError = GoogleSheetsSyncError.notAuthorized
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        await coordinator.syncNow()
+
+        #expect(coordinator.status == .needsAuth)
+    }
+
+    @Test func syncNowMaps401And403ToNeedsAuth() async {
+        for status in [401, 403] {
+            let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+            insertWorkout(in: container)
+            let api = StubGoogleSheetsAPI(isAuthorized: true)
+            api.nextOverwriteError = GoogleSheetsSyncError.httpError(status: status, body: "unauthorized")
+            let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+            await coordinator.attach(modelContainer: container)
+
+            await coordinator.syncNow()
+
+            #expect(coordinator.status == .needsAuth, "HTTP \(status) should map to .needsAuth")
+        }
+    }
+
+    @Test func syncNowKeepsNonAuthHttpErrorAsFailed() async {
+        // A server-side 500 is transient, not an auth problem — it must stay
+        // `.failed` so the menu offers "Retry", not a pointless re-sign-in.
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        api.nextOverwriteError = GoogleSheetsSyncError.httpError(status: 500, body: "server error")
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        await coordinator.syncNow()
+
+        if case .failed = coordinator.status {
+            // ok
+        } else {
+            Issue.record("expected .failed for HTTP 500, got \(coordinator.status)")
+        }
+    }
+
+    @Test func reauthorizeForcesInteractiveEvenWhenSessionLooksAuthorized() async throws {
+        // Simulates a server-side revoke where the local session still *looks*
+        // authorized (isAuthorized == true) because the access token hasn't
+        // expired yet. Reconnect must force a fresh interactive sign-in, not
+        // silently trust the cached session (which would 401 and loop back to
+        // .needsAuth without ever prompting).
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-A")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        try await coordinator.reauthorize()
+
+        #expect(api.reauthorizeInteractivelyCount == 1,
+                "reconnect must force interactive sign-in, not reuse the cached session")
+        #expect(api.lastSpreadsheetID == "sheet-A")
+        #expect(api.createdSpreadsheetIDs.isEmpty)
+    }
+
+    @Test func reconnectAfterMidSyncExpiryReusesExistingSheet() async throws {
+        // Full reconnect flow: a sync fails mid-flight with an expired token
+        // (→ .needsAuth), then the user re-auths via `reauthorize`, which must
+        // resume syncing to the *existing* spreadsheet rather than create a
+        // new one (the original duplicate-file bug).
+        let container = makeContainerWithConfig(enabled: true, spreadsheetID: "sheet-existing")
+        insertWorkout(in: container)
+        let api = StubGoogleSheetsAPI(isAuthorized: true)
+        api.nextOverwriteError = GoogleSheetsSyncError.notAuthorized
+        let coordinator = GoogleSheetsSyncCoordinator(api: api, debounceSeconds: 1)
+        await coordinator.attach(modelContainer: container)
+
+        await coordinator.syncNow()
+        #expect(coordinator.status == .needsAuth)
+
+        try await coordinator.reauthorize()
+
+        #expect(api.lastSpreadsheetID == "sheet-existing",
+                "reconnect must reuse the existing spreadsheet, not create a new one")
+        #expect(api.createdSpreadsheetIDs.isEmpty,
+                "reconnect must not create a new spreadsheet")
+        if case .success = coordinator.status {
+            // ok
+        } else {
+            Issue.record("expected .success after reconnect, got \(coordinator.status)")
+        }
+    }
 }
 
 // MARK: - AppConfiguration Sheets Sync Defaults
