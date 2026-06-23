@@ -104,7 +104,9 @@ The app's sync code is gated behind `#if canImport(GoogleSignIn)` (mirroring the
 
 #### 3. Configure the OAuth Consent Screen
 
-The app uses the `auth/drive.file` scope, which grants per-file access only to the spreadsheet the app creates — not the rest of the user's Drive. This is a **non-sensitive** scope, so no Google verification or privacy-policy URL is required and refresh tokens do not expire on the 7-day Testing-mode timer.
+The app uses the `auth/drive.file` scope, which grants per-file access only to the spreadsheet the app creates — not the rest of the user's Drive. This is a **non-sensitive** scope, so no Google verification or privacy-policy URL is required.
+
+> **Note on the 7-day token expiry:** while the app stays in **Testing** publishing status, Google expires refresh tokens after 7 days. (The no-expiry exemption applies only to apps that request *solely* the basic `openid`/`email`/`profile` scopes — `drive.file`, though non-sensitive for verification purposes, is not one of them.) This is expected: when a token expires the History tab's sync menu shows **"Sign in to resume Sheets Sync"**, which re-authenticates and resumes syncing to the **same** spreadsheet (it never creates a new file). To avoid the weekly expiry entirely, publish the OAuth consent screen to **In production** — for the non-sensitive `drive.file` scope this needs no verification.
 
 1. **APIs & Services → OAuth consent screen** → User type: **External** → Create.
 2. App information: name (e.g. "Hybrid AIthletics"), user support email, developer contact email. The app logo, privacy policy URL, ToS URL, and authorized domains can all be left blank.
@@ -150,8 +152,8 @@ Build and run the app. Open the History tab → toolbar menu → **Google Sheets
 
 - **Disabled** (default): toolbar menu shows **Google Sheets Sync** as a single button. Tapping it shows a confirmation alert explaining export-only behavior. On confirm: OAuth → spreadsheet created → initial sync.
 - **Enabled, healthy**: menu shows **Disable Google Sheets Sync**. Mutations debounce for 30 s then upload silently.
-- **Enabled, last sync failed**: a red dot overlays the toolbar's `…` icon. Menu shows a **Retry** button with the failure reason.
-- **Enabled but no token on this device** (e.g. CloudKit-synced from another device): menu shows **Sign in to resume Sheets Sync**. Tapping presents OAuth and then re-syncs to the existing spreadsheet (does not create a new one).
+- **Enabled, last sync failed** (transient network/API error): a red dot overlays the toolbar's `…` icon. Menu shows a **Retry** button with the failure reason.
+- **Enabled but the OAuth token is missing or expired** (a fresh CloudKit-synced device, or the 7-day Testing-mode expiry): menu shows **Sign in to resume Sheets Sync**. Tapping presents OAuth — re-signing in even when a stale, expired session is cached — and then re-syncs to the existing spreadsheet (does not create a new one).
 
 ## Running Tests
 
