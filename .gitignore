@@ -1,5 +1,7 @@
 # Don't track heavy resources in VCS -- download before bundling
-Hybrid AIthletics/Resources/
+# (small checked-in resources like the exercise library JSON are negated below)
+Hybrid AIthletics/Resources/*
+!Hybrid AIthletics/Resources/StrengthExerciseLibrary.json
 
 # Swift Package Manager build artifacts
 .build/
