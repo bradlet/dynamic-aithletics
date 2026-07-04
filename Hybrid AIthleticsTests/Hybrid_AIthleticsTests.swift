@@ -3020,3 +3020,454 @@ struct AppConfigurationSheetsSyncDefaultsTests {
         #expect(config.googleSheetsSpreadsheetID == "abc-123")
     }
 }
+
+// MARK: - WeightRecordingType Tests
+
+struct WeightRecordingTypeTests {
+
+    @Test func hasAllFiveRecordingTypes() {
+        #expect(WeightRecordingType.allCases.count == 5)
+        #expect(WeightRecordingType.allCases.contains(.maxWeight))
+        #expect(WeightRecordingType.allCases.contains(.averageWeight))
+        #expect(WeightRecordingType.allCases.contains(.firstSetWeight))
+        #expect(WeightRecordingType.allCases.contains(.lastSetWeight))
+        #expect(WeightRecordingType.allCases.contains(.minWeight))
+    }
+
+    @Test func allCasesHaveShortLabels() {
+        for type in WeightRecordingType.allCases {
+            #expect(!type.shortLabel.isEmpty, "\(type) should have a shortLabel")
+        }
+    }
+
+    @Test func codableRoundTrip() throws {
+        for type in WeightRecordingType.allCases {
+            let data = try JSONEncoder().encode(type)
+            let decoded = try JSONDecoder().decode(WeightRecordingType.self, from: data)
+            #expect(decoded == type)
+        }
+    }
+}
+
+// MARK: - MuscleGroup Tests
+
+struct MuscleGroupTests {
+
+    @Test func codableRoundTrip() throws {
+        for group in MuscleGroup.allCases {
+            let data = try JSONEncoder().encode(group)
+            let decoded = try JSONDecoder().decode(MuscleGroup.self, from: data)
+            #expect(decoded == group)
+        }
+    }
+
+    @Test func unknownRawValueDecodesAsOther() throws {
+        let data = Data("\"Neck\"".utf8)
+        let decoded = try JSONDecoder().decode(MuscleGroup.self, from: data)
+        #expect(decoded == .other)
+    }
+}
+
+// MARK: - StrengthWorkout Tests
+
+struct StrengthWorkoutTests {
+
+    @Test func defaultValues() {
+        let workout = StrengthWorkout()
+        #expect(workout.weightPounds == 0.0)
+        #expect(workout.recordingType == .maxWeight)
+        #expect(workout.notes == "")
+    }
+
+    @Test func explicitInitPreservesValues() {
+        let date = Date(timeIntervalSince1970: 1_700_000_000)
+        let workout = StrengthWorkout(
+            date: date,
+            weightPounds: 225.0,
+            recordingType: .averageWeight,
+            notes: "Felt strong"
+        )
+        #expect(workout.date == date)
+        #expect(workout.weightPounds == 225.0)
+        #expect(workout.recordingType == .averageWeight)
+        #expect(workout.notes == "Felt strong")
+    }
+
+    @Test func codableRoundTrip() throws {
+        let workout = StrengthWorkout(weightPounds: 135.5, recordingType: .firstSetWeight, notes: "warmup")
+        let data = try JSONEncoder().encode(workout)
+        let decoded = try JSONDecoder().decode(StrengthWorkout.self, from: data)
+        #expect(decoded == workout)
+    }
+}
+
+// MARK: - StrengthExercise Tests
+
+struct StrengthExerciseTests {
+
+    @Test func defaultValues() {
+        let exercise = StrengthExercise(name: "Bench Press")
+        #expect(exercise.name == "Bench Press")
+        #expect(exercise.libraryExerciseID == nil)
+        #expect(exercise.muscleGroup == .other)
+        #expect(exercise.weekdayIndex == 0)
+        #expect(exercise.isOffloaded == false)
+        #expect(exercise.sortOrder == 0)
+        #expect(exercise.notes == "")
+        #expect(exercise.workouts.isEmpty)
+        #expect(exercise.latestWorkout == nil)
+    }
+
+    @Test func explicitInitPreservesValues() {
+        let exercise = StrengthExercise(
+            name: "Back Squat",
+            libraryExerciseID: "back-squat",
+            muscleGroup: .quads,
+            weekdayIndex: 3,
+            isOffloaded: true,
+            sortOrder: 2,
+            notes: "pause reps"
+        )
+        #expect(exercise.libraryExerciseID == "back-squat")
+        #expect(exercise.muscleGroup == .quads)
+        #expect(exercise.weekdayIndex == 3)
+        #expect(exercise.isOffloaded == true)
+        #expect(exercise.sortOrder == 2)
+        #expect(exercise.notes == "pause reps")
+    }
+
+    @Test func workoutsRoundTripThroughBackingData() {
+        let exercise = StrengthExercise(name: "Deadlift", muscleGroup: .back)
+        let first = StrengthWorkout(weightPounds: 315, recordingType: .maxWeight)
+        let second = StrengthWorkout(weightPounds: 275, recordingType: .averageWeight)
+        exercise.workouts = [first, second]
+        #expect(exercise.workouts == [first, second])
+        exercise.workouts = []
+        #expect(exercise.workouts.isEmpty)
+    }
+
+    @Test func latestWorkoutReturnsMostRecentByDate() {
+        let exercise = StrengthExercise(name: "Overhead Press", muscleGroup: .shoulders)
+        let older = StrengthWorkout(date: Date(timeIntervalSince1970: 1_000), weightPounds: 95)
+        let newer = StrengthWorkout(date: Date(timeIntervalSince1970: 2_000), weightPounds: 105)
+        exercise.workouts = [newer, older]
+        #expect(exercise.latestWorkout == newer)
+    }
+
+    @Test func persistsInModelContainer() throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        let exercise = StrengthExercise(
+            name: "Barbell Row",
+            libraryExerciseID: "barbell-row",
+            muscleGroup: .back,
+            weekdayIndex: 5,
+            sortOrder: 1,
+            workouts: [StrengthWorkout(weightPounds: 185, recordingType: .lastSetWeight)]
+        )
+        context.insert(exercise)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<StrengthExercise>())
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.name == "Barbell Row")
+        #expect(fetched.first?.weekdayIndex == 5)
+        #expect(fetched.first?.workouts.first?.weightPounds == 185)
+        #expect(fetched.first?.workouts.first?.recordingType == .lastSetWeight)
+    }
+}
+
+// MARK: - Double+Weight Tests
+
+struct DoubleWeightTests {
+
+    @Test func imperialDisplayIsUnchanged() {
+        #expect(185.0.toDisplayWeight(metric: false) == 185.0)
+        #expect(185.0.fromDisplayWeight(metric: false) == 185.0)
+    }
+
+    @Test func metricConversionRoundTrips() {
+        let pounds = 225.0
+        let kg = pounds.toDisplayWeight(metric: true)
+        #expect(abs(kg - 102.058) < 0.01)
+        #expect(abs(kg.fromDisplayWeight(metric: true) - pounds) < 0.0001)
+    }
+
+    @Test func formattedWeightDropsDecimalForWholeNumbers() {
+        #expect(185.0.formattedWeight(metric: false) == "185 lb")
+    }
+
+    @Test func formattedWeightShowsOneDecimalOtherwise() {
+        #expect(185.0.formattedWeight(metric: true) == "83.9 kg")
+    }
+}
+
+// MARK: - LibraryExercise Tests
+
+struct LibraryExerciseTests {
+
+    @Test func decodesFullEntry() throws {
+        let json = """
+        {
+            "id": "test-press",
+            "name": "Test Press",
+            "description": "A test movement.",
+            "muscleGroup": "Chest",
+            "secondaryMuscleGroups": ["Triceps", "Shoulders"],
+            "equipment": "Barbell",
+            "difficulty": "Intermediate"
+        }
+        """
+        let entry = try JSONDecoder().decode(LibraryExercise.self, from: Data(json.utf8))
+        #expect(entry.id == "test-press")
+        #expect(entry.name == "Test Press")
+        #expect(entry.details == "A test movement.")
+        #expect(entry.muscleGroup == .chest)
+        #expect(entry.secondaryMuscleGroups == [.triceps, .shoulders])
+        #expect(entry.equipment == "Barbell")
+        #expect(entry.difficulty == "Intermediate")
+    }
+
+    @Test func secondaryMuscleGroupsDefaultsToEmpty() throws {
+        let json = """
+        {
+            "id": "test-curl",
+            "name": "Test Curl",
+            "description": "A test curl.",
+            "muscleGroup": "Biceps",
+            "equipment": "Dumbbells",
+            "difficulty": "Beginner"
+        }
+        """
+        let entry = try JSONDecoder().decode(LibraryExercise.self, from: Data(json.utf8))
+        #expect(entry.secondaryMuscleGroups.isEmpty)
+    }
+
+    @Test func unknownMuscleGroupDecodesAsOther() throws {
+        let json = """
+        {
+            "id": "future-move",
+            "name": "Future Move",
+            "description": "From a newer server catalog.",
+            "muscleGroup": "Neck",
+            "equipment": "Machine",
+            "difficulty": "Beginner"
+        }
+        """
+        let entry = try JSONDecoder().decode(LibraryExercise.self, from: Data(json.utf8))
+        #expect(entry.muscleGroup == .other)
+    }
+}
+
+// MARK: - Exercise Library Provider Tests
+
+/// Test double returning a fixed list of entries, or throwing.
+private struct FixedLibraryProvider: ExerciseLibraryProvider {
+    let entries: [LibraryExercise]
+    var shouldThrow = false
+
+    func loadExercises() async throws -> [LibraryExercise] {
+        if shouldThrow { throw ExerciseLibraryError.missingBundledCatalog }
+        return entries
+    }
+}
+
+struct ExerciseLibraryProviderTests {
+
+    /// Helper building a minimal library entry.
+    private func entry(id: String, name: String) -> LibraryExercise {
+        LibraryExercise(
+            id: id, name: name, details: "d",
+            muscleGroup: .chest, equipment: "Barbell", difficulty: "Beginner"
+        )
+    }
+
+    @Test func bundledCatalogLoadsAtLeastOneHundredUniqueExercises() async throws {
+        let provider = BundledExerciseLibraryProvider()
+        let exercises = try await provider.loadExercises()
+        #expect(exercises.count >= 100)
+        let ids = Set(exercises.map(\.id))
+        #expect(ids.count == exercises.count, "library ids must be unique")
+        for exercise in exercises {
+            #expect(!exercise.name.isEmpty)
+            #expect(!exercise.details.isEmpty)
+            #expect(exercise.muscleGroup != .other, "bundled entries should have a known muscle group")
+        }
+    }
+
+    @Test func missingBundledCatalogThrows() async {
+        let provider = BundledExerciseLibraryProvider(resourceName: "DoesNotExist")
+        await #expect(throws: ExerciseLibraryError.missingBundledCatalog) {
+            _ = try await provider.loadExercises()
+        }
+    }
+
+    @Test func compositeMergesLaterProvidersOverEarlier() async throws {
+        let bundled = FixedLibraryProvider(entries: [
+            entry(id: "a", name: "Bundled A"),
+            entry(id: "b", name: "Bundled B"),
+        ])
+        let server = FixedLibraryProvider(entries: [
+            entry(id: "b", name: "Server B Override"),
+            entry(id: "c", name: "Server C"),
+        ])
+        let composite = CompositeExerciseLibraryProvider(providers: [bundled, server])
+        let merged = try await composite.loadExercises()
+        #expect(merged.count == 3)
+        #expect(merged.first(where: { $0.id == "b" })?.name == "Server B Override")
+    }
+
+    @Test func compositeSkipsFailingProviders() async throws {
+        let good = FixedLibraryProvider(entries: [entry(id: "a", name: "A")])
+        let bad = FixedLibraryProvider(entries: [], shouldThrow: true)
+        let composite = CompositeExerciseLibraryProvider(providers: [good, bad])
+        let merged = try await composite.loadExercises()
+        #expect(merged.count == 1)
+    }
+}
+
+// MARK: - StrengthBoardPlanner Tests
+
+struct StrengthBoardPlannerTests {
+
+    /// Builds a board exercise in a specific lane position.
+    private func exercise(_ name: String, day: Int, offloaded: Bool = false, order: Int) -> StrengthExercise {
+        StrengthExercise(name: name, weekdayIndex: day, isOffloaded: offloaded, sortOrder: order)
+    }
+
+    @Test func laneFiltersAndSortsByOrder() {
+        let a = exercise("A", day: 1, order: 1)
+        let b = exercise("B", day: 1, order: 0)
+        let other = exercise("C", day: 2, order: 0)
+        let offloaded = exercise("D", day: 1, offloaded: true, order: 0)
+        let lane = StrengthBoardPlanner.lane([a, b, other, offloaded], day: 1, offloaded: false)
+        #expect(lane.map(\.name) == ["B", "A"])
+    }
+
+    @Test func nextSortOrderAppendsAfterLast() {
+        let a = exercise("A", day: 1, order: 0)
+        let b = exercise("B", day: 1, order: 1)
+        #expect(StrengthBoardPlanner.nextSortOrder([a, b], day: 1, offloaded: false) == 2)
+        #expect(StrengthBoardPlanner.nextSortOrder([a, b], day: 4, offloaded: false) == 0)
+    }
+
+    @Test func reorderWithinLaneInsertsBeforeTarget() {
+        let a = exercise("A", day: 1, order: 0)
+        let b = exercise("B", day: 1, order: 1)
+        let c = exercise("C", day: 1, order: 2)
+        let all = [a, b, c]
+        // Move C before A: expect C, A, B
+        StrengthBoardPlanner.move(c, toDay: 1, offloaded: false, before: a, in: all)
+        let lane = StrengthBoardPlanner.lane(all, day: 1, offloaded: false)
+        #expect(lane.map(\.name) == ["C", "A", "B"])
+        #expect(lane.map(\.sortOrder) == [0, 1, 2])
+    }
+
+    @Test func moveWithoutTargetAppendsAtEnd() {
+        let a = exercise("A", day: 1, order: 0)
+        let b = exercise("B", day: 1, order: 1)
+        let all = [a, b]
+        StrengthBoardPlanner.move(a, toDay: 1, offloaded: false, before: nil, in: all)
+        let lane = StrengthBoardPlanner.lane(all, day: 1, offloaded: false)
+        #expect(lane.map(\.name) == ["B", "A"])
+    }
+
+    @Test func moveAcrossDaysUpdatesWeekdayIndex() {
+        let a = exercise("A", day: 1, order: 0)
+        let b = exercise("B", day: 3, order: 0)
+        let all = [a, b]
+        StrengthBoardPlanner.move(a, toDay: 3, offloaded: false, before: b, in: all)
+        #expect(a.weekdayIndex == 3)
+        let lane = StrengthBoardPlanner.lane(all, day: 3, offloaded: false)
+        #expect(lane.map(\.name) == ["A", "B"])
+        #expect(StrengthBoardPlanner.lane(all, day: 1, offloaded: false).isEmpty)
+    }
+
+    @Test func moveToOffloadedSectionSetsFlag() {
+        let a = exercise("A", day: 2, order: 0)
+        let held = exercise("H", day: 2, offloaded: true, order: 0)
+        let all = [a, held]
+        StrengthBoardPlanner.move(a, toDay: 2, offloaded: true, before: nil, in: all)
+        #expect(a.isOffloaded == true)
+        let lane = StrengthBoardPlanner.lane(all, day: 2, offloaded: true)
+        #expect(lane.map(\.name) == ["H", "A"])
+        #expect(StrengthBoardPlanner.lane(all, day: 2, offloaded: false).isEmpty)
+    }
+
+    @Test func moveBackToActiveFromOffloaded() {
+        let a = exercise("A", day: 2, offloaded: true, order: 0)
+        let all = [a]
+        StrengthBoardPlanner.move(a, toDay: 2, offloaded: false, before: nil, in: all)
+        #expect(a.isOffloaded == false)
+        #expect(StrengthBoardPlanner.lane(all, day: 2, offloaded: false).map(\.name) == ["A"])
+    }
+}
+
+// MARK: - StrengthCoachExporter Tests
+
+struct StrengthCoachExporterTests {
+
+    @Test func snapshotCapturesExerciseFields() {
+        let exercise = StrengthExercise(
+            name: "Back Squat",
+            muscleGroup: .quads,
+            weekdayIndex: 2,
+            isOffloaded: true,
+            notes: "belt on top sets",
+            workouts: [StrengthWorkout(weightPounds: 315, recordingType: .maxWeight)]
+        )
+        let snapshot = CoachStrengthExercise(from: exercise)
+        #expect(snapshot.name == "Back Squat")
+        #expect(snapshot.muscleGroup == "Quads")
+        #expect(snapshot.weekdayIndex == 2)
+        #expect(snapshot.isOffloaded == true)
+        #expect(snapshot.notes == "belt on top sets")
+        #expect(snapshot.workouts.count == 1)
+        #expect(snapshot.workouts.first?.weightPounds == 315)
+        #expect(snapshot.workouts.first?.recordingType == "Max Weight")
+    }
+
+    @Test func emptyNotesAreOmitted() {
+        let exercise = StrengthExercise(
+            name: "Curl",
+            muscleGroup: .biceps,
+            workouts: [StrengthWorkout(weightPounds: 30)]
+        )
+        let snapshot = CoachStrengthExercise(from: exercise)
+        #expect(snapshot.notes == nil)
+        #expect(snapshot.workouts.first?.notes == nil)
+    }
+
+    @Test func workoutsAreSortedOldestFirst() {
+        let older = StrengthWorkout(date: Date(timeIntervalSince1970: 1_000), weightPounds: 100)
+        let newer = StrengthWorkout(date: Date(timeIntervalSince1970: 2_000), weightPounds: 110)
+        let exercise = StrengthExercise(name: "Press", workouts: [newer, older])
+        let snapshot = CoachStrengthExercise(from: exercise)
+        #expect(snapshot.workouts.map(\.weightPounds) == [100, 110])
+    }
+
+    @Test func snapshotsFollowBoardOrder() {
+        let mondayFirst = StrengthExercise(name: "Mon-0", weekdayIndex: 1, sortOrder: 0)
+        let mondaySecond = StrengthExercise(name: "Mon-1", weekdayIndex: 1, sortOrder: 1)
+        let mondayOffloaded = StrengthExercise(name: "Mon-Off", weekdayIndex: 1, isOffloaded: true, sortOrder: 0)
+        let sunday = StrengthExercise(name: "Sun-0", weekdayIndex: 0, sortOrder: 0)
+        let snapshots = StrengthCoachExporter.snapshots(
+            from: [mondayOffloaded, mondaySecond, sunday, mondayFirst]
+        )
+        #expect(snapshots.map(\.name) == ["Sun-0", "Mon-0", "Mon-1", "Mon-Off"])
+    }
+
+    @Test func jsonStringSerializesISO8601DatesAndFields() throws {
+        let workout = StrengthWorkout(
+            date: Date(timeIntervalSince1970: 0),
+            weightPounds: 135,
+            recordingType: .averageWeight
+        )
+        let exercise = StrengthExercise(name: "Bench", muscleGroup: .chest, workouts: [workout])
+        let json = try StrengthCoachExporter.jsonString(from: [exercise])
+        #expect(json.contains("\"name\":\"Bench\""))
+        #expect(json.contains("\"muscleGroup\":\"Chest\""))
+        #expect(json.contains("\"recordingType\":\"Average Weight\""))
+        #expect(json.contains("1970-01-01T00:00:00Z"))
+    }
+}
