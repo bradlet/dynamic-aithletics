@@ -20,6 +20,17 @@ extension Date {
         Calendar.current.dateInterval(of: .weekOfYear, for: self)?.start ?? startOfDay
     }
 
+    /// Returns midnight on the configured first weekday of the week containing
+    /// this date. Unlike `startOfWeek`, this sets `firstWeekday` explicitly
+    /// rather than relying on the locale default, so a Sunday date with
+    /// `firstWeekday: 2` belongs to the *previous* Monday-start week.
+    /// - Parameter firstWeekday: Calendar weekday convention (1=Sunday ... 7=Saturday).
+    func startOfWeek(firstWeekday: Int) -> Date {
+        var cal = Calendar.current
+        cal.firstWeekday = firstWeekday
+        return cal.dateInterval(of: .weekOfYear, for: self)?.start ?? startOfDay
+    }
+
     /// Returns 23:59:59 on Saturday of the week containing this date.
     var endOfWeek: Date {
         let cal = Calendar.current

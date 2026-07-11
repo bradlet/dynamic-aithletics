@@ -71,6 +71,27 @@ struct DateWeekTests {
         #expect(startOfWeek.weekdayName == "Sunday")
     }
 
+    @Test func startOfWeekFirstWeekdaySundayMatchesDefault() {
+        // Wednesday April 8, 2026
+        let wednesday = makeDate(year: 2026, month: 4, day: 8)
+        #expect(wednesday.startOfWeek(firstWeekday: 1) == wednesday.startOfWeek)
+    }
+
+    @Test func startOfWeekFirstWeekdayMondayReturnsMonday() {
+        // Wednesday April 8, 2026 -> Monday April 6, 2026
+        let wednesday = makeDate(year: 2026, month: 4, day: 8)
+        let start = wednesday.startOfWeek(firstWeekday: 2)
+        #expect(start == makeDate(year: 2026, month: 4, day: 6))
+        #expect(start.weekdayName == "Monday")
+    }
+
+    @Test func startOfWeekMondayStartPutsSundayInPreviousWeek() {
+        // Sunday April 5, 2026 belongs to the Monday-start week of Mar 30.
+        let sunday = makeDate(year: 2026, month: 4, day: 5)
+        let start = sunday.startOfWeek(firstWeekday: 2)
+        #expect(start == makeDate(year: 2026, month: 3, day: 30))
+    }
+
     @Test func daysInWeekReturnsSevenDays() {
         let date = makeDate(year: 2026, month: 4, day: 4)
         let days = date.daysInWeek()
