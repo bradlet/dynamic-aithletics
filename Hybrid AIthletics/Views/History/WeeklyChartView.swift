@@ -69,8 +69,9 @@ struct WeeklyChartConfiguration {
     let title: String
     /// Whether the y-axis is clamped to `0...10` (felt rating).
     let fixedYScaleZeroToTen: Bool
-    /// Projects recorded exercises into weekly points.
-    let projection: (_ exercises: [Exercise], _ weekCount: Int, _ anchor: Date) -> [WeeklyMetricPoint]
+    /// Projects recorded exercises into weekly points. The last parameter
+    /// is the first weekday of the aggregation week (1=Sunday ... 7=Saturday).
+    let projection: (_ exercises: [Exercise], _ weekCount: Int, _ anchor: Date, _ firstWeekday: Int) -> [WeeklyMetricPoint]
     /// Whether the y value represents a distance in miles. When `true`
     /// the chart applies metric conversion and shows a unit axis label.
     let isDistance: Bool
@@ -103,7 +104,7 @@ struct WeeklyChartView: View {
     /// we materialize a converted copy when metric is on so `LineMark`
     /// positions and the axis label stay aligned.
     private var points: [WeeklyMetricPoint] {
-        let raw = configuration.projection(exercises, selectedWindow.weekCount, Date())
+        let raw = configuration.projection(exercises, selectedWindow.weekCount, Date(), 1)
         guard configuration.isDistance, useMetricUnits else { return raw }
         return raw.map {
             WeeklyMetricPoint(weekStart: $0.weekStart, value: $0.value)

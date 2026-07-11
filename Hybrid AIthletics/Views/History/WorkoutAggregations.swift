@@ -3,8 +3,9 @@
 //  Hybrid AIthletics
 //
 //  Pure, stateless aggregation helpers used by the History tab's
-//  Performance Hub. Groups recorded exercises into Sunday-start weekly
-//  buckets and computes mileage / felt-rating summaries. Each exercise's
+//  Performance Hub. Groups recorded exercises into weekly buckets
+//  (week start configurable via `firstWeekday`, default Sunday) and
+//  computes mileage / felt-rating summaries. Each exercise's
 //  placement uses its `date`; its metrics come from the nested `workout`.
 //  Extracted so the math can be unit-tested without spinning up SwiftUI.
 //
@@ -12,11 +13,11 @@
 import Foundation
 
 /// A single weekly data point for chart or stat-card consumption.
-/// `weekStart` is Sunday midnight for the week containing the data
+/// `weekStart` is midnight on the first day of the week containing the data
 /// and also serves as the Chart x-axis value. `value` is either total
 /// miles or an average felt rating depending on the projection used.
 struct WeeklyMetricPoint: Identifiable, Equatable {
-    /// Sunday midnight at the start of this week.
+    /// Midnight at the start of this week (first weekday per configuration).
     let weekStart: Date
     /// Metric value for this week: total miles or average felt rating.
     /// Empty buckets always carry `0` per product spec.
@@ -30,22 +31,25 @@ enum WorkoutAggregations {
 
     // MARK: - Bucketing primitive
 
-    /// Groups `exercises` into the last `weekCount` Sunday-start weeks,
-    /// ending in the week containing `anchor`. Empty weeks are present
-    /// with an empty array. Returned chronologically (oldest first).
+    /// Groups `exercises` into the last `weekCount` weeks starting on
+    /// `firstWeekday`, ending in the week containing `anchor`. Empty weeks
+    /// are present with an empty array. Returned chronologically (oldest first).
     /// - Parameters:
     ///   - exercises: Source recorded exercises. Order irrelevant.
     ///   - weekCount: Number of weeks in the rolling window. Must be > 0.
     ///   - anchor: Date whose week becomes the tail of the window.
+    ///   - firstWeekday: First day of the week (1=Sunday ... 7=Saturday).
     static func weeklyBuckets(
         exercises: [Exercise],
         weekCount: Int,
-        anchor: Date
+        anchor: Date,
+        firstWeekday: Int = 1
     ) -> [(weekStart: Date, exercises: [Exercise])] {
         guard weekCount > 0 else { return [] }
 
-        let calendar = Calendar.current
-        let tailWeekStart = anchor.startOfWeek
+        var calendar = Calendar.current
+        calendar.firstWeekday = firstWeekday
+        let tailWeekStart = calendar.dateInterval(of: .weekOfYear, for: anchor)?.start ?? anchor.startOfDay
 
         // Build the ordered list of week starts, oldest first.
         let weekStarts: [Date] = (0..<weekCount).compactMap { offset in
@@ -54,7 +58,9 @@ enum WorkoutAggregations {
         }
 
         // Group all exercises by their own week start for O(n) lookup.
-        let grouped = Dictionary(grouping: exercises) { $0.date.startOfWeek }
+        let grouped = Dictionary(grouping: exercises) {
+            calendar.dateInterval(of: .weekOfYear, for: $0.date)?.start ?? $0.date.startOfDay
+        }
 
         return weekStarts.map { start in
             (weekStart: start, exercises: grouped[start] ?? [])
@@ -69,9 +75,10 @@ enum WorkoutAggregations {
     static func weeklyMileage(
         exercises: [Exercise],
         weekCount: Int,
-        anchor: Date
+        anchor: Date,
+        firstWeekday: Int = 1
     ) -> [WeeklyMetricPoint] {
-        weeklyBuckets(exercises: exercises, weekCount: weekCount, anchor: anchor)
+        weeklyBuckets(exercises: exercises, weekCount: weekCount, anchor: anchor, firstWeekday: firstWeekday)
             .map { bucket in
                 let total = bucket.exercises.reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
                 return WeeklyMetricPoint(weekStart: bucket.weekStart, value: total)
@@ -86,9 +93,10 @@ enum WorkoutAggregations {
     static func weeklyAverageFeltRating(
         exercises: [Exercise],
         weekCount: Int,
-        anchor: Date
+        anchor: Date,
+        firstWeekday: Int = 1
     ) -> [WeeklyMetricPoint] {
-        weeklyBuckets(exercises: exercises, weekCount: weekCount, anchor: anchor)
+        weeklyBuckets(exercises: exercises, weekCount: weekCount, anchor: anchor, firstWeekday: firstWeekday)
             .map { bucket in
                 let ratings = bucket.exercises.compactMap { $0.workout?.feltRating }.filter { $0 > 0 }
                 let average: Double
@@ -104,27 +112,35 @@ enum WorkoutAggregations {
 
     // MARK: - Stat-card helpers
 
-    /// Total recorded miles in the Sunday-Saturday week containing `anchor`.
+    /// Total recorded miles in the week containing `anchor`, where the
+    /// week starts on `firstWeekday` (1=Sunday ... 7=Saturday).
     static func currentWeekMileage(
         exercises: [Exercise],
-        anchor: Date
+        anchor: Date,
+        firstWeekday: Int = 1
     ) -> Double {
-        let weekStart = anchor.startOfWeek
+        var calendar = Calendar.current
+        calendar.firstWeekday = firstWeekday
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: anchor)?.start
         return exercises
-            .filter { $0.date.startOfWeek == weekStart }
+            .filter { calendar.dateInterval(of: .weekOfYear, for: $0.date)?.start == weekStart }
             .reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Average recorded `feltRating` in the Sun-Sat week containing `anchor`,
-    /// excluding workouts with `feltRating == 0`. Returns `nil` when no
-    /// workouts in the week have a recorded rating (caller displays "—").
+    /// Average recorded `feltRating` in the week containing `anchor` (week
+    /// starting on `firstWeekday`), excluding workouts with `feltRating == 0`.
+    /// Returns `nil` when no workouts in the week have a recorded rating
+    /// (caller displays "—").
     static func currentWeekAverageFeltRating(
         exercises: [Exercise],
-        anchor: Date
+        anchor: Date,
+        firstWeekday: Int = 1
     ) -> Double? {
-        let weekStart = anchor.startOfWeek
+        var calendar = Calendar.current
+        calendar.firstWeekday = firstWeekday
+        let weekStart = calendar.dateInterval(of: .weekOfYear, for: anchor)?.start
         let ratings = exercises
-            .filter { $0.date.startOfWeek == weekStart }
+            .filter { calendar.dateInterval(of: .weekOfYear, for: $0.date)?.start == weekStart }
             .compactMap { $0.workout?.feltRating }
             .filter { $0 > 0 }
         guard !ratings.isEmpty else { return nil }

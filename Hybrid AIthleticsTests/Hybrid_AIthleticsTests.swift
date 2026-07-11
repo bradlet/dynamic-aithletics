@@ -2194,6 +2194,85 @@ struct WorkoutAggregationsTests {
         }
     }
 
+    // MARK: Configurable week start (firstWeekday)
+
+    @Test func weeklyMileageMondayStartPutsSundayInPreviousWeek() {
+        // Sunday Apr 5 belongs to the Monday-start week of Mar 30, i.e. the
+        // bucket BEFORE the anchor's (Mon Apr 6 – Sun Apr 12) tail week.
+        let workouts = [makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 5.0)]
+        let points = WorkoutAggregations.weeklyMileage(
+            exercises: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday,
+            firstWeekday: 2
+        )
+        #expect(points.last?.value == 0)
+        #expect(points[points.count - 2].value == 5.0)
+    }
+
+    @Test func weeklyMileageMondayStartTailBucketStartsMonday() {
+        let points = WorkoutAggregations.weeklyMileage(
+            exercises: [],
+            weekCount: 4,
+            anchor: anchorWednesday,
+            firstWeekday: 2
+        )
+        #expect(points.last?.weekStart == makeDate(year: 2026, month: 4, day: 6, hour: 0))
+    }
+
+    @Test func weeklyMileageDefaultRemainsSundayStart() {
+        let points = WorkoutAggregations.weeklyMileage(
+            exercises: [],
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.last?.weekStart == makeDate(year: 2026, month: 4, day: 5, hour: 0))
+    }
+
+    @Test func currentWeekMileageMondayStartExcludesSunday() {
+        // Sunday Apr 5 counts toward the anchor week with the default Sunday
+        // start, but toward the previous week with a Monday start.
+        let workouts = [makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 5.0)]
+        let sundayStart = WorkoutAggregations.currentWeekMileage(
+            exercises: workouts,
+            anchor: anchorWednesday
+        )
+        #expect(sundayStart == 5.0)
+        let mondayStart = WorkoutAggregations.currentWeekMileage(
+            exercises: workouts,
+            anchor: anchorWednesday,
+            firstWeekday: 2
+        )
+        #expect(mondayStart == 0)
+    }
+
+    @Test func currentWeekAverageFeltRatingMondayStartExcludesSunday() {
+        let workouts = [makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 5.0, felt: 8)]
+        let sundayStart = WorkoutAggregations.currentWeekAverageFeltRating(
+            exercises: workouts,
+            anchor: anchorWednesday
+        )
+        #expect(sundayStart == 8.0)
+        let mondayStart = WorkoutAggregations.currentWeekAverageFeltRating(
+            exercises: workouts,
+            anchor: anchorWednesday,
+            firstWeekday: 2
+        )
+        #expect(mondayStart == nil)
+    }
+
+    @Test func weeklyAverageFeltRatingHonorsFirstWeekday() {
+        // Sunday-rated workout lands in the previous Monday-start bucket.
+        let workouts = [makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 5.0, felt: 6)]
+        let points = WorkoutAggregations.weeklyAverageFeltRating(
+            exercises: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday,
+            firstWeekday: 2
+        )
+        #expect(points.last?.value == 0)
+        #expect(points[points.count - 2].value == 6.0)
+    }
 }
 
 // MARK: - CalendarDisplayable Tests
