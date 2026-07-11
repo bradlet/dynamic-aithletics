@@ -430,6 +430,25 @@ struct AppConfigurationTests {
         let config2 = AppConfiguration.current(in: context)
         #expect(config2.useMetricUnits == true)
     }
+
+    @Test func weekStartDayDefaultsToSunday() throws {
+        let config = AppConfiguration()
+        #expect(config.weekStartDay == 1)
+    }
+
+    @Test func weekStartDayAcceptsExplicitValue() throws {
+        let config = AppConfiguration(weekStartDay: 2)
+        #expect(config.weekStartDay == 2)
+    }
+
+    @Test func weekStartDayPersists() throws {
+        let context = try makeContext()
+        let config = AppConfiguration.current(in: context)
+        config.weekStartDay = 3
+        try context.save()
+        let fetched = AppConfiguration.current(in: context)
+        #expect(fetched.weekStartDay == 3)
+    }
 }
 
 // MARK: - ExerciseDragItem Tests
@@ -2153,6 +2172,7 @@ struct WorkoutAggregationsTests {
             #expect(starts[i] > starts[i - 1])
         }
     }
+
 }
 
 // MARK: - CalendarDisplayable Tests

@@ -27,15 +27,23 @@ final class AppConfiguration {
     /// one.
     var googleSheetsSpreadsheetID: String = ""
 
+    /// First day of the user's workout week, using the Calendar weekday
+    /// convention (1=Sunday ... 7=Saturday). Affects weekly aggregation math
+    /// only (weekly mileage buckets, "This Week" stats); calendar grids stay
+    /// visually Sunday-first regardless. Default is 1 (Sunday).
+    var weekStartDay: Int = 1
+
     /// Creates a new configuration with default values.
     init(
         useMetricUnits: Bool = false,
         googleSheetsSyncEnabled: Bool = false,
-        googleSheetsSpreadsheetID: String = ""
+        googleSheetsSpreadsheetID: String = "",
+        weekStartDay: Int = 1
     ) {
         self.useMetricUnits = useMetricUnits
         self.googleSheetsSyncEnabled = googleSheetsSyncEnabled
         self.googleSheetsSpreadsheetID = googleSheetsSpreadsheetID
+        self.weekStartDay = weekStartDay
     }
 
     /// Fetches the singleton configuration, creating one if it doesn't exist.
