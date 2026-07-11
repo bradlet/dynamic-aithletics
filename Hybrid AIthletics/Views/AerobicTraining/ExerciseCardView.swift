@@ -104,9 +104,18 @@ struct ExerciseCardView: View {
         }
     }
 
-    /// The main card content (icon, name, metadata, record button).
+    /// The main card content (icon, name, metadata, record button). Completed
+    /// exercises render a diagonal split background: the left half is tinted by
+    /// performance vs plan and shows the completed distance; the right half
+    /// keeps the type tint and shows the planned distance.
     private var cardContent: some View {
-        HStack(spacing: 8) {
+        // Read once — `exercise.workout` decodes `workoutData` on each access.
+        let workout = hasRecordedWorkout ? exercise.workout : nil
+        let performance = PlanPerformance.classify(
+            completedMiles: workout?.distanceMiles,
+            plannedMiles: exercise.distanceMiles
+        )
+        return HStack(spacing: 8) {
             Image(systemName: exercise.type.systemImage)
                 .foregroundStyle(exercise.type.color)
                 .font(.caption)
@@ -115,7 +124,8 @@ struct ExerciseCardView: View {
                     .font(.caption.bold())
                     .lineLimit(1)
                 HStack(spacing: 4) {
-                    Text(exercise.distanceMiles.formattedDistance(metric: useMetricUnits))
+                    Text((workout?.distanceMiles ?? exercise.distanceMiles)
+                        .formattedDistance(metric: useMetricUnits))
                     Text("·")
                     Text(exercise.durationSeconds.formattedDuration)
                 }
@@ -128,7 +138,9 @@ struct ExerciseCardView: View {
                     .foregroundStyle(.secondary)
                     .font(.caption2)
             }
-            if !hasRecordedWorkout {
+            if let workout {
+                plannedDistanceLabel(completedMiles: workout.distanceMiles)
+            } else {
                 Button { onRecord() } label: {
                     Image(systemName: "checkmark.circle")
                         .foregroundStyle(.green)
@@ -138,7 +150,36 @@ struct ExerciseCardView: View {
             }
         }
         .padding(8)
-        .background(exercise.type.color.opacity(0.1))
+        .background {
+            if let performance {
+                ZStack {
+                    Rectangle()
+                        .fill(exercise.type.color.opacity(0.1))
+                    DiagonalSplitShape()
+                        .fill(performance.color.opacity(0.28))
+                    DiagonalDividerShape()
+                        .stroke(performance.color.opacity(0.8), lineWidth: 1.5)
+                }
+            } else {
+                exercise.type.color.opacity(0.1)
+            }
+        }
+    }
+
+    /// Trailing "plan" label shown in the right half of a completed card.
+    private func plannedDistanceLabel(completedMiles: Double) -> some View {
+        VStack(alignment: .trailing, spacing: 0) {
+            Text("PLAN")
+                .font(.system(size: 8, weight: .medium))
+            Text(exercise.distanceMiles.formattedDistance(metric: useMetricUnits))
+                .font(.caption2)
+        }
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "Completed \(completedMiles.formattedDistance(metric: useMetricUnits)) of planned \(exercise.distanceMiles.formattedDistance(metric: useMetricUnits))"
+        )
+        .accessibilityIdentifier("exerciseCard.plannedDistance.\(exercise.name)")
     }
 
     /// Red X delete button revealed by swiping left on the card.
@@ -171,19 +212,47 @@ struct ExerciseCardView: View {
 
 #Preview {
     let container = ModelContainerFactory.makePreviewContainer()
-    let exercise = Exercise(
+    let planned = Exercise(
         name: "Morning Run",
         type: .run,
         durationSeconds: 1800,
         distanceMiles: 3.0,
         date: Date()
     )
-    return ExerciseCardView(
-        exercise: exercise,
-        onRecord: {},
-        onEdit: {},
-        swipeDeleteActiveID: .constant(nil)
-    )
+    // Completed cards in each performance state: below (yellow), at (green), above (gold).
+    let completedDistances: [(String, Double)] = [
+        ("Below Plan Run", 2.2),
+        ("At Plan Run", 3.0),
+        ("Above Plan Run", 4.1),
+    ]
+    let completed = completedDistances.map { name, miles in
+        let exercise = Exercise(
+            name: name,
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date()
+        )
+        exercise.workout = Workout(durationSeconds: 1750, distanceMiles: miles)
+        return exercise
+    }
+    return VStack(spacing: 8) {
+        ExerciseCardView(
+            exercise: planned,
+            onRecord: {},
+            onEdit: {},
+            swipeDeleteActiveID: .constant(nil)
+        )
+        ForEach(completed) { exercise in
+            ExerciseCardView(
+                exercise: exercise,
+                onRecord: {},
+                onEdit: {},
+                hasRecordedWorkout: true,
+                swipeDeleteActiveID: .constant(nil)
+            )
+        }
+    }
     .modelContainer(container)
     .padding()
 }

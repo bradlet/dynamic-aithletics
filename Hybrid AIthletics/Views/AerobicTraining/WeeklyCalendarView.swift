@@ -228,25 +228,18 @@ private struct DaySwimlane: View {
         }
     }
 
-    /// List of exercise cards for this day.
+    /// List of exercise cards for this day. Completion is signaled by the
+    /// card's diagonal completed/planned split rather than a checkmark.
     private var exerciseList: some View {
         ForEach(exercises) { exercise in
-            HStack(spacing: 4) {
-                ExerciseCardView(
-                    exercise: exercise,
-                    onRecord: { onRecord(exercise) },
-                    onEdit: { onEdit(exercise) },
-                    hasRecordedWorkout: hasWorkoutsRecorded(exercise),
-                    swipeDeleteActiveID: $swipeDeleteActiveID,
-                    isVirtual: exercise.isRepeating && !exercise.date.isSameDay(as: day)
-                )
-                // Checkmark indicator if a workout has been recorded.
-                if hasWorkoutsRecorded(exercise) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green)
-                        .font(.caption)
-                }
-            }
+            ExerciseCardView(
+                exercise: exercise,
+                onRecord: { onRecord(exercise) },
+                onEdit: { onEdit(exercise) },
+                hasRecordedWorkout: hasWorkoutsRecorded(exercise),
+                swipeDeleteActiveID: $swipeDeleteActiveID,
+                isVirtual: exercise.isRepeating && !exercise.date.isSameDay(as: day)
+            )
         }
     }
 }
