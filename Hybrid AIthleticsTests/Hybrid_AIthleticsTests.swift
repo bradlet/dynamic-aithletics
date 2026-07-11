@@ -8,6 +8,7 @@
 import Testing
 import Foundation
 import SwiftData
+import SwiftUI
 import AICoachCore
 @testable import Hybrid_AIthletics
 
@@ -3589,5 +3590,67 @@ struct StrengthCoachExporterTests {
         #expect(json.contains("\"muscleGroup\":\"Chest\""))
         #expect(json.contains("\"recordingType\":\"Average Weight\""))
         #expect(json.contains("1970-01-01T00:00:00Z"))
+    }
+}
+
+// MARK: - PlanPerformance Tests
+
+struct PlanPerformanceTests {
+
+    @Test func exactMatchIsAtPlan() {
+        #expect(PlanPerformance.classify(completedMiles: 3.0, plannedMiles: 3.0) == .atPlan)
+    }
+
+    @Test func nilCompletedReturnsNil() {
+        #expect(PlanPerformance.classify(completedMiles: nil, plannedMiles: 3.0) == nil)
+    }
+
+    @Test func clearlyUnderIsBelowPlan() {
+        #expect(PlanPerformance.classify(completedMiles: 2.0, plannedMiles: 3.0) == .belowPlan)
+    }
+
+    @Test func clearlyOverIsAbovePlan() {
+        #expect(PlanPerformance.classify(completedMiles: 4.0, plannedMiles: 3.0) == .abovePlan)
+    }
+
+    @Test func toleranceBoundaryIsInclusive() {
+        #expect(PlanPerformance.classify(completedMiles: 3.05, plannedMiles: 3.0) == .atPlan)
+        #expect(PlanPerformance.classify(completedMiles: 2.95, plannedMiles: 3.0) == .atPlan)
+    }
+
+    @Test func justOutsideToleranceClassifies() {
+        #expect(PlanPerformance.classify(completedMiles: 3.051, plannedMiles: 3.0) == .abovePlan)
+        #expect(PlanPerformance.classify(completedMiles: 2.949, plannedMiles: 3.0) == .belowPlan)
+    }
+
+    @Test func metricRoundTripDriftIsAtPlan() {
+        // Simulates RecordWorkoutSheet pre-filling km then converting back to miles.
+        let planned = 5.0 / 1.60934
+        let completed = (planned * 1.60934) / 1.60934
+        #expect(PlanPerformance.classify(completedMiles: completed, plannedMiles: planned) == .atPlan)
+    }
+
+    @Test func zeroPlannedDistance() {
+        #expect(PlanPerformance.classify(completedMiles: 0, plannedMiles: 0) == .atPlan)
+        #expect(PlanPerformance.classify(completedMiles: 3.0, plannedMiles: 0) == .abovePlan)
+        #expect(PlanPerformance.classify(completedMiles: 0, plannedMiles: 3.0) == .belowPlan)
+    }
+
+    @Test func customToleranceIsRespected() {
+        #expect(PlanPerformance.classify(completedMiles: 3.4, plannedMiles: 3.0, toleranceMiles: 0.5) == .atPlan)
+        #expect(PlanPerformance.classify(completedMiles: 3.4, plannedMiles: 3.0, toleranceMiles: 0.1) == .abovePlan)
+    }
+
+    @Test func defaultToleranceValue() {
+        #expect(PlanPerformance.defaultToleranceMiles == 0.05)
+    }
+
+    @Test func colorMappingNeverRed() {
+        #expect(PlanPerformance.belowPlan.color == .yellow)
+        #expect(PlanPerformance.atPlan.color == .green)
+        #expect(PlanPerformance.abovePlan.color == .performanceGold)
+        for performance in [PlanPerformance.belowPlan, .atPlan, .abovePlan] {
+            #expect(performance.color != .red)
+        }
     }
 }
