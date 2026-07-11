@@ -98,13 +98,14 @@ struct WeeklyChartView: View {
     let configuration: WeeklyChartConfiguration
 
     @Environment(\.useMetricUnits) private var useMetricUnits
+    @Environment(\.weekStartDay) private var weekStartDay
     @State private var selectedWindow: PerformanceTimeWindow = .oneMonth
 
     /// Derived chart points for the current window. For distance charts
     /// we materialize a converted copy when metric is on so `LineMark`
     /// positions and the axis label stay aligned.
     private var points: [WeeklyMetricPoint] {
-        let raw = configuration.projection(exercises, selectedWindow.weekCount, Date(), 1)
+        let raw = configuration.projection(exercises, selectedWindow.weekCount, Date(), weekStartDay)
         guard configuration.isDistance, useMetricUnits else { return raw }
         return raw.map {
             WeeklyMetricPoint(weekStart: $0.weekStart, value: $0.value)

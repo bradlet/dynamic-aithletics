@@ -17,6 +17,7 @@ struct SummaryStatsView: View {
     /// Recorded exercises (pre-filtered to completed by parent).
     let exercises: [Exercise]
     @Environment(\.useMetricUnits) private var useMetricUnits
+    @Environment(\.weekStartDay) private var weekStartDay
 
     /// Total recorded mileage across all exercises.
     private var allTimeMiles: Double {
@@ -39,17 +40,24 @@ struct SummaryStatsView: View {
             .reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Total recorded mileage for the current Sun-Sat week.
+    /// Total recorded mileage for the current week (start per user preference).
     private var thisWeekMiles: Double {
-        WorkoutAggregations.currentWeekMileage(exercises: exercises, anchor: Date())
+        WorkoutAggregations.currentWeekMileage(
+            exercises: exercises,
+            anchor: Date(),
+            firstWeekday: weekStartDay
+        )
     }
 
     /// Floor of the current week's average felt rating. `0` when no
     /// workouts in the week have a recorded rating — maps to the
     /// `face.dashed` placeholder via `FeltRatingVisuals`.
     private var avgFeltRatingFloored: Int {
-        guard let avg = WorkoutAggregations
-            .currentWeekAverageFeltRating(exercises: exercises, anchor: Date()) else {
+        guard let avg = WorkoutAggregations.currentWeekAverageFeltRating(
+            exercises: exercises,
+            anchor: Date(),
+            firstWeekday: weekStartDay
+        ) else {
             return 0
         }
         return Int(avg.rounded(.down))

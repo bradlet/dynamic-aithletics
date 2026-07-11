@@ -17,6 +17,11 @@ struct ContentView: View {
     /// Reactively reads the metric preference without fetching in body.
     private var useMetric: Bool { configurations.first?.useMetricUnits ?? false }
 
+    /// Reactively reads the week-start preference, clamped to a valid
+    /// Calendar weekday (1=Sunday ... 7=Saturday) in case a bad value
+    /// arrives via CloudKit sync.
+    private var weekStartDay: Int { min(max(configurations.first?.weekStartDay ?? 1, 1), 7) }
+
     var body: some View {
         TabView {
             AerobicTrainingView()
@@ -27,6 +32,7 @@ struct ContentView: View {
                 .tabItem { Label("History", systemImage: "clock") }
         }
         .environment(\.useMetricUnits, useMetric)
+        .environment(\.weekStartDay, weekStartDay)
         .onAppear { ensureConfigurationExists() }
     }
 
