@@ -55,6 +55,8 @@ struct HistoryView: View {
     /// in the menu sets this to the current `.failed` reason.
     @State private var pendingFailureRetry: String?
 
+    @State private var isSettingsPresented = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -71,6 +73,14 @@ struct HistoryView: View {
             }
             .navigationTitle("History")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        isSettingsPresented = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityIdentifier("history.settingsButton")
+                }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button {
@@ -137,6 +147,9 @@ struct HistoryView: View {
             }
             .sheet(isPresented: $isHealthKitImporterPresented) {
                 ImportHealthKitSheet()
+            }
+            .sheet(isPresented: $isSettingsPresented) {
+                SettingsView()
             }
             .alert(
                 "Something went wrong",
