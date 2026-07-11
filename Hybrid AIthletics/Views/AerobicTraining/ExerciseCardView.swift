@@ -176,10 +176,11 @@ struct ExerciseCardView: View {
         }
         .foregroundStyle(.secondary)
         .accessibilityElement(children: .ignore)
+        // No identifier: the enclosing swimlane's accessibilityIdentifier
+        // overrides descendants, so UI tests match on this label instead.
         .accessibilityLabel(
             "Completed \(completedMiles.formattedDistance(metric: useMetricUnits)) of planned \(exercise.distanceMiles.formattedDistance(metric: useMetricUnits))"
         )
-        .accessibilityIdentifier("exerciseCard.plannedDistance.\(exercise.name)")
     }
 
     /// Red X delete button revealed by swiping left on the card.

@@ -119,6 +119,25 @@ final class AerobicTrainingUITests: XCTestCase {
     }
 
     @MainActor
+    func testCompletedExerciseShowsPlannedDistanceSplit() {
+        let app = launchApp()
+
+        // Seeded recorded workouts show the completed/planned diagonal split
+        // with a trailing PLAN label. The swimlane's accessibilityIdentifier
+        // overrides descendants' identifiers, so match on the label.
+        let planLabel = app.otherElements.matching(
+            NSPredicate(format: "label BEGINSWITH 'Completed' AND label CONTAINS 'of planned'")
+        ).firstMatch
+        if !planLabel.waitForExistence(timeout: 5) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(
+            planLabel.waitForExistence(timeout: 3),
+            "Completed exercise card should show the planned distance label"
+        )
+    }
+
+    @MainActor
     func testScheduleButtonOpensScheduleExerciseSheet() {
         let app = launchApp()
 

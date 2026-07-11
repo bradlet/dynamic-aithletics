@@ -38,12 +38,21 @@ enum UITestFixtures {
         let baseDate = Date()
 
         // Seed recorded exercises (one per day backward from today). Each
-        // carries a `workout` so it appears in the History tab.
+        // carries a `workout` so it appears in the History tab. Two fixtures
+        // record a distance different from plan so the training tab's
+        // completed/planned split renders in the above- and below-plan states.
         for index in 0..<workoutCount {
             let number = index + 1
             guard let day = calendar.date(byAdding: .day, value: -index, to: baseDate) else { continue }
             let duration = 1800 + (index * 60)   // 30m, 31m, 32m, ...
             let miles = 3.0 + Double(index) * 0.1
+            // index 1 → "Test Workout 2" (yesterday): above plan (gold).
+            // index 2 → "Test Workout 3" (two days ago): below plan (yellow).
+            let workoutMiles: Double = switch index {
+            case 1: miles + 1.0
+            case 2: miles - 1.0
+            default: miles
+            }
             let exercise = Exercise(
                 name: "Test Workout \(number)",
                 type: .run,
@@ -54,7 +63,7 @@ enum UITestFixtures {
                 isRepeating: false,
                 workout: Workout(
                     durationSeconds: duration,
-                    distanceMiles: miles,
+                    distanceMiles: workoutMiles,
                     notes: "Seeded fixture \(number)",
                     feltRating: 5 + (index % 5)
                 )
