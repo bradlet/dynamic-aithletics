@@ -21,6 +21,8 @@ struct MonthlyCalendarView: View {
     /// Invoked when the user taps any day in the calendar.
     let onDayTap: (Date) -> Void
 
+    @Environment(\.weekStartDay) private var weekStartDay
+
     /// Weekday header labels.
     private let weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
     /// Grid columns: 7 days.
@@ -103,7 +105,8 @@ struct MonthlyCalendarView: View {
                 DayCell(
                     day: day,
                     items: itemsForDay(day),
-                    isToday: day.isSameDay(as: Date())
+                    isToday: day.isSameDay(as: Date()),
+                    isWeekStart: weekStartDay != 1 && day.weekdayIndex == weekStartDay - 1
                 )
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .onTapGesture {
@@ -152,6 +155,10 @@ private struct DayCell: View {
     let day: Date
     let items: [any CalendarDisplayable]
     let isToday: Bool
+    /// Whether this day is the configured start of the workout week
+    /// (suppressed for the default Sunday start). Renders a thin leading
+    /// accent without altering the Sun-Sat grid.
+    let isWeekStart: Bool
 
     var body: some View {
         VStack(spacing: 2) {
@@ -178,6 +185,14 @@ private struct DayCell: View {
                 : Color.clear,
             in: RoundedRectangle(cornerRadius: 6)
         )
+        .overlay(alignment: .leading) {
+            if isWeekStart {
+                Capsule()
+                    .fill(Color.accentColor.opacity(0.45))
+                    .frame(width: 2)
+                    .padding(.vertical, 6)
+            }
+        }
     }
 }
 
