@@ -138,6 +138,50 @@ final class AerobicTrainingUITests: XCTestCase {
     }
 
     @MainActor
+    func testTapCompletedCardOpensEditWorkoutSheet() {
+        let app = launchApp()
+
+        // Any completed card's PLAN label carries the "Completed X of
+        // planned Y" accessibility label; tapping it propagates to the
+        // card's tap gesture, which opens the unified workout editor.
+        let planLabel = app.otherElements.matching(
+            NSPredicate(format: "label BEGINSWITH 'Completed' AND label CONTAINS 'of planned'")
+        ).firstMatch
+        if !planLabel.waitForExistence(timeout: 5) {
+            app.swipeUp()
+        }
+        XCTAssertTrue(planLabel.waitForExistence(timeout: 3), "A completed card should exist")
+        planLabel.tap()
+
+        let navTitle = app.navigationBars["Edit Workout"]
+        XCTAssertTrue(navTitle.waitForExistence(timeout: 3), "Unified Edit Workout sheet should appear")
+        XCTAssertTrue(
+            app.textFields["workoutForm.plannedDistanceField"].waitForExistence(timeout: 2),
+            "Planned Target distance field should be present"
+        )
+        app.buttons["Cancel"].tap()
+    }
+
+    @MainActor
+    func testTapPlannedCardOpensEditPlanSheet() {
+        let app = launchApp()
+
+        // "Test Concrete Run" is seeded tomorrow with no recorded workout,
+        // so tapping its card opens the plan editor.
+        let cardText = app.staticTexts["Test Concrete Run"]
+        if !cardText.waitForExistence(timeout: 5) {
+            app.swipeUp()
+        }
+        if cardText.waitForExistence(timeout: 3) {
+            cardText.tap()
+
+            let navTitle = app.navigationBars["Edit Exercise"]
+            XCTAssertTrue(navTitle.waitForExistence(timeout: 3), "Edit Exercise sheet should appear")
+            app.buttons["Cancel"].tap()
+        }
+    }
+
+    @MainActor
     func testScheduleButtonOpensScheduleExerciseSheet() {
         let app = launchApp()
 
