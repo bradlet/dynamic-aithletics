@@ -3,7 +3,8 @@
 //  Hybrid AIthletics
 //
 //  Displays a single planned exercise as a compact card.
-//  Supports drag-and-drop between day swimlanes, swipe-to-delete, and tap-to-record.
+//  Supports drag-and-drop between day swimlanes, swipe-to-delete, and
+//  tap-to-edit (unified workout editor when completed, plan editor otherwise).
 //
 
 import SwiftUI
@@ -73,6 +74,16 @@ struct ExerciseCardView: View {
                     }
                 }
         )
+        .onTapGesture {
+            // Tap edits what you see: the unified workout editor for
+            // completed exercises, the plan editor otherwise. A tap while
+            // any card shows its delete button just dismisses that state.
+            if swipeDeleteActiveID != nil {
+                withAnimation(.spring(response: 0.3)) { swipeDeleteActiveID = nil }
+            } else {
+                onEdit()
+            }
+        }
         .contextMenu {
             if !hasRecordedWorkout {
                 Button { onRecord() } label: {
@@ -80,7 +91,7 @@ struct ExerciseCardView: View {
                 }
             }
             Button { onEdit() } label: {
-                Label("Edit", systemImage: "pencil")
+                Label(hasRecordedWorkout ? "Edit Workout" : "Edit Plan", systemImage: "pencil")
             }
             Button(role: .destructive) { showDeleteConfirmation = true } label: {
                 Label("Delete", systemImage: "trash")

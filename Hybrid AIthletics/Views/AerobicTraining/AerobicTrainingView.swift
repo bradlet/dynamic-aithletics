@@ -25,8 +25,10 @@ struct AerobicTrainingView: View {
     @State private var addExerciseRequest: AddExerciseRequest?
     /// The exercise selected for recording a workout.
     @State private var recordingExercise: Exercise?
-    /// The exercise selected for editing.
+    /// The exercise selected for editing its plan (uncompleted).
     @State private var editingExercise: Exercise?
+    /// The completed exercise opened in the unified planned + completed editor.
+    @State private var detailExercise: Exercise?
     /// The request passed to the AI coach sheet when the user taps "Ask Coach".
     @State private var coachRequest: CoachingRequest?
     /// Quick-add request (records a workout directly without scheduling first).
@@ -113,7 +115,14 @@ struct AerobicTrainingView: View {
                             recordingExercise = exercise
                         },
                         onEdit: { exercise in
-                            editingExercise = exercise
+                            // Completed exercises open the unified planned +
+                            // completed editor; planned-only ones open the
+                            // plan editor.
+                            if exercise.isCompleted {
+                                detailExercise = exercise
+                            } else {
+                                editingExercise = exercise
+                            }
                         },
                         navigationRequest: exerciseNavigationRequest
                     )
@@ -136,6 +145,9 @@ struct AerobicTrainingView: View {
             }
             .sheet(item: $editingExercise) { exercise in
                 AddExerciseSheet(exercise: exercise, defaultDate: exercise.date)
+            }
+            .sheet(item: $detailExercise) { exercise in
+                WorkoutDetailSheet(exercise: exercise)
             }
             .sheet(item: $quickAddRequest) { request in
                 RecordWorkoutSheet(exercise: nil, defaultDate: request.date)
