@@ -9,14 +9,19 @@
 
 import SwiftUI
 
-/// The six `Form` sections that describe a workout. Intended to be embedded
+/// The `Form` sections that describe a workout. Intended to be embedded
 /// directly inside a parent `Form { ... }`.
 ///
 /// All state is owned by the parent view via bindings — this view is a pure
 /// presentational grouping. `distance` is expected to be in the user's display
 /// units (miles or km depending on `useMetricUnits`); conversion to the
 /// internal miles storage is the parent's responsibility.
-struct WorkoutFormFields: View {
+///
+/// `plannedSection` is an optional slot rendered between the distance and
+/// date sections; the unified editor injects `PlannedTargetFields` there and
+/// sets `usesCompletedHeaders` so the actuals read "Completed Duration" /
+/// "Completed Distance" in contrast to the planned target.
+struct WorkoutFormFields<PlannedSection: View>: View {
     @Binding var name: String
     @Binding var type: ExerciseType
     @Binding var hours: Int
@@ -26,6 +31,10 @@ struct WorkoutFormFields: View {
     @Binding var date: Date
     @Binding var notes: String
     @Binding var feltRating: Int
+    /// Retitles the duration/distance headers as "Completed …" when a
+    /// planned section is shown alongside them.
+    var usesCompletedHeaders: Bool = false
+    @ViewBuilder var plannedSection: () -> PlannedSection
 
     @Environment(\.useMetricUnits) private var useMetricUnits
 
@@ -33,6 +42,7 @@ struct WorkoutFormFields: View {
         nameAndTypeSection
         durationSection
         distanceSection
+        plannedSection()
         dateSection
         notesSection
         feltRatingSection
@@ -56,14 +66,14 @@ struct WorkoutFormFields: View {
 
     /// Duration pickers for hours, minutes, seconds.
     private var durationSection: some View {
-        Section("Duration") {
+        Section(usesCompletedHeaders ? "Completed Duration" : "Duration") {
             DurationWheelPickers(hours: $hours, minutes: $minutes, seconds: $seconds)
         }
     }
 
     /// Distance input field. Unit label follows the user's preference.
     private var distanceSection: some View {
-        Section("Distance") {
+        Section(usesCompletedHeaders ? "Completed Distance" : "Distance") {
             HStack {
                 TextField("0.0", value: $distance, format: .number.precision(.fractionLength(1)))
                     .keyboardType(.decimalPad)
@@ -94,5 +104,35 @@ struct WorkoutFormFields: View {
         Section("How did it feel?") {
             FeltRatingPicker(value: $feltRating)
         }
+    }
+}
+
+extension WorkoutFormFields where PlannedSection == EmptyView {
+    /// Convenience initializer for forms without a planned target section
+    /// (e.g. `RecordWorkoutSheet`), matching the pre-slot signature.
+    init(
+        name: Binding<String>,
+        type: Binding<ExerciseType>,
+        hours: Binding<Int>,
+        minutes: Binding<Int>,
+        seconds: Binding<Int>,
+        distance: Binding<Double>,
+        date: Binding<Date>,
+        notes: Binding<String>,
+        feltRating: Binding<Int>
+    ) {
+        self.init(
+            name: name,
+            type: type,
+            hours: hours,
+            minutes: minutes,
+            seconds: seconds,
+            distance: distance,
+            date: date,
+            notes: notes,
+            feltRating: feltRating,
+            usesCompletedHeaders: false,
+            plannedSection: { EmptyView() }
+        )
     }
 }

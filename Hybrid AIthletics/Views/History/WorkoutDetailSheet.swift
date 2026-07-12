@@ -30,12 +30,16 @@ struct WorkoutDetailSheet: View {
     @State private var minutes: Int
     @State private var seconds: Int
     @State private var distance: Double
+    @State private var plannedHours: Int
+    @State private var plannedMinutes: Int
+    @State private var plannedSeconds: Int
+    @State private var plannedDistance: Double
     @State private var date: Date
     @State private var notes: String
     @State private var feltRating: Int
     @State private var showDeleteConfirmation = false
-    /// Tracks whether the distance field has been converted from its raw
-    /// (miles) seed value into the user's display unit. `@Environment` is
+    /// Tracks whether the distance fields have been converted from their raw
+    /// (miles) seed values into the user's display unit. `@Environment` is
     /// not available during `init`, so the conversion runs once in `.onAppear`.
     @State private var hasConvertedDistance = false
 
@@ -51,9 +55,14 @@ struct WorkoutDetailSheet: View {
         _hours = State(initialValue: total / 3600)
         _minutes = State(initialValue: (total % 3600) / 60)
         _seconds = State(initialValue: total % 60)
+        let plannedTotal = exercise.durationSeconds
+        _plannedHours = State(initialValue: plannedTotal / 3600)
+        _plannedMinutes = State(initialValue: (plannedTotal % 3600) / 60)
+        _plannedSeconds = State(initialValue: plannedTotal % 60)
         // Seed with raw miles; converted to display units in .onAppear once
         // `useMetricUnits` is available from the environment.
         _distance = State(initialValue: workout?.distanceMiles ?? exercise.distanceMiles)
+        _plannedDistance = State(initialValue: exercise.distanceMiles)
         _date = State(initialValue: exercise.date)
         _notes = State(initialValue: workout?.notes ?? "")
         _feltRating = State(initialValue: workout?.feltRating ?? 0)
@@ -76,8 +85,17 @@ struct WorkoutDetailSheet: View {
                     distance: $distance,
                     date: $date,
                     notes: $notes,
-                    feltRating: $feltRating
-                )
+                    feltRating: $feltRating,
+                    usesCompletedHeaders: true
+                ) {
+                    PlannedTargetFields(
+                        distance: $plannedDistance,
+                        hours: $plannedHours,
+                        minutes: $plannedMinutes,
+                        seconds: $plannedSeconds,
+                        completedDistance: distance
+                    )
+                }
                 deleteSection
             }
             .navigationTitle("Edit Workout")
@@ -115,6 +133,13 @@ struct WorkoutDetailSheet: View {
 
     private var deleteSection: some View {
         Section {
+            Button {
+                performRemoveRecording()
+            } label: {
+                Label("Remove Recorded Workout", systemImage: "arrow.uturn.backward")
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .accessibilityIdentifier("workoutDetail.removeRecordingButton")
             Button(role: .destructive) {
                 if Self.isRunningUITests {
                     // In UI tests, bypass the confirmation alert — SwiftUI's
@@ -143,26 +168,29 @@ struct WorkoutDetailSheet: View {
 
     // MARK: - Actions
 
-    /// On first appear, convert the seeded raw-miles `distance` to the user's
-    /// display unit. Guarded so repeated `onAppear` calls don't re-convert.
+    /// On first appear, convert the seeded raw-miles distance fields to the
+    /// user's display unit. Guarded so repeated `onAppear` calls don't
+    /// re-convert.
     private func convertDistanceForDisplayIfNeeded() {
         guard !hasConvertedDistance else { return }
         hasConvertedDistance = true
         if useMetricUnits {
             distance = recordedMiles.toDisplayDistance(metric: true)
+            plannedDistance = exercise.distanceMiles.toDisplayDistance(metric: true)
         }
     }
 
     /// Persists all edits back to the exercise via `WorkoutEditor.apply`.
     private func save() {
         let distanceMiles = useMetricUnits ? distance / 1.60934 : distance
+        let plannedDistanceMiles = useMetricUnits ? plannedDistance / 1.60934 : plannedDistance
         let edits = WorkoutEditor.EditedValues(
             name: name,
             type: type,
             durationSeconds: hours * 3600 + minutes * 60 + seconds,
             distanceMiles: distanceMiles,
-            plannedDurationSeconds: exercise.durationSeconds,
-            plannedDistanceMiles: exercise.distanceMiles,
+            plannedDurationSeconds: plannedHours * 3600 + plannedMinutes * 60 + plannedSeconds,
+            plannedDistanceMiles: plannedDistanceMiles,
             date: date.startOfDay,
             notes: notes,
             feltRating: feltRating
@@ -170,6 +198,16 @@ struct WorkoutDetailSheet: View {
         WorkoutEditor.apply(edits, to: exercise)
         // Explicit save so the Google Sheets sync trigger sees the edit
         // immediately when it fetches via a fresh ModelContext.
+        try? modelContext.save()
+        sheetsSync.requestSync()
+        dismiss()
+    }
+
+    /// Clears the recorded workout (un-completes the exercise), keeping the
+    /// planned exercise intact. Recoverable by re-recording, so no
+    /// confirmation alert.
+    private func performRemoveRecording() {
+        WorkoutEditor.removeRecording(from: exercise)
         try? modelContext.save()
         sheetsSync.requestSync()
         dismiss()

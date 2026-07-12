@@ -2042,6 +2042,39 @@ struct WorkoutDetailEditTests {
         let kmDisplayed = milesStored.toDisplayDistance(metric: true)
         #expect(abs(kmDisplayed - kmInput) < 0.0001)
     }
+
+    @Test func plannedMetricDistanceConversionRoundTrip() throws {
+        // The planned distance follows the same display↔storage conversion as
+        // the completed distance; verify a km entry round-trips through
+        // WorkoutEditor.apply's plannedDistanceMiles path.
+        let context = makeContext()
+        let exercise = Exercise(
+            name: "Metric Plan",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date(),
+            workout: Workout(durationSeconds: 1800, distanceMiles: 3.0)
+        )
+        context.insert(exercise)
+
+        let kmInput = 8.0
+        let edits = WorkoutEditor.EditedValues(
+            name: exercise.name,
+            type: exercise.type,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            plannedDurationSeconds: 1800,
+            plannedDistanceMiles: kmInput / 1.60934,
+            date: exercise.date,
+            notes: "",
+            feltRating: 0
+        )
+        WorkoutEditor.apply(edits, to: exercise)
+
+        let kmDisplayed = exercise.distanceMiles.toDisplayDistance(metric: true)
+        #expect(abs(kmDisplayed - kmInput) < 0.0001)
+    }
 }
 
 // MARK: - WorkoutAggregations Tests
