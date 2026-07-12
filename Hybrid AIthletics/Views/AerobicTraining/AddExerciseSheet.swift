@@ -91,24 +91,7 @@ struct AddExerciseSheet: View {
     /// Duration pickers for hours, minutes, seconds.
     private var durationSection: some View {
         Section("Duration") {
-            HStack {
-                Picker("Hours", selection: $hours) {
-                    ForEach(0..<24) { Text("\($0)h").tag($0) }
-                }
-                .pickerStyle(.wheel)
-                .frame(maxWidth: .infinity)
-                Picker("Minutes", selection: $minutes) {
-                    ForEach(0..<60) { Text("\($0)m").tag($0) }
-                }
-                .pickerStyle(.wheel)
-                .frame(maxWidth: .infinity)
-                Picker("Seconds", selection: $seconds) {
-                    ForEach(0..<60) { Text("\($0)s").tag($0) }
-                }
-                .pickerStyle(.wheel)
-                .frame(maxWidth: .infinity)
-            }
-            .frame(height: 120)
+            DurationWheelPickers(hours: $hours, minutes: $minutes, seconds: $seconds)
         }
     }
 
