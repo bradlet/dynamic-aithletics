@@ -1836,13 +1836,13 @@ struct WorkoutDetailEditTests {
         context.insert(exercise)
 
         let newDate = Date(timeIntervalSince1970: 1_710_000_000)
-        let plannedDuration = exercise.durationSeconds
-        let plannedDistance = exercise.distanceMiles
         let edits = WorkoutEditor.EditedValues(
             name: "Edited Name",
             type: .tempoRun,
             durationSeconds: 2700,
             distanceMiles: 6.2,
+            plannedDurationSeconds: 2400,
+            plannedDistanceMiles: 5.0,
             date: newDate,
             notes: "edited notes",
             feltRating: 9
@@ -1858,9 +1858,70 @@ struct WorkoutDetailEditTests {
         #expect(exercise.workout?.distanceMiles == 6.2)
         #expect(exercise.workout?.notes == "edited notes")
         #expect(exercise.workout?.feltRating == 9)
-        // Planned target metrics are NOT touched by an edit.
-        #expect(exercise.durationSeconds == plannedDuration)
-        #expect(exercise.distanceMiles == plannedDistance)
+        // Planned target metrics rewritten on the exercise (unified editor).
+        #expect(exercise.durationSeconds == 2400)
+        #expect(exercise.distanceMiles == 5.0)
+    }
+
+    @Test func applyWritesPlannedTargetsIndependentlyOfActuals() throws {
+        let context = makeContext()
+        let exercise = Exercise(
+            name: "Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date(timeIntervalSince1970: 1_700_000_000),
+            workout: Workout(durationSeconds: 1750, distanceMiles: 3.4, notes: "n", feltRating: 5)
+        )
+        context.insert(exercise)
+
+        // Only the planned targets change; actuals repeat their current values.
+        let edits = WorkoutEditor.EditedValues(
+            name: exercise.name,
+            type: exercise.type,
+            durationSeconds: 1750,
+            distanceMiles: 3.4,
+            plannedDurationSeconds: 3600,
+            plannedDistanceMiles: 6.0,
+            date: exercise.date,
+            notes: "n",
+            feltRating: 5
+        )
+        WorkoutEditor.apply(edits, to: exercise)
+
+        #expect(exercise.durationSeconds == 3600)
+        #expect(exercise.distanceMiles == 6.0)
+        #expect(exercise.workout?.durationSeconds == 1750)
+        #expect(exercise.workout?.distanceMiles == 3.4)
+        #expect(exercise.workout?.notes == "n")
+        #expect(exercise.workout?.feltRating == 5)
+    }
+
+    @Test func removeRecordingClearsWorkoutAndKeepsPlan() throws {
+        let context = makeContext()
+        let exercise = Exercise(
+            name: "Recorded Run",
+            type: .tempoRun,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date(timeIntervalSince1970: 1_700_000_000),
+            workout: Workout(durationSeconds: 2000, distanceMiles: 4.0, feltRating: 7)
+        )
+        context.insert(exercise)
+        let originalID = exercise.id
+        let originalDate = exercise.date
+
+        WorkoutEditor.removeRecording(from: exercise)
+
+        #expect(exercise.workout == nil)
+        #expect(exercise.isCompleted == false)
+        // Identity and planned targets untouched.
+        #expect(exercise.id == originalID)
+        #expect(exercise.name == "Recorded Run")
+        #expect(exercise.type == .tempoRun)
+        #expect(exercise.date == originalDate)
+        #expect(exercise.durationSeconds == 1800)
+        #expect(exercise.distanceMiles == 3.0)
     }
 
     @Test func applyPreservesIdAndImportMetadata() throws {
@@ -1886,6 +1947,8 @@ struct WorkoutDetailEditTests {
             type: .easyRun,
             durationSeconds: 2400,
             distanceMiles: 4.0,
+            plannedDurationSeconds: 1800,
+            plannedDistanceMiles: 3.0,
             date: Date(),
             notes: "",
             feltRating: 6
@@ -1920,6 +1983,8 @@ struct WorkoutDetailEditTests {
             type: .tempoRun,
             durationSeconds: 2400,
             distanceMiles: 4.0,
+            plannedDurationSeconds: 1800,
+            plannedDistanceMiles: 3.0,
             date: Date(),
             notes: "edited",
             feltRating: 7

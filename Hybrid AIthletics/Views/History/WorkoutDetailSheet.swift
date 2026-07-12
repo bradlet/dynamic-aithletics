@@ -161,6 +161,8 @@ struct WorkoutDetailSheet: View {
             type: type,
             durationSeconds: hours * 3600 + minutes * 60 + seconds,
             distanceMiles: distanceMiles,
+            plannedDurationSeconds: exercise.durationSeconds,
+            plannedDistanceMiles: exercise.distanceMiles,
             date: date.startOfDay,
             notes: notes,
             feltRating: feltRating
@@ -199,19 +201,25 @@ enum WorkoutEditor {
         /// Distance in miles — the caller is responsible for converting any
         /// km display values back to miles before constructing this struct.
         var distanceMiles: Double
+        /// Planned target duration in seconds (the exercise's own metric).
+        var plannedDurationSeconds: Int
+        /// Planned target distance in miles — caller converts from km display.
+        var plannedDistanceMiles: Double
         var date: Date
         var notes: String
         var feltRating: Int
     }
 
-    /// Writes the edited identity fields (`name`, `type`, `date`) onto the
-    /// exercise and rebuilds its nested `workout` from the edited actuals,
-    /// preserving the existing `source` / `externalID`. Does not touch the
-    /// exercise `id` or its planned target metrics.
+    /// Writes the edited identity fields (`name`, `type`, `date`) and planned
+    /// targets onto the exercise, and rebuilds its nested `workout` from the
+    /// edited actuals, preserving the existing `source` / `externalID`.
+    /// Does not touch the exercise `id`.
     static func apply(_ edits: EditedValues, to exercise: Exercise) {
         exercise.name = edits.name
         exercise.type = edits.type
         exercise.date = edits.date
+        exercise.durationSeconds = edits.plannedDurationSeconds
+        exercise.distanceMiles = edits.plannedDistanceMiles
         let existing = exercise.workout
         exercise.workout = Workout(
             durationSeconds: edits.durationSeconds,
@@ -221,6 +229,12 @@ enum WorkoutEditor {
             source: existing?.source ?? WorkoutSource.manual.rawValue,
             externalID: existing?.externalID
         )
+    }
+
+    /// Clears the exercise's recorded workout, reverting it to a planned
+    /// (uncompleted) state. Identity and planned targets are untouched.
+    static func removeRecording(from exercise: Exercise) {
+        exercise.workout = nil
     }
 }
 
