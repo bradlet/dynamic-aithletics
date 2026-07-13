@@ -15,12 +15,15 @@ import AICoachCore
 struct AerobicTrainingView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.useMetricUnits) private var useMetricUnits
+    @Environment(\.weekStartDay) private var weekStartDay
     @Query private var allExercises: [Exercise]
 
     /// The month displayed in the monthly calendar.
     @State private var selectedMonth: Date = Date()
-    /// The first day (Sunday) of the currently displayed week.
-    @State private var selectedWeek: Date = Date().startOfWeek
+    /// A date within the currently displayed week (normalized to the user's
+    /// configured week start on navigation). Week boundaries always derive
+    /// from `weekStart`/`weekEnd` since the environment isn't available here.
+    @State private var selectedWeek: Date = Date().startOfDay
     /// The request passed to the schedule exercise sheet (nil = hidden).
     @State private var addExerciseRequest: AddExerciseRequest?
     /// The exercise selected for recording a workout.
@@ -38,16 +41,26 @@ struct AerobicTrainingView: View {
     /// The edge new content slides in from during a weekly swipe transition.
     @State private var weekSlideEdge: Edge = .trailing
 
+    /// Midnight on the first day of the displayed week per the user's week-start preference.
+    private var weekStart: Date {
+        selectedWeek.startOfWeek(firstWeekday: weekStartDay)
+    }
+
+    /// 23:59:59 on the last day of the displayed week per the user's week-start preference.
+    private var weekEnd: Date {
+        selectedWeek.endOfWeek(firstWeekday: weekStartDay)
+    }
+
     /// Exercises scheduled within the currently displayed week, including virtual repeating exercises.
     private var weekExercises: [Exercise] {
-        let start = selectedWeek.startOfDay
-        let end = selectedWeek.endOfWeek
+        let start = weekStart
+        let end = weekEnd
 
         // Concrete exercises scheduled this week
         let concrete = allExercises.filter { $0.date >= start && $0.date <= end }
 
         // Only show virtual repeating exercises for current week and future
-        guard selectedWeek >= Date().startOfWeek else { return concrete }
+        guard start >= Date().startOfWeek(firstWeekday: weekStartDay) else { return concrete }
 
         // Repeating exercises from other weeks
         let repeating = allExercises.filter { exercise in
@@ -105,7 +118,7 @@ struct AerobicTrainingView: View {
                     weekHeader
                     Divider()
                     WeeklyCalendarView(
-                        days: selectedWeek.daysInWeek(),
+                        days: selectedWeek.daysInWeek(firstWeekday: weekStartDay),
                         exercises: weekExercises,
                         onAdd: { date in
                             addExerciseRequest = AddExerciseRequest(date: date)
@@ -186,7 +199,7 @@ struct AerobicTrainingView: View {
     /// Days with existing items get highlighted; empty days open the schedule sheet.
     private func handleMonthDayTap(_ day: Date) {
         withAnimation {
-            selectedWeek = day.startOfWeek
+            selectedWeek = day.startOfWeek(firstWeekday: weekStartDay)
         }
         if !day.isSameMonth(as: selectedMonth) {
             selectedMonth = day.startOfMonth
@@ -294,7 +307,7 @@ struct AerobicTrainingView: View {
 
     /// Formatted label for the current week, e.g. "Apr 7 - Apr 13, 2026".
     private var weekLabel: String {
-        let start = selectedWeek
+        let start = weekStart
         let end = Calendar.current.date(byAdding: .day, value: 6, to: start) ?? start
         let formatter = DateFormatter()
         formatter.dateFormat = "MMM d"
@@ -322,8 +335,8 @@ struct AerobicTrainingView: View {
 
     /// Navigates forward or backward by one week.
     private func changeWeek(by weeks: Int) {
-        if let newWeek = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: selectedWeek) {
-            selectedWeek = newWeek.startOfWeek
+        if let newWeek = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: weekStart) {
+            selectedWeek = newWeek.startOfWeek(firstWeekday: weekStartDay)
         }
     }
 }
