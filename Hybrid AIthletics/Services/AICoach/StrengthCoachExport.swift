@@ -45,6 +45,10 @@ struct CoachStrengthExercise: Codable, Equatable, Sendable {
     let isOffloaded: Bool
     /// User notes, omitted from JSON when empty.
     let notes: String?
+    /// Planned number of sets, omitted from JSON when no plan is set.
+    let plannedSets: Int?
+    /// Planned reps per set, omitted from JSON when no plan is set.
+    let plannedReps: Int?
     /// Recorded weight entries, oldest first.
     let workouts: [CoachStrengthWorkout]
 
@@ -55,6 +59,8 @@ struct CoachStrengthExercise: Codable, Equatable, Sendable {
         self.weekdayIndex = exercise.weekdayIndex
         self.isOffloaded = exercise.isOffloaded
         self.notes = exercise.notes.isEmpty ? nil : exercise.notes
+        self.plannedSets = exercise.plannedSets
+        self.plannedReps = exercise.plannedReps
         self.workouts = exercise.workouts
             .sorted { $0.date < $1.date }
             .map { CoachStrengthWorkout(from: $0) }

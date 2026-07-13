@@ -3909,6 +3909,25 @@ struct StrengthCoachExporterTests {
         #expect(snapshot.workouts.first?.notes == nil)
     }
 
+    @Test func snapshotCapturesPlannedSetsAndReps() {
+        let exercise = StrengthExercise(name: "Bench", plannedSets: 3, plannedReps: 8)
+        let snapshot = CoachStrengthExercise(from: exercise)
+        #expect(snapshot.plannedSets == 3)
+        #expect(snapshot.plannedReps == 8)
+    }
+
+    @Test func jsonIncludesPlannedFieldsOnlyWhenSet() throws {
+        let planned = StrengthExercise(name: "Bench", plannedSets: 3, plannedReps: 8)
+        let plannedJSON = try StrengthCoachExporter.jsonString(from: [planned])
+        #expect(plannedJSON.contains("\"plannedSets\":3"))
+        #expect(plannedJSON.contains("\"plannedReps\":8"))
+
+        let unplanned = StrengthExercise(name: "Curl")
+        let unplannedJSON = try StrengthCoachExporter.jsonString(from: [unplanned])
+        #expect(!unplannedJSON.contains("plannedSets"))
+        #expect(!unplannedJSON.contains("plannedReps"))
+    }
+
     @Test func workoutsAreSortedOldestFirst() {
         let older = StrengthWorkout(date: Date(timeIntervalSince1970: 1_000), weightPounds: 100)
         let newer = StrengthWorkout(date: Date(timeIntervalSince1970: 2_000), weightPounds: 110)
