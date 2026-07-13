@@ -29,6 +29,7 @@ struct AddExerciseSheet: View {
     @State private var notes = ""
     @State private var scheduledDate: Date
     @State private var isRepeating = false
+    @State private var countsTowardMileage = true
 
     init(exercise: Exercise?, defaultDate: Date) {
         self.exercise = exercise
@@ -95,14 +96,22 @@ struct AddExerciseSheet: View {
         }
     }
 
-    /// Distance input field.
+    /// Distance input field and mileage-counting toggle.
     private var distanceSection: some View {
-        Section("Distance") {
+        Section {
             HStack {
                 TextField("0.0", value: $distance, format: .number.precision(.fractionLength(1)))
                     .keyboardType(.decimalPad)
                 Text(useMetricUnits ? "km" : "mi")
                     .foregroundStyle(.secondary)
+            }
+            Toggle("Counts Toward Mileage", isOn: $countsTowardMileage)
+                .accessibilityIdentifier("workoutForm.countsTowardMileageToggle")
+        } header: {
+            Text("Distance")
+        } footer: {
+            if !countsTowardMileage {
+                Text("Distance is tracked but excluded from mileage totals.")
             }
         }
     }
@@ -144,10 +153,15 @@ struct AddExerciseSheet: View {
             hours = total / 3600
             minutes = (total % 3600) / 60
             seconds = total % 60
-            distance = useMetricUnits ? exercise.distanceMiles.toDisplayDistance(metric: true) : exercise.distanceMiles
+            // Leave the field empty (placeholder) when there is no target
+            // distance rather than pre-filling a literal 0.0.
+            if exercise.distanceMiles > 0 {
+                distance = useMetricUnits ? exercise.distanceMiles.toDisplayDistance(metric: true) : exercise.distanceMiles
+            }
             notes = exercise.notes
             scheduledDate = exercise.date
             isRepeating = exercise.isRepeating
+            countsTowardMileage = exercise.countsTowardMileage
         } else {
             name = type.rawValue
             scheduledDate = defaultDate
@@ -167,6 +181,7 @@ struct AddExerciseSheet: View {
             exercise.notes = notes
             exercise.date = scheduledDate.startOfDay
             exercise.isRepeating = isRepeating
+            exercise.countsTowardMileage = countsTowardMileage
         } else {
             let newExercise = Exercise(
                 name: name,
@@ -175,7 +190,8 @@ struct AddExerciseSheet: View {
                 distanceMiles: distanceMiles,
                 notes: notes,
                 date: scheduledDate,
-                isRepeating: isRepeating
+                isRepeating: isRepeating,
+                countsTowardMileage: countsTowardMileage
             )
             modelContext.insert(newExercise)
         }

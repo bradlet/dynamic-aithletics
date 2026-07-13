@@ -11,15 +11,18 @@ import SwiftUI
 
 /// A single `Form` section editing an exercise's planned target distance and
 /// duration. State is owned by the parent via bindings; `distance` is in the
-/// user's display units (parent converts to miles on save). The footer shows
-/// a live plan-vs-completed hint tinted with the `PlanPerformance` color.
+/// user's display units (parent converts to miles on save) and is optional so
+/// an unset target shows the placeholder instead of a literal `0.0`. The
+/// footer shows a live plan-vs-completed hint tinted with the
+/// `PlanPerformance` color.
 struct PlannedTargetFields: View {
-    @Binding var distance: Double
+    @Binding var distance: Double?
     @Binding var hours: Int
     @Binding var minutes: Int
     @Binding var seconds: Int
     /// The live completed distance from the parent form, in display units.
-    let completedDistance: Double
+    /// `nil` means the field is empty (treated as zero).
+    let completedDistance: Double?
 
     @Environment(\.useMetricUnits) private var useMetricUnits
 
@@ -45,12 +48,14 @@ struct PlannedTargetFields: View {
 
     /// The live completed distance converted back to miles for classification.
     private var completedMiles: Double {
-        useMetricUnits ? completedDistance / 1.60934 : completedDistance
+        let display = completedDistance ?? 0
+        return useMetricUnits ? display / 1.60934 : display
     }
 
     /// The edited planned distance converted back to miles for classification.
     private var plannedMiles: Double {
-        useMetricUnits ? distance / 1.60934 : distance
+        let display = distance ?? 0
+        return useMetricUnits ? display / 1.60934 : display
     }
 
     /// Performance of the completed distance against the edited plan.
@@ -62,7 +67,7 @@ struct PlannedTargetFields: View {
 #Preview {
     Form {
         PlannedTargetFields(
-            distance: .constant(3.0),
+            distance: .constant(3.0 as Double?),
             hours: .constant(0),
             minutes: .constant(30),
             seconds: .constant(0),
