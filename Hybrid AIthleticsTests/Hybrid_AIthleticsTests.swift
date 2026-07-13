@@ -200,6 +200,96 @@ struct DateWeekTests {
     }
 }
 
+// MARK: - WeekMileage Tests
+
+struct WeekMileageTests {
+
+    /// A planned-only exercise (no recorded workout).
+    private func makePlanned(miles: Double, counts: Bool = true) -> Exercise {
+        Exercise(
+            name: "planned",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: miles,
+            date: Date(),
+            countsTowardMileage: counts
+        )
+    }
+
+    /// A completed exercise whose recorded distance may differ from the plan.
+    private func makeCompleted(plannedMiles: Double, recordedMiles: Double, counts: Bool = true) -> Exercise {
+        Exercise(
+            name: "completed",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: plannedMiles,
+            date: Date(),
+            countsTowardMileage: counts,
+            workout: Workout(durationSeconds: 1800, distanceMiles: recordedMiles)
+        )
+    }
+
+    @Test func plannedEmptyInputIsZero() {
+        #expect(WeekMileage.planned([]) == 0)
+        #expect(WeekMileage.planned([], includeNonTracked: true) == 0)
+    }
+
+    @Test func plannedSumsScheduledDistances() {
+        let exercises = [makePlanned(miles: 3.0), makePlanned(miles: 5.0)]
+        #expect(WeekMileage.planned(exercises) == 8.0)
+    }
+
+    @Test func plannedExcludesOptedOutByDefault() {
+        let exercises = [makePlanned(miles: 3.0), makePlanned(miles: 2.0, counts: false)]
+        #expect(WeekMileage.planned(exercises) == 3.0)
+    }
+
+    @Test func plannedIncludesOptedOutWhenNonTrackedRequested() {
+        let exercises = [makePlanned(miles: 3.0), makePlanned(miles: 2.0, counts: false)]
+        #expect(WeekMileage.planned(exercises, includeNonTracked: true) == 5.0)
+    }
+
+    @Test func completedOnlySumsCompletedExercises() {
+        let exercises = [
+            makePlanned(miles: 10.0),
+            makeCompleted(plannedMiles: 5.0, recordedMiles: 4.5)
+        ]
+        #expect(WeekMileage.completed(exercises) == 4.5)
+    }
+
+    @Test func completedUsesRecordedNotPlannedDistance() {
+        let exercises = [makeCompleted(plannedMiles: 5.0, recordedMiles: 6.2)]
+        #expect(WeekMileage.completed(exercises) == 6.2)
+    }
+
+    @Test func completedExcludesOptedOutByDefault() {
+        let exercises = [
+            makeCompleted(plannedMiles: 5.0, recordedMiles: 5.0),
+            makeCompleted(plannedMiles: 2.0, recordedMiles: 2.0, counts: false)
+        ]
+        #expect(WeekMileage.completed(exercises) == 5.0)
+    }
+
+    @Test func completedIncludesOptedOutWhenNonTrackedRequested() {
+        let exercises = [
+            makeCompleted(plannedMiles: 5.0, recordedMiles: 5.0),
+            makeCompleted(plannedMiles: 2.0, recordedMiles: 2.0, counts: false)
+        ]
+        #expect(WeekMileage.completed(exercises, includeNonTracked: true) == 7.0)
+    }
+
+    @Test func weekWithOnlyOptedOutTrackedTotalsAreZeroButAllTotalsAreNot() {
+        let exercises = [
+            makePlanned(miles: 3.0, counts: false),
+            makeCompleted(plannedMiles: 2.0, recordedMiles: 2.5, counts: false)
+        ]
+        #expect(WeekMileage.planned(exercises) == 0)
+        #expect(WeekMileage.completed(exercises) == 0)
+        #expect(WeekMileage.planned(exercises, includeNonTracked: true) == 5.0)
+        #expect(WeekMileage.completed(exercises, includeNonTracked: true) == 2.5)
+    }
+}
+
 // MARK: - Double+Distance Tests
 
 struct DoubleDistanceTests {
