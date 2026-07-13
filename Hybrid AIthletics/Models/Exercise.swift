@@ -32,6 +32,11 @@ final class Exercise {
     var date: Date = Date()
     /// Whether this exercise repeats on the same day every week.
     var isRepeating: Bool = false
+    /// Whether this exercise's recorded distance counts toward mileage
+    /// aggregates (weekly totals, stat cards, charts). Defaults to `true` so
+    /// every pre-existing record keeps counting; turn off for casual activity
+    /// (e.g. walks) that should be tracked but not treated as training volume.
+    var countsTowardMileage: Bool = true
 
     /// JSON-encoded backing store for the nested recorded workout. SwiftData
     /// persists `Data?` reliably and CloudKit mirrors it as a blob. We do NOT
@@ -70,6 +75,7 @@ final class Exercise {
     ///   - notes: Optional notes.
     ///   - date: The day this activity is planned and/or performed.
     ///   - isRepeating: Whether this exercise repeats weekly on the same day.
+    ///   - countsTowardMileage: Whether the distance counts toward mileage aggregates.
     ///   - workout: Recorded data, if the activity has been performed.
     init(
         name: String,
@@ -79,6 +85,7 @@ final class Exercise {
         notes: String = "",
         date: Date,
         isRepeating: Bool = false,
+        countsTowardMileage: Bool = true,
         workout: Workout? = nil
     ) {
         self.id = UUID()
@@ -89,6 +96,7 @@ final class Exercise {
         self.notes = notes
         self.date = date
         self.isRepeating = isRepeating
+        self.countsTowardMileage = countsTowardMileage
         self.workout = workout
     }
 }

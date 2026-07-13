@@ -29,14 +29,15 @@ struct WorkoutDetailSheet: View {
     @State private var hours: Int
     @State private var minutes: Int
     @State private var seconds: Int
-    @State private var distance: Double
+    @State private var distance: Double?
     @State private var plannedHours: Int
     @State private var plannedMinutes: Int
     @State private var plannedSeconds: Int
-    @State private var plannedDistance: Double
+    @State private var plannedDistance: Double?
     @State private var date: Date
     @State private var notes: String
     @State private var feltRating: Int
+    @State private var countsTowardMileage: Bool
     @State private var showDeleteConfirmation = false
     /// Tracks whether the distance fields have been converted from their raw
     /// (miles) seed values into the user's display unit. `@Environment` is
@@ -60,12 +61,15 @@ struct WorkoutDetailSheet: View {
         _plannedMinutes = State(initialValue: (plannedTotal % 3600) / 60)
         _plannedSeconds = State(initialValue: plannedTotal % 60)
         // Seed with raw miles; converted to display units in .onAppear once
-        // `useMetricUnits` is available from the environment.
-        _distance = State(initialValue: workout?.distanceMiles ?? exercise.distanceMiles)
-        _plannedDistance = State(initialValue: exercise.distanceMiles)
+        // `useMetricUnits` is available from the environment. Zero distances
+        // seed as nil so the field shows its placeholder instead of "0.0".
+        let recordedMiles = workout?.distanceMiles ?? exercise.distanceMiles
+        _distance = State(initialValue: recordedMiles > 0 ? recordedMiles : nil)
+        _plannedDistance = State(initialValue: exercise.distanceMiles > 0 ? exercise.distanceMiles : nil)
         _date = State(initialValue: exercise.date)
         _notes = State(initialValue: workout?.notes ?? "")
         _feltRating = State(initialValue: workout?.feltRating ?? 0)
+        _countsTowardMileage = State(initialValue: exercise.countsTowardMileage)
     }
 
     /// Whether the form has enough data to save.
@@ -86,6 +90,7 @@ struct WorkoutDetailSheet: View {
                     date: $date,
                     notes: $notes,
                     feltRating: $feltRating,
+                    countsTowardMileage: $countsTowardMileage,
                     usesCompletedHeaders: true
                 ) {
                     PlannedTargetFields(
@@ -175,15 +180,17 @@ struct WorkoutDetailSheet: View {
         guard !hasConvertedDistance else { return }
         hasConvertedDistance = true
         if useMetricUnits {
-            distance = recordedMiles.toDisplayDistance(metric: true)
-            plannedDistance = exercise.distanceMiles.toDisplayDistance(metric: true)
+            distance = distance.map { _ in recordedMiles.toDisplayDistance(metric: true) }
+            plannedDistance = plannedDistance.map { _ in exercise.distanceMiles.toDisplayDistance(metric: true) }
         }
     }
 
     /// Persists all edits back to the exercise via `WorkoutEditor.apply`.
     private func save() {
-        let distanceMiles = useMetricUnits ? distance / 1.60934 : distance
-        let plannedDistanceMiles = useMetricUnits ? plannedDistance / 1.60934 : plannedDistance
+        let displayDistance = distance ?? 0
+        let displayPlannedDistance = plannedDistance ?? 0
+        let distanceMiles = useMetricUnits ? displayDistance / 1.60934 : displayDistance
+        let plannedDistanceMiles = useMetricUnits ? displayPlannedDistance / 1.60934 : displayPlannedDistance
         let edits = WorkoutEditor.EditedValues(
             name: name,
             type: type,
@@ -193,7 +200,8 @@ struct WorkoutDetailSheet: View {
             plannedDistanceMiles: plannedDistanceMiles,
             date: date.startOfDay,
             notes: notes,
-            feltRating: feltRating
+            feltRating: feltRating,
+            countsTowardMileage: countsTowardMileage
         )
         WorkoutEditor.apply(edits, to: exercise)
         // Explicit save so the Google Sheets sync trigger sees the edit
@@ -246,6 +254,8 @@ enum WorkoutEditor {
         var date: Date
         var notes: String
         var feltRating: Int
+        /// Whether the exercise's distance counts toward mileage aggregates.
+        var countsTowardMileage: Bool = true
     }
 
     /// Writes the edited identity fields (`name`, `type`, `date`) and planned
@@ -258,6 +268,7 @@ enum WorkoutEditor {
         exercise.date = edits.date
         exercise.durationSeconds = edits.plannedDurationSeconds
         exercise.distanceMiles = edits.plannedDistanceMiles
+        exercise.countsTowardMileage = edits.countsTowardMileage
         let existing = exercise.workout
         exercise.workout = Workout(
             durationSeconds: edits.durationSeconds,

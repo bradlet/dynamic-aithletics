@@ -29,10 +29,11 @@ struct RecordWorkoutSheet: View {
     @State private var hours = 0
     @State private var minutes = 0
     @State private var seconds = 0
-    @State private var distance = 0.0
+    @State private var distance: Double?
     @State private var notes = ""
     @State private var workoutDate = Date()
     @State private var feltRating = 0
+    @State private var countsTowardMileage = true
     @State private var previousType: ExerciseType = .run
 
     /// Whether the form has enough data to save.
@@ -52,7 +53,8 @@ struct RecordWorkoutSheet: View {
                     distance: $distance,
                     date: $workoutDate,
                     notes: $notes,
-                    feltRating: $feltRating
+                    feltRating: $feltRating,
+                    countsTowardMileage: $countsTowardMileage
                 )
             }
             .navigationTitle("Record Workout")
@@ -86,7 +88,12 @@ struct RecordWorkoutSheet: View {
             hours = total / 3600
             minutes = (total % 3600) / 60
             seconds = total % 60
-            distance = useMetricUnits ? exercise.distanceMiles.toDisplayDistance(metric: true) : exercise.distanceMiles
+            // Leave the field empty (placeholder) when there is no target
+            // distance rather than pre-filling a literal 0.0.
+            if exercise.distanceMiles > 0 {
+                distance = useMetricUnits ? exercise.distanceMiles.toDisplayDistance(metric: true) : exercise.distanceMiles
+            }
+            countsTowardMileage = exercise.countsTowardMileage
             previousType = exercise.type
         } else {
             name = type.rawValue
@@ -101,7 +108,8 @@ struct RecordWorkoutSheet: View {
     /// is created with planned targets mirroring the actuals.
     private func save() {
         let durationSec = hours * 3600 + minutes * 60 + seconds
-        let distanceMiles = useMetricUnits ? distance / 1.60934 : distance
+        let displayDistance = distance ?? 0
+        let distanceMiles = useMetricUnits ? displayDistance / 1.60934 : displayDistance
 
         let workout = Workout(
             durationSeconds: durationSec,
@@ -116,6 +124,7 @@ struct RecordWorkoutSheet: View {
             exercise.name = name
             exercise.type = type
             exercise.date = workoutDate
+            exercise.countsTowardMileage = countsTowardMileage
             exercise.workout = workout
         } else {
             let newExercise = Exercise(
@@ -126,6 +135,7 @@ struct RecordWorkoutSheet: View {
                 notes: notes,
                 date: workoutDate,
                 isRepeating: false,
+                countsTowardMileage: countsTowardMileage,
                 workout: workout
             )
             modelContext.insert(newExercise)

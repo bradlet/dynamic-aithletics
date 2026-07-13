@@ -116,7 +116,8 @@ struct WeeklyCalendarView: View {
             distanceMiles: exercise.distanceMiles,
             notes: exercise.notes,
             date: day,
-            isRepeating: false
+            isRepeating: false,
+            countsTowardMileage: exercise.countsTowardMileage
         )
         modelContext.insert(concrete)
         return concrete

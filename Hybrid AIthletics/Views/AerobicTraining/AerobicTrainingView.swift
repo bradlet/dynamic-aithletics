@@ -79,14 +79,16 @@ struct AerobicTrainingView: View {
         ExerciseVirtualExpansion.monthItems(allExercises: allExercises, month: selectedMonth)
     }
 
-    /// Sum of planned exercise distances for the current week.
+    /// Sum of planned exercise distances for the current week, excluding
+    /// exercises opted out of mileage totals.
     private var plannedMiles: Double {
-        weekExercises.reduce(0) { $0 + $1.distanceMiles }
+        weekExercises.filter(\.countsTowardMileage).reduce(0) { $0 + $1.distanceMiles }
     }
 
-    /// Sum of recorded (actual) distances for the current week.
+    /// Sum of recorded (actual) distances for the current week, excluding
+    /// exercises opted out of mileage totals.
     private var completedMiles: Double {
-        weekCompletedExercises.reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
+        weekCompletedExercises.filter(\.countsTowardMileage).reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
     var body: some View {
