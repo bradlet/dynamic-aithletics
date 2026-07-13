@@ -43,6 +43,7 @@ struct StrengthExerciseCard: View {
 
     @Environment(\.useMetricUnits) private var useMetricUnits
     @State private var showDeleteConfirmation = false
+    @State private var showPlanEditor = false
 
     /// Cached formatter for the latest-workout date, e.g. "Jun 12".
     private static let workoutDateFormatter: DateFormatter = {
@@ -73,6 +74,15 @@ struct StrengthExerciseCard: View {
                         .background(exercise.muscleGroup.color.opacity(0.15))
                         .foregroundStyle(exercise.muscleGroup.color)
                         .clipShape(Capsule())
+                    if let plan = exercise.plannedSummary {
+                        Text(plan)
+                            .font(.caption2.bold())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.secondary.opacity(0.15))
+                            .foregroundStyle(.secondary)
+                            .clipShape(Capsule())
+                    }
                     if let latest = exercise.latestWorkout {
                         Text(latestSummary(latest))
                             .font(.caption2)
@@ -101,6 +111,9 @@ struct StrengthExerciseCard: View {
             Button { onRecord() } label: {
                 Label("Record Weight", systemImage: "checkmark.circle")
             }
+            Button { showPlanEditor = true } label: {
+                Label("Edit Plan", systemImage: "list.number")
+            }
             Menu {
                 ForEach(0..<7, id: \.self) { dayIndex in
                     Button(Calendar.current.weekdaySymbols[dayIndex]) {
@@ -119,6 +132,9 @@ struct StrengthExerciseCard: View {
             Button(role: .destructive) { showDeleteConfirmation = true } label: {
                 Label("Delete", systemImage: "trash")
             }
+        }
+        .sheet(isPresented: $showPlanEditor) {
+            EditStrengthPlanSheet(exercise: exercise)
         }
         .confirmationDialog(
             "Delete \(exercise.name)?",
@@ -144,6 +160,8 @@ struct StrengthExerciseCard: View {
     let exercise = StrengthExercise(
         name: "Barbell Bench Press",
         muscleGroup: .chest,
+        plannedSets: 3,
+        plannedReps: 8,
         workouts: [StrengthWorkout(weightPounds: 185, recordingType: .maxWeight)]
     )
     return StrengthExerciseCard(
