@@ -3686,6 +3686,90 @@ struct ExerciseLibraryProviderTests {
     }
 }
 
+// MARK: - UserLibraryEditor Tests
+
+struct UserLibraryEditorTests {
+
+    @Test func makeExerciseTrimsAndPreservesFields() throws {
+        let exercise = try #require(UserLibraryEditor.makeExercise(
+            name: "  Landmine Press  ",
+            details: " Press the barbell end. ",
+            muscleGroup: .shoulders,
+            secondaryMuscleGroups: [.triceps, .core],
+            equipment: " Barbell ",
+            difficulty: "Intermediate"
+        ))
+        #expect(exercise.name == "Landmine Press")
+        #expect(exercise.details == "Press the barbell end.")
+        #expect(exercise.muscleGroup == .shoulders)
+        #expect(exercise.secondaryMuscleGroups == [.triceps, .core])
+        #expect(exercise.equipment == "Barbell")
+        #expect(exercise.difficulty == "Intermediate")
+    }
+
+    @Test func makeExerciseRejectsBlankName() {
+        let exercise = UserLibraryEditor.makeExercise(
+            name: "   \n ",
+            details: "d",
+            muscleGroup: .chest,
+            secondaryMuscleGroups: [],
+            equipment: "",
+            difficulty: "Beginner"
+        )
+        #expect(exercise == nil)
+    }
+
+    @Test func deleteRemovesOnlyMatchingUserEntry() throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        let keep = UserLibraryExercise(name: "Keep Me")
+        let remove = UserLibraryExercise(name: "Remove Me")
+        context.insert(keep)
+        context.insert(remove)
+        try context.save()
+
+        try UserLibraryEditor.delete(entryID: remove.id, in: context)
+
+        let fetched = try context.fetch(FetchDescriptor<UserLibraryExercise>())
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.name == "Keep Me")
+    }
+
+    @Test func deleteIgnoresBundledIDs() throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        context.insert(UserLibraryExercise(name: "Untouched"))
+        try context.save()
+
+        try UserLibraryEditor.delete(entryID: "barbell-bench-press", in: context)
+
+        let fetched = try context.fetch(FetchDescriptor<UserLibraryExercise>())
+        #expect(fetched.count == 1)
+    }
+
+    @Test func madeExerciseSurfacesThroughProviderAfterSave() async throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        let exercise = try #require(UserLibraryEditor.makeExercise(
+            name: "Sled Push",
+            details: "Drive forward.",
+            muscleGroup: .quads,
+            secondaryMuscleGroups: [.glutes],
+            equipment: "Sled",
+            difficulty: "Intermediate"
+        ))
+        context.insert(exercise)
+        try context.save()
+
+        let provider = UserLocalExerciseLibraryProvider(container: container)
+        let loaded = try await provider.loadExercises()
+        #expect(loaded.count == 1)
+        #expect(loaded.first?.name == "Sled Push")
+        #expect(loaded.first?.secondaryMuscleGroups == [.glutes])
+        #expect(loaded.first?.isUserCreated == true)
+    }
+}
+
 // MARK: - StrengthBoardPlanner Tests
 
 struct StrengthBoardPlannerTests {

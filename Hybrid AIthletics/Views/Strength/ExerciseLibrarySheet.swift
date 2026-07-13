@@ -18,9 +18,11 @@ struct ExerciseLibrarySheet: View {
     let onSelect: (LibraryExercise) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
     @State private var exercises: [LibraryExercise] = []
     @State private var searchText: String = ""
     @State private var loadFailed = false
+    @State private var showCreateForm = false
 
     /// Entries matching the current search, grouped by primary muscle group.
     private var groupedExercises: [(group: MuscleGroup, entries: [LibraryExercise])] {
@@ -58,15 +60,29 @@ struct ExerciseLibrarySheet: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showCreateForm = true
+                    } label: {
+                        Label("New Exercise", systemImage: "plus")
+                    }
+                    .accessibilityIdentifier("exerciseLibrary.create")
+                }
+            }
+            .sheet(isPresented: $showCreateForm, onDismiss: { Task { await load() } }) {
+                UserExerciseFormSheet()
             }
         }
-        .task {
-            do {
-                exercises = try await provider.loadExercises()
-                loadFailed = exercises.isEmpty
-            } catch {
-                loadFailed = true
-            }
+        .task { await load() }
+    }
+
+    /// Loads (or reloads) the library entries from the provider.
+    private func load() async {
+        do {
+            exercises = try await provider.loadExercises()
+            loadFailed = exercises.isEmpty
+        } catch {
+            loadFailed = true
         }
     }
 
@@ -84,6 +100,15 @@ struct ExerciseLibrarySheet: View {
                         } label: {
                             libraryRow(entry)
                         }
+                        .swipeActions(edge: .trailing) {
+                            if entry.isUserCreated {
+                                Button(role: .destructive) {
+                                    deleteUserEntry(entry)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
                 } header: {
                     Label(section.group.rawValue, systemImage: "figure.strengthtraining.traditional")
@@ -95,14 +120,34 @@ struct ExerciseLibrarySheet: View {
         .accessibilityIdentifier("exerciseLibrary.list")
     }
 
-    /// A single library row: name, equipment, and difficulty.
+    /// Deletes a user-created entry from the store and reloads the list.
+    private func deleteUserEntry(_ entry: LibraryExercise) {
+        try? UserLibraryEditor.delete(entryID: entry.id, in: modelContext)
+        Task { await load() }
+    }
+
+    /// A single library row: name, equipment, and difficulty, plus a
+    /// "Custom" tag on user-created entries.
     private func libraryRow(_ entry: LibraryExercise) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(entry.name)
-                .font(.subheadline.bold())
             HStack(spacing: 6) {
-                Text(entry.equipment)
-                Text("·")
+                Text(entry.name)
+                    .font(.subheadline.bold())
+                if entry.isUserCreated {
+                    Text("Custom")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(.tint.opacity(0.15))
+                        .foregroundStyle(.tint)
+                        .clipShape(Capsule())
+                }
+            }
+            HStack(spacing: 6) {
+                if !entry.equipment.isEmpty {
+                    Text(entry.equipment)
+                    Text("·")
+                }
                 Text(entry.difficulty)
             }
             .font(.caption)
