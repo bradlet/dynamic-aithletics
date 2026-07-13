@@ -253,9 +253,11 @@ struct ExerciseModelTests {
         #expect(exercise.durationSeconds == 1500)
         #expect(exercise.distanceMiles == 3.1)
         #expect(exercise.notes == "")
-        // A freshly planned exercise has no recorded workout.
+        // A freshly planned exercise has no recorded workout and counts
+        // toward mileage totals.
         #expect(exercise.workout == nil)
         #expect(exercise.isCompleted == false)
+        #expect(exercise.countsTowardMileage == true)
     }
 
     @Test func settingWorkoutMarksExerciseCompleted() {
@@ -345,6 +347,68 @@ struct ExerciseModelTests {
         let completed = all.filter { $0.workout != nil }
         #expect(completed.count == 2)
         #expect(Set(completed.map(\.name)) == ["Done A", "Done B"])
+    }
+}
+
+// MARK: - Exercise Mileage Counting Tests
+
+struct ExerciseMileageCountingTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = ModelContainerFactory.makePreviewContainer()
+        return ModelContext(container)
+    }
+
+    @Test func countsTowardMileageDefaultsTrue() {
+        let exercise = Exercise(
+            name: "Morning Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date()
+        )
+        #expect(exercise.countsTowardMileage == true)
+    }
+
+    @Test func countsTowardMileageCanBeSetFalse() {
+        let exercise = Exercise(
+            name: "Lunch Walk",
+            type: .other,
+            durationSeconds: 1200,
+            distanceMiles: 1.0,
+            date: Date(),
+            countsTowardMileage: false
+        )
+        #expect(exercise.countsTowardMileage == false)
+    }
+
+    @Test func countsTowardMileagePersistsThroughSwiftData() throws {
+        let context = try makeContext()
+        let walk = Exercise(
+            name: "Evening Walk",
+            type: .other,
+            durationSeconds: 1800,
+            distanceMiles: 1.5,
+            date: Date(),
+            countsTowardMileage: false,
+            workout: Workout(durationSeconds: 1800, distanceMiles: 1.5)
+        )
+        let run = Exercise(
+            name: "Tempo Run",
+            type: .tempoRun,
+            durationSeconds: 2400,
+            distanceMiles: 5.0,
+            date: Date(),
+            workout: Workout(durationSeconds: 2400, distanceMiles: 5.0)
+        )
+        context.insert(walk)
+        context.insert(run)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(fetched.count == 2)
+        #expect(fetched.first { $0.name == "Evening Walk" }?.countsTowardMileage == false)
+        #expect(fetched.first { $0.name == "Tempo Run" }?.countsTowardMileage == true)
     }
 }
 
@@ -1897,6 +1961,40 @@ struct WorkoutDetailEditTests {
         #expect(exercise.workout?.feltRating == 5)
     }
 
+    @Test func applyWritesCountsTowardMileage() throws {
+        let context = makeContext()
+        let exercise = Exercise(
+            name: "Walk",
+            type: .other,
+            durationSeconds: 1800,
+            distanceMiles: 1.5,
+            date: Date(timeIntervalSince1970: 1_700_000_000),
+            workout: Workout(durationSeconds: 1800, distanceMiles: 1.5)
+        )
+        context.insert(exercise)
+        #expect(exercise.countsTowardMileage == true)
+
+        var edits = WorkoutEditor.EditedValues(
+            name: exercise.name,
+            type: exercise.type,
+            durationSeconds: 1800,
+            distanceMiles: 1.5,
+            plannedDurationSeconds: 1800,
+            plannedDistanceMiles: 1.5,
+            date: exercise.date,
+            notes: "",
+            feltRating: 0,
+            countsTowardMileage: false
+        )
+        WorkoutEditor.apply(edits, to: exercise)
+        #expect(exercise.countsTowardMileage == false)
+
+        // Toggling back on through another edit restores counting.
+        edits.countsTowardMileage = true
+        WorkoutEditor.apply(edits, to: exercise)
+        #expect(exercise.countsTowardMileage == true)
+    }
+
     @Test func removeRecordingClearsWorkoutAndKeepsPlan() throws {
         let context = makeContext()
         let exercise = Exercise(
@@ -2097,13 +2195,14 @@ struct WorkoutAggregationsTests {
     /// Constructs a completed `Exercise` (no ModelContext) for pure-logic
     /// aggregation tests. The placement date lives on the exercise; the
     /// recorded miles/feltRating live in the nested workout.
-    private func makeExercise(date: Date, miles: Double, felt: Int = 0) -> Exercise {
+    private func makeExercise(date: Date, miles: Double, felt: Int = 0, counts: Bool = true) -> Exercise {
         Exercise(
             name: "test",
             type: .run,
             durationSeconds: 1800,
             distanceMiles: miles,
             date: date,
+            countsTowardMileage: counts,
             workout: Workout(
                 durationSeconds: 1800,
                 distanceMiles: miles,
@@ -2174,6 +2273,48 @@ struct WorkoutAggregationsTests {
         #expect(points.allSatisfy { $0.value == 0 })
     }
 
+    @Test func weeklyMileageExcludesOptedOutExercises() {
+        // A 5-mile run and a 2-mile walk (opted out) in the current week —
+        // only the run counts toward the weekly total.
+        let workouts = [
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 5.0),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 2.0, counts: false)
+        ]
+        let points = WorkoutAggregations.weeklyMileage(
+            exercises: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.last?.value == 5.0)
+    }
+
+    @Test func weeklyMileageWeekWithOnlyOptedOutIsZero() {
+        let workouts = [
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 2.0, counts: false)
+        ]
+        let points = WorkoutAggregations.weeklyMileage(
+            exercises: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.allSatisfy { $0.value == 0 })
+    }
+
+    @Test func weeklyAverageFeltRatingIncludesOptedOutExercises() {
+        // Opting out of mileage only affects distance totals; effort ratings
+        // still contribute to the weekly average.
+        let workouts = [
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, felt: 6),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 2.0, felt: 8, counts: false)
+        ]
+        let points = WorkoutAggregations.weeklyAverageFeltRating(
+            exercises: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.last?.value == 7.0)
+    }
+
     @Test func weeklyAverageFeltRatingExcludesZeroRatings() {
         // Three workouts in the current week rated 6, 8, 0 → avg = 7.0 (not 4.67).
         let workouts = [
@@ -2226,6 +2367,18 @@ struct WorkoutAggregationsTests {
             anchor: anchorWednesday
         )
         #expect(total == 9.0)
+    }
+
+    @Test func currentWeekMileageExcludesOptedOutExercises() {
+        let workouts = [
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 4.0),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 2.5, counts: false)
+        ]
+        let total = WorkoutAggregations.currentWeekMileage(
+            exercises: workouts,
+            anchor: anchorWednesday
+        )
+        #expect(total == 4.0)
     }
 
     @Test func currentWeekMileageBoundarySundayStart() {
