@@ -64,7 +64,7 @@ struct StrengthTrainingView: View {
                 }
             }
             .sheet(isPresented: $showLibrary) {
-                ExerciseLibrarySheet { entry in
+                ExerciseLibrarySheet(provider: .withUserLibrary(container: modelContext.container)) { entry in
                     addFromLibrary(entry)
                 }
             }

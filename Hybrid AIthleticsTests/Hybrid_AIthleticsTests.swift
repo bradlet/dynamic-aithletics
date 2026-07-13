@@ -3609,6 +3609,7 @@ struct ExerciseLibraryProviderTests {
             #expect(!exercise.name.isEmpty)
             #expect(!exercise.details.isEmpty)
             #expect(exercise.muscleGroup != .other, "bundled entries should have a known muscle group")
+            #expect(!exercise.id.hasPrefix(UserLibraryExercise.idPrefix), "bundled ids must never collide with user entries")
         }
     }
 
@@ -3640,6 +3641,48 @@ struct ExerciseLibraryProviderTests {
         let composite = CompositeExerciseLibraryProvider(providers: [good, bad])
         let merged = try await composite.loadExercises()
         #expect(merged.count == 1)
+    }
+
+    @Test func userLocalProviderReturnsEmptyForFreshStore() async throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let provider = UserLocalExerciseLibraryProvider(container: container)
+        let exercises = try await provider.loadExercises()
+        #expect(exercises.isEmpty)
+    }
+
+    @Test func userLocalProviderReturnsMappedEntries() async throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        context.insert(UserLibraryExercise(name: "Sled Push", muscleGroup: .quads, equipment: "Sled"))
+        context.insert(UserLibraryExercise(name: "Landmine Press", muscleGroup: .shoulders))
+        try context.save()
+
+        let provider = UserLocalExerciseLibraryProvider(container: container)
+        let exercises = try await provider.loadExercises()
+        #expect(exercises.count == 2)
+        let names = Set(exercises.map(\.name))
+        #expect(names == ["Sled Push", "Landmine Press"])
+        let allUserCreated = exercises.allSatisfy(\.isUserCreated)
+        #expect(allUserCreated)
+        let sledPush = exercises.first(where: { $0.name == "Sled Push" })
+        #expect(sledPush?.muscleGroup == .quads)
+        #expect(sledPush?.equipment == "Sled")
+    }
+
+    @Test func compositeMergesBundledAndUserEntries() async throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        context.insert(UserLibraryExercise(name: "Custom Carry", muscleGroup: .forearms))
+        try context.save()
+
+        let bundled = FixedLibraryProvider(entries: [entry(id: "a", name: "Bundled A")])
+        let composite = CompositeExerciseLibraryProvider(providers: [
+            bundled,
+            UserLocalExerciseLibraryProvider(container: container),
+        ])
+        let merged = try await composite.loadExercises()
+        let names = merged.map(\.name)
+        #expect(names == ["Bundled A", "Custom Carry"], "merged entries sort by name")
     }
 }
 

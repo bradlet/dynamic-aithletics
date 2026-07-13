@@ -9,6 +9,7 @@
 //
 
 import Foundation
+import SwiftData
 
 /// A source of strength exercise library entries.
 protocol ExerciseLibraryProvider: Sendable {
@@ -52,6 +53,35 @@ struct BundledExerciseLibraryProvider: ExerciseLibraryProvider {
     }
 }
 
+// MARK: - User-Local Provider
+
+/// Loads the user's own exercise entries from the SwiftData store. Empty by
+/// default — entries exist only once the user creates them in the library
+/// sheet. Backed by `UserLibraryExercise` models (CloudKit-synced), mapped to
+/// `LibraryExercise` values for the UI.
+struct UserLocalExerciseLibraryProvider: ExerciseLibraryProvider {
+    /// The store to read from. `ModelContainer` is Sendable, so the provider
+    /// can hop threads; each load opens its own context.
+    let container: ModelContainer
+
+    /// Creates a user-local provider reading from the given container.
+    /// - Parameter container: The SwiftData store holding user entries.
+    init(container: ModelContainer) {
+        self.container = container
+    }
+
+    /// Fetches all user-created entries, oldest first, mapped to
+    /// `LibraryExercise`. Reads through a fresh context, so only saved
+    /// changes are visible.
+    func loadExercises() async throws -> [LibraryExercise] {
+        let context = ModelContext(container)
+        let descriptor = FetchDescriptor<UserLibraryExercise>(
+            sortBy: [SortDescriptor(\.createdAt)]
+        )
+        return try context.fetch(descriptor).map(\.libraryEntry)
+    }
+}
+
 // MARK: - Composite Provider
 
 /// Merges entries from multiple providers. Later providers win on id
@@ -89,5 +119,16 @@ extension ExerciseLibraryProvider where Self == CompositeExerciseLibraryProvider
     /// server-backed provider (append it to the array to enable merging).
     static var `default`: CompositeExerciseLibraryProvider {
         CompositeExerciseLibraryProvider(providers: [BundledExerciseLibraryProvider()])
+    }
+
+    /// The bundled catalog merged with the user's own entries from the given
+    /// store. User entries come later so they'd win any id collision (none
+    /// occur in practice — user ids carry the "user-" prefix).
+    /// - Parameter container: The SwiftData store holding user entries.
+    static func withUserLibrary(container: ModelContainer) -> CompositeExerciseLibraryProvider {
+        CompositeExerciseLibraryProvider(providers: [
+            BundledExerciseLibraryProvider(),
+            UserLocalExerciseLibraryProvider(container: container),
+        ])
     }
 }
