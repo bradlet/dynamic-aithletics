@@ -276,7 +276,7 @@ struct AerobicTrainingView: View {
                     value: completedMiles.formattedDistance(metric: useMetricUnits)
                 )
                 ProgressStat(
-                    label: "Progress",
+                    label: "Training Progress",
                     completedMiles: completedMiles,
                     plannedMiles: plannedMiles,
                     metric: useMetricUnits
