@@ -19,15 +19,21 @@ struct SummaryStatsView: View {
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Environment(\.weekStartDay) private var weekStartDay
 
+    /// Exercises whose distance counts toward mileage totals. Walks and other
+    /// opted-out activity stay visible in History but don't inflate stats.
+    private var countingExercises: [Exercise] {
+        exercises.filter(\.countsTowardMileage)
+    }
+
     /// Total recorded mileage across all exercises.
     private var allTimeMiles: Double {
-        exercises.reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
+        countingExercises.reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
     /// Total recorded mileage for the current calendar year.
     private var yearMiles: Double {
         let startOfYear = Date().startOfYear
-        return exercises
+        return countingExercises
             .filter { $0.date >= startOfYear }
             .reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
@@ -35,7 +41,7 @@ struct SummaryStatsView: View {
     /// Total recorded mileage for the current calendar month.
     private var monthMiles: Double {
         let startOfMonth = Date().startOfMonth
-        return exercises
+        return countingExercises
             .filter { $0.date >= startOfMonth }
             .reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }

@@ -69,7 +69,8 @@ enum WorkoutAggregations {
 
     // MARK: - Mileage projections
 
-    /// Sums recorded `distanceMiles` per week across the rolling window.
+    /// Sums recorded `distanceMiles` per week across the rolling window,
+    /// excluding exercises opted out via `countsTowardMileage == false`.
     /// Empty weeks yield `0`. Values are always in miles; callers apply
     /// metric conversion at the display layer.
     static func weeklyMileage(
@@ -80,7 +81,9 @@ enum WorkoutAggregations {
     ) -> [WeeklyMetricPoint] {
         weeklyBuckets(exercises: exercises, weekCount: weekCount, anchor: anchor, firstWeekday: firstWeekday)
             .map { bucket in
-                let total = bucket.exercises.reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
+                let total = bucket.exercises
+                    .filter(\.countsTowardMileage)
+                    .reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
                 return WeeklyMetricPoint(weekStart: bucket.weekStart, value: total)
             }
     }
@@ -113,7 +116,8 @@ enum WorkoutAggregations {
     // MARK: - Stat-card helpers
 
     /// Total recorded miles in the week containing `anchor`, where the
-    /// week starts on `firstWeekday` (1=Sunday ... 7=Saturday).
+    /// week starts on `firstWeekday` (1=Sunday ... 7=Saturday). Exercises
+    /// opted out via `countsTowardMileage == false` are excluded.
     static func currentWeekMileage(
         exercises: [Exercise],
         anchor: Date,
@@ -123,6 +127,7 @@ enum WorkoutAggregations {
         calendar.firstWeekday = firstWeekday
         let weekStart = calendar.dateInterval(of: .weekOfYear, for: anchor)?.start
         return exercises
+            .filter(\.countsTowardMileage)
             .filter { calendar.dateInterval(of: .weekOfYear, for: $0.date)?.start == weekStart }
             .reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
