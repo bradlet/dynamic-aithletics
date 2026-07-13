@@ -36,6 +36,12 @@ final class StrengthExercise {
     var sortOrder: Int = 0
     /// Optional user notes for the exercise.
     var notes: String = ""
+    /// Planned number of sets, or `nil` when no plan is set. Plan-only data
+    /// for the user's weekly set structure — never part of the recorded
+    /// `StrengthWorkout` history.
+    var plannedSets: Int? = nil
+    /// Planned reps per set, or `nil` when no plan is set.
+    var plannedReps: Int? = nil
 
     /// Primary muscle group, denormalized from the library for card display.
     /// Unknown stored raw values (e.g. synced from a newer app version) read
@@ -69,6 +75,13 @@ final class StrengthExercise {
         workouts.max(by: { $0.date < $1.date })
     }
 
+    /// Compact plan badge text, e.g. "3×8". `nil` unless both sets and reps
+    /// are set.
+    var plannedSummary: String? {
+        guard let plannedSets, let plannedReps else { return nil }
+        return "\(plannedSets)×\(plannedReps)"
+    }
+
     /// Creates a strength exercise.
     /// - Parameters:
     ///   - name: Display name.
@@ -78,6 +91,8 @@ final class StrengthExercise {
     ///   - isOffloaded: Whether it starts in the offloaded section.
     ///   - sortOrder: Position within the lane section.
     ///   - notes: Optional notes.
+    ///   - plannedSets: Planned number of sets, if any.
+    ///   - plannedReps: Planned reps per set, if any.
     ///   - workouts: Recorded weight entries, if any.
     init(
         name: String,
@@ -87,6 +102,8 @@ final class StrengthExercise {
         isOffloaded: Bool = false,
         sortOrder: Int = 0,
         notes: String = "",
+        plannedSets: Int? = nil,
+        plannedReps: Int? = nil,
         workouts: [StrengthWorkout] = []
     ) {
         self.id = UUID()
@@ -97,6 +114,8 @@ final class StrengthExercise {
         self.isOffloaded = isOffloaded
         self.sortOrder = sortOrder
         self.notes = notes
+        self.plannedSets = plannedSets
+        self.plannedReps = plannedReps
         self.workouts = workouts
     }
 }

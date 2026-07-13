@@ -3333,8 +3333,35 @@ struct StrengthExerciseTests {
         #expect(exercise.isOffloaded == false)
         #expect(exercise.sortOrder == 0)
         #expect(exercise.notes == "")
+        #expect(exercise.plannedSets == nil)
+        #expect(exercise.plannedReps == nil)
+        #expect(exercise.plannedSummary == nil)
         #expect(exercise.workouts.isEmpty)
         #expect(exercise.latestWorkout == nil)
+    }
+
+    @Test func plannedSummaryFormatsSetsByReps() {
+        let exercise = StrengthExercise(name: "Bench Press", plannedSets: 3, plannedReps: 8)
+        #expect(exercise.plannedSummary == "3×8")
+    }
+
+    @Test func plannedSummaryNilWhenEitherFieldMissing() {
+        let setsOnly = StrengthExercise(name: "A", plannedSets: 3)
+        #expect(setsOnly.plannedSummary == nil)
+        let repsOnly = StrengthExercise(name: "B", plannedReps: 8)
+        #expect(repsOnly.plannedSummary == nil)
+    }
+
+    @Test func plannedFieldsPersistInModelContainer() throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        context.insert(StrengthExercise(name: "Front Squat", plannedSets: 5, plannedReps: 5))
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<StrengthExercise>())
+        #expect(fetched.first?.plannedSets == 5)
+        #expect(fetched.first?.plannedReps == 5)
+        #expect(fetched.first?.plannedSummary == "5×5")
     }
 
     @Test func explicitInitPreservesValues() {
