@@ -82,11 +82,6 @@ struct AerobicTrainingView: View {
         return concrete + virtual
     }
 
-    /// Recorded (completed) exercises within the currently displayed week.
-    private var weekCompletedExercises: [Exercise] {
-        weekExercises.filter(\.isCompleted)
-    }
-
     /// Calendar display items for the monthly overview.
     private var monthCalendarItems: [any CalendarDisplayable] {
         ExerciseVirtualExpansion.monthItems(allExercises: allExercises, month: selectedMonth)
@@ -95,13 +90,25 @@ struct AerobicTrainingView: View {
     /// Sum of planned exercise distances for the current week, excluding
     /// exercises opted out of mileage totals.
     private var plannedMiles: Double {
-        weekExercises.filter(\.countsTowardMileage).reduce(0) { $0 + $1.distanceMiles }
+        WeekMileage.planned(weekExercises)
     }
 
     /// Sum of recorded (actual) distances for the current week, excluding
     /// exercises opted out of mileage totals.
     private var completedMiles: Double {
-        weekCompletedExercises.filter(\.countsTowardMileage).reduce(0) { $0 + ($1.workout?.distanceMiles ?? 0) }
+        WeekMileage.completed(weekExercises)
+    }
+
+    /// Sum of planned exercise distances for the current week, including
+    /// exercises opted out of mileage totals.
+    private var allPlannedMiles: Double {
+        WeekMileage.planned(weekExercises, includeNonTracked: true)
+    }
+
+    /// Sum of recorded (actual) distances for the current week, including
+    /// exercises opted out of mileage totals.
+    private var allCompletedMiles: Double {
+        WeekMileage.completed(weekExercises, includeNonTracked: true)
     }
 
     var body: some View {
@@ -268,15 +275,18 @@ struct AerobicTrainingView: View {
                     label: "Completed",
                     value: completedMiles.formattedDistance(metric: useMetricUnits)
                 )
-                // Completion fraction
-                VStack(spacing: 2) {
-                    Text("Progress")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text(progressText)
-                        .font(.caption.bold())
-                        .foregroundStyle(progressColor)
-                }
+                ProgressStat(
+                    label: "Progress",
+                    completedMiles: completedMiles,
+                    plannedMiles: plannedMiles,
+                    metric: useMetricUnits
+                )
+                ProgressStat(
+                    label: "All Mileage",
+                    completedMiles: allCompletedMiles,
+                    plannedMiles: allPlannedMiles,
+                    metric: useMetricUnits
+                )
             }
         }
         .padding(.horizontal)
@@ -316,23 +326,6 @@ struct AerobicTrainingView: View {
         return "\(formatter.string(from: start)) - \(endFormatter.string(from: end))"
     }
 
-    /// Progress display text, e.g. "3.0 / 10.0 mi".
-    private var progressText: String {
-        let completed = completedMiles.toDisplayDistance(metric: useMetricUnits)
-        let planned = plannedMiles.toDisplayDistance(metric: useMetricUnits)
-        let unit = useMetricUnits ? "km" : "mi"
-        return String(format: "%.1f / %.1f %@", completed, planned, unit)
-    }
-
-    /// Color indicating completion progress.
-    private var progressColor: Color {
-        guard plannedMiles > 0 else { return .secondary }
-        let fraction = completedMiles / plannedMiles
-        if fraction >= 1.0 { return .green }
-        if fraction >= 0.5 { return .orange }
-        return .red
-    }
-
     /// Navigates forward or backward by one week.
     private func changeWeek(by weeks: Int) {
         if let newWeek = Calendar.current.date(byAdding: .weekOfYear, value: weeks, to: weekStart) {
@@ -368,6 +361,41 @@ private struct MileageStat: View {
             Text(value)
                 .font(.caption.bold())
         }
+    }
+}
+
+/// A completed-vs-planned fraction display colored by completion progress,
+/// e.g. "3.0 / 10.0 mi".
+private struct ProgressStat: View {
+    let label: String
+    let completedMiles: Double
+    let plannedMiles: Double
+    let metric: Bool
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(text)
+                .font(.caption.bold())
+                .foregroundStyle(color)
+        }
+    }
+
+    private var text: String {
+        let completed = completedMiles.toDisplayDistance(metric: metric)
+        let planned = plannedMiles.toDisplayDistance(metric: metric)
+        let unit = metric ? "km" : "mi"
+        return String(format: "%.1f / %.1f %@", completed, planned, unit)
+    }
+
+    private var color: Color {
+        guard plannedMiles > 0 else { return .secondary }
+        let fraction = completedMiles / plannedMiles
+        if fraction >= 1.0 { return .green }
+        if fraction >= 0.5 { return .orange }
+        return .red
     }
 }
 
