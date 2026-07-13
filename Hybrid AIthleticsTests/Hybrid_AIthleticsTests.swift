@@ -3478,6 +3478,104 @@ struct LibraryExerciseTests {
     }
 }
 
+// MARK: - UserLibraryExercise Tests
+
+struct UserLibraryExerciseTests {
+
+    @Test func defaultValues() {
+        let exercise = UserLibraryExercise(name: "Weighted Dips")
+        #expect(exercise.id.hasPrefix(UserLibraryExercise.idPrefix))
+        #expect(exercise.name == "Weighted Dips")
+        #expect(exercise.details == "")
+        #expect(exercise.muscleGroup == .other)
+        #expect(exercise.secondaryMuscleGroups.isEmpty)
+        #expect(exercise.equipment == "")
+        #expect(exercise.difficulty == "Beginner")
+    }
+
+    @Test func generatedIDsAreUnique() {
+        let first = UserLibraryExercise(name: "A")
+        let second = UserLibraryExercise(name: "A")
+        #expect(first.id != second.id)
+    }
+
+    @Test func explicitInitPreservesValues() {
+        let exercise = UserLibraryExercise(
+            name: "Landmine Press",
+            details: "Press the barbell end from the shoulder.",
+            muscleGroup: .shoulders,
+            secondaryMuscleGroups: [.triceps, .core],
+            equipment: "Barbell",
+            difficulty: "Intermediate"
+        )
+        #expect(exercise.name == "Landmine Press")
+        #expect(exercise.details == "Press the barbell end from the shoulder.")
+        #expect(exercise.muscleGroup == .shoulders)
+        #expect(exercise.secondaryMuscleGroups == [.triceps, .core])
+        #expect(exercise.equipment == "Barbell")
+        #expect(exercise.difficulty == "Intermediate")
+    }
+
+    @Test func secondaryMuscleGroupsRoundTripThroughBackingData() {
+        let exercise = UserLibraryExercise(name: "Zercher Squat")
+        exercise.secondaryMuscleGroups = [.core, .glutes]
+        #expect(exercise.secondaryMuscleGroups == [.core, .glutes])
+        exercise.secondaryMuscleGroups = []
+        #expect(exercise.secondaryMuscleGroups.isEmpty)
+    }
+
+    @Test func libraryEntryMapsAllFields() {
+        let exercise = UserLibraryExercise(
+            name: "Landmine Press",
+            details: "Press the barbell end from the shoulder.",
+            muscleGroup: .shoulders,
+            secondaryMuscleGroups: [.triceps],
+            equipment: "Barbell",
+            difficulty: "Advanced"
+        )
+        let entry = exercise.libraryEntry
+        #expect(entry.id == exercise.id)
+        #expect(entry.name == "Landmine Press")
+        #expect(entry.details == "Press the barbell end from the shoulder.")
+        #expect(entry.muscleGroup == .shoulders)
+        #expect(entry.secondaryMuscleGroups == [.triceps])
+        #expect(entry.equipment == "Barbell")
+        #expect(entry.difficulty == "Advanced")
+    }
+
+    @Test func persistsInModelContainer() throws {
+        let container = ModelContainerFactory.makePreviewContainer()
+        let context = ModelContext(container)
+        let exercise = UserLibraryExercise(
+            name: "Sled Push",
+            details: "Drive the sled forward.",
+            muscleGroup: .quads,
+            secondaryMuscleGroups: [.glutes, .calves],
+            equipment: "Sled",
+            difficulty: "Intermediate"
+        )
+        context.insert(exercise)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<UserLibraryExercise>())
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.name == "Sled Push")
+        #expect(fetched.first?.muscleGroup == .quads)
+        #expect(fetched.first?.secondaryMuscleGroups == [.glutes, .calves])
+        #expect(fetched.first?.equipment == "Sled")
+    }
+
+    @Test func isUserCreatedDetectsPrefix() {
+        let user = UserLibraryExercise(name: "Custom Move")
+        #expect(user.libraryEntry.isUserCreated)
+        let bundled = LibraryExercise(
+            id: "barbell-bench-press", name: "Barbell Bench Press", details: "d",
+            muscleGroup: .chest, equipment: "Barbell", difficulty: "Intermediate"
+        )
+        #expect(!bundled.isUserCreated)
+    }
+}
+
 // MARK: - Exercise Library Provider Tests
 
 /// Test double returning a fixed list of entries, or throwing.
