@@ -102,6 +102,47 @@ struct DateWeekTests {
         #expect(days.last!.shortWeekdayName == "Sat")
     }
 
+    @Test func daysInWeekFirstWeekdaySundayMatchesDefault() {
+        let date = makeDate(year: 2026, month: 4, day: 8)
+        #expect(date.daysInWeek(firstWeekday: 1) == date.daysInWeek())
+    }
+
+    @Test func daysInWeekFirstWeekdayMondayOrdersMondayFirst() {
+        // Wednesday April 8, 2026 -> Mon Apr 6 through Sun Apr 12
+        let wednesday = makeDate(year: 2026, month: 4, day: 8)
+        let days = wednesday.daysInWeek(firstWeekday: 2)
+        #expect(days.count == 7)
+        #expect(days.first == makeDate(year: 2026, month: 4, day: 6))
+        #expect(days.first!.weekdayName == "Monday")
+        #expect(days.last == makeDate(year: 2026, month: 4, day: 12))
+        #expect(days.last!.weekdayName == "Sunday")
+    }
+
+    @Test func daysInWeekFirstWeekdaySaturdayOrdersSaturdayFirst() {
+        // Wednesday April 8, 2026 -> Sat Apr 4 through Fri Apr 10
+        let wednesday = makeDate(year: 2026, month: 4, day: 8)
+        let days = wednesday.daysInWeek(firstWeekday: 7)
+        #expect(days.first == makeDate(year: 2026, month: 4, day: 4))
+        #expect(days.last == makeDate(year: 2026, month: 4, day: 10))
+    }
+
+    @Test func endOfWeekFirstWeekdaySundayMatchesDefault() {
+        let date = makeDate(year: 2026, month: 4, day: 8)
+        #expect(date.endOfWeek(firstWeekday: 1) == date.endOfWeek)
+    }
+
+    @Test func endOfWeekFirstWeekdayMondayEndsOnSunday() {
+        // Wednesday April 8, 2026 -> Sunday April 12, 23:59:59
+        let wednesday = makeDate(year: 2026, month: 4, day: 8)
+        let end = wednesday.endOfWeek(firstWeekday: 2)
+        let cal = Calendar.current
+        #expect(end.weekdayName == "Sunday")
+        #expect(cal.component(.day, from: end) == 12)
+        #expect(cal.component(.hour, from: end) == 23)
+        #expect(cal.component(.minute, from: end) == 59)
+        #expect(cal.component(.second, from: end) == 59)
+    }
+
     @Test func daysInMonthCorrectCount() {
         // April 2026 has 30 days
         let april = makeDate(year: 2026, month: 4, day: 15)

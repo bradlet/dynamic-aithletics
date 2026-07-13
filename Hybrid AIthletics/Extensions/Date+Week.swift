@@ -38,6 +38,16 @@ extension Date {
         return cal.date(bySettingHour: 23, minute: 59, second: 59, of: saturday) ?? saturday
     }
 
+    /// Returns 23:59:59 on the last day of the week containing this date,
+    /// where the week begins on the given weekday.
+    /// - Parameter firstWeekday: Calendar weekday convention (1=Sunday ... 7=Saturday).
+    func endOfWeek(firstWeekday: Int) -> Date {
+        let cal = Calendar.current
+        let start = startOfWeek(firstWeekday: firstWeekday)
+        guard let lastDay = cal.date(byAdding: .day, value: 6, to: start) else { return self }
+        return cal.date(bySettingHour: 23, minute: 59, second: 59, of: lastDay) ?? lastDay
+    }
+
     /// Returns midnight on the first day of the month containing this date.
     var startOfMonth: Date {
         let components = Calendar.current.dateComponents([.year, .month], from: self)
@@ -63,6 +73,18 @@ extension Date {
         let sunday = startOfWeek
         return (0..<7).compactMap {
             Calendar.current.date(byAdding: .day, value: $0, to: sunday)
+        }
+    }
+
+    /// Returns an array of 7 dates for the week containing this date, ordered
+    /// from the given first weekday. Unlike `daysInWeek()`, the week boundary
+    /// and ordering follow the user's week-start preference rather than the
+    /// fixed Sunday-first layout used by the monthly grids.
+    /// - Parameter firstWeekday: Calendar weekday convention (1=Sunday ... 7=Saturday).
+    func daysInWeek(firstWeekday: Int) -> [Date] {
+        let start = startOfWeek(firstWeekday: firstWeekday)
+        return (0..<7).compactMap {
+            Calendar.current.date(byAdding: .day, value: $0, to: start)
         }
     }
 
