@@ -28,13 +28,25 @@ struct AddExerciseSheet: View {
     @State private var distance: Double?
     @State private var notes = ""
     @State private var scheduledDate: Date
-    @State private var isRepeating = false
     @State private var countsTowardMileage = true
+
+    // Recurrence (create mode only).
+    @State private var cadence: SeriesCadence = .oneOff
+    @State private var seriesEndDate: Date
+    @State private var addProgression = false
+    @State private var progressionEveryN = 1
+    @State private var progressionDistanceDelta: Double?
+    @State private var progressionDurationMinutes: Int?
+
+    /// Whether the series-scope save dialog is showing (edit mode, series member).
+    @State private var showSeriesSaveDialog = false
 
     init(exercise: Exercise?, defaultDate: Date) {
         self.exercise = exercise
         self.defaultDate = defaultDate
         _scheduledDate = State(initialValue: defaultDate)
+        let threeMonthsOut = Calendar.current.date(byAdding: .month, value: 3, to: defaultDate) ?? defaultDate
+        _seriesEndDate = State(initialValue: threeMonthsOut)
     }
 
     /// Whether the form has enough data to save.
@@ -50,7 +62,9 @@ struct AddExerciseSheet: View {
                 durationSection
                 distanceSection
                 dateSection
-                repeatSection
+                if exercise == nil {
+                    recurrenceSection
+                }
                 notesSection
             }
             .navigationTitle(exercise == nil ? "Schedule Exercise" : "Edit Exercise")
@@ -60,9 +74,24 @@ struct AddExerciseSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(!canSave)
+                    Button("Save") {
+                        if exercise?.seriesID != nil {
+                            showSeriesSaveDialog = true
+                        } else {
+                            save()
+                        }
+                    }
+                    .disabled(!canSave)
                 }
+            }
+            .confirmationDialog(
+                "This exercise is part of a series.",
+                isPresented: $showSeriesSaveDialog,
+                titleVisibility: .visible
+            ) {
+                Button("Save This Exercise Only") { save() }
+                Button("Save This + Future") { saveThisAndFuture() }
+                Button("Cancel", role: .cancel) {}
             }
             .onAppear { populateFields() }
             .onChange(of: type) { oldType, newType in
@@ -123,15 +152,63 @@ struct AddExerciseSheet: View {
         }
     }
 
-    /// Toggle for weekly repetition.
-    private var repeatSection: some View {
+    /// Recurrence controls: cadence, end date, and optional progression.
+    /// Creating a recurring exercise bulk-inserts one concrete exercise per
+    /// occurrence — there is no template to maintain afterward.
+    private var recurrenceSection: some View {
         Section {
-            Toggle("Repeat Weekly", isOn: $isRepeating)
+            Picker("Repeat", selection: $cadence) {
+                ForEach(SeriesCadence.allCases) { cadence in
+                    Text(cadence.displayName).tag(cadence)
+                }
+            }
+            .accessibilityIdentifier("addExercise.cadencePicker")
+            if cadence != .oneOff {
+                DatePicker(
+                    "End Date",
+                    selection: $seriesEndDate,
+                    in: scheduledDate...,
+                    displayedComponents: .date
+                )
+                Toggle("Add Progression", isOn: $addProgression)
+                if addProgression {
+                    Stepper(
+                        "Every \(progressionEveryN) occurrence\(progressionEveryN == 1 ? "" : "s")",
+                        value: $progressionEveryN,
+                        in: 1...12
+                    )
+                    HStack {
+                        Text("Distance change")
+                        Spacer()
+                        TextField("0.0", value: $progressionDistanceDelta, format: .number.precision(.fractionLength(1)))
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                        Text(useMetricUnits ? "km" : "mi")
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack {
+                        Text("Duration change")
+                        Spacer()
+                        TextField("0", value: $progressionDurationMinutes, format: .number)
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 80)
+                        Text("min")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         } footer: {
-            if isRepeating {
-                Text("This exercise will appear every \(scheduledDate.weekdayName).")
+            if cadence != .oneOff {
+                Text("\(plannedOccurrenceCount) exercises will be created.")
             }
         }
+    }
+
+    /// How many exercises the current recurrence settings would create.
+    private var plannedOccurrenceCount: Int {
+        SeriesGenerator.occurrences(for: currentSeriesSpec).count
     }
 
     /// Notes text field.
@@ -160,7 +237,6 @@ struct AddExerciseSheet: View {
             }
             notes = exercise.notes
             scheduledDate = exercise.date
-            isRepeating = exercise.isRepeating
             countsTowardMileage = exercise.countsTowardMileage
         } else {
             name = type.rawValue
@@ -168,34 +244,99 @@ struct AddExerciseSheet: View {
         }
     }
 
-    /// Saves the exercise (creates new or updates existing).
-    private func save() {
-        let durationSec = hours * 3600 + minutes * 60 + seconds
-        let distanceMiles = useMetricUnits ? (distance ?? 0) / 1.60934 : (distance ?? 0)
+    /// Planned duration from the wheel pickers, in seconds.
+    private var enteredDurationSeconds: Int {
+        hours * 3600 + minutes * 60 + seconds
+    }
 
+    /// Planned distance converted from display units to internal miles.
+    private var enteredDistanceMiles: Double {
+        useMetricUnits ? (distance ?? 0) / 1.60934 : (distance ?? 0)
+    }
+
+    /// The series spec described by the current form fields (create mode).
+    private var currentSeriesSpec: ExerciseSeriesSpec {
+        var progression: SeriesProgression?
+        if addProgression {
+            let deltaDisplay = progressionDistanceDelta ?? 0
+            progression = SeriesProgression(
+                everyN: progressionEveryN,
+                distanceDeltaMiles: useMetricUnits ? deltaDisplay / 1.60934 : deltaDisplay,
+                durationDeltaSeconds: (progressionDurationMinutes ?? 0) * 60
+            )
+        }
+        return ExerciseSeriesSpec(
+            name: name,
+            type: type,
+            startDate: scheduledDate,
+            cadence: cadence,
+            endDate: seriesEndDate,
+            baseDistanceMiles: enteredDistanceMiles,
+            baseDurationSeconds: enteredDurationSeconds,
+            notes: notes,
+            countsTowardMileage: countsTowardMileage,
+            progression: progression
+        )
+    }
+
+    /// Saves the exercise: updates the existing one in edit mode, otherwise
+    /// creates a single exercise or a whole series depending on cadence.
+    private func save() {
         if let exercise {
-            exercise.name = name
-            exercise.type = type
-            exercise.durationSeconds = durationSec
-            exercise.distanceMiles = distanceMiles
-            exercise.notes = notes
-            exercise.date = scheduledDate.startOfDay
-            exercise.isRepeating = isRepeating
-            exercise.countsTowardMileage = countsTowardMileage
-        } else {
+            applyFields(to: exercise)
+        } else if cadence == .oneOff {
             let newExercise = Exercise(
                 name: name,
                 type: type,
-                durationSeconds: durationSec,
-                distanceMiles: distanceMiles,
+                durationSeconds: enteredDurationSeconds,
+                distanceMiles: enteredDistanceMiles,
                 notes: notes,
                 date: scheduledDate,
-                isRepeating: isRepeating,
                 countsTowardMileage: countsTowardMileage
             )
             modelContext.insert(newExercise)
+        } else {
+            ExercisePlanner.createSeries(currentSeriesSpec, in: modelContext)
         }
         dismiss()
+    }
+
+    /// Saves the edited exercise, then applies the same planned-field values
+    /// to every later member of its series. Date changes stay on this
+    /// exercise only.
+    private func saveThisAndFuture() {
+        guard let exercise, let seriesID = exercise.seriesID else {
+            save()
+            return
+        }
+        // Capture the scope boundary before the date edit can move it.
+        let scopeStart = exercise.date
+        applyFields(to: exercise)
+        ExercisePlanner.updateSeries(
+            seriesID,
+            scope: .from(scopeStart),
+            mutations: SeriesMutations(
+                name: name,
+                type: type,
+                notes: notes,
+                countsTowardMileage: countsTowardMileage,
+                distanceMiles: enteredDistanceMiles,
+                durationSeconds: enteredDurationSeconds
+            ),
+            in: modelContext
+        )
+        dismiss()
+    }
+
+    /// Writes the form fields onto the given exercise.
+    private func applyFields(to exercise: Exercise) {
+        exercise.name = name
+        exercise.type = type
+        exercise.durationSeconds = enteredDurationSeconds
+        exercise.distanceMiles = enteredDistanceMiles
+        exercise.notes = notes
+        exercise.date = scheduledDate.startOfDay
+        exercise.countsTowardMileage = countsTowardMileage
     }
 }
 
