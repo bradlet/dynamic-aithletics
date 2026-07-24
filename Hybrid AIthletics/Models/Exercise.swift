@@ -32,6 +32,9 @@ final class Exercise {
     var date: Date = Date()
     /// Whether this exercise repeats on the same day every week.
     var isRepeating: Bool = false
+    /// Groups exercises that were bulk-created as one recurring series.
+    /// `nil` means a standalone one-off exercise.
+    var seriesID: UUID? = nil
     /// Whether this exercise's recorded distance counts toward mileage
     /// aggregates (weekly totals, stat cards, charts). Defaults to `true` so
     /// every pre-existing record keeps counting; turn off for casual activity
@@ -75,6 +78,7 @@ final class Exercise {
     ///   - notes: Optional notes.
     ///   - date: The day this activity is planned and/or performed.
     ///   - isRepeating: Whether this exercise repeats weekly on the same day.
+    ///   - seriesID: Identifier shared by exercises bulk-created as one series.
     ///   - countsTowardMileage: Whether the distance counts toward mileage aggregates.
     ///   - workout: Recorded data, if the activity has been performed.
     init(
@@ -85,6 +89,7 @@ final class Exercise {
         notes: String = "",
         date: Date,
         isRepeating: Bool = false,
+        seriesID: UUID? = nil,
         countsTowardMileage: Bool = true,
         workout: Workout? = nil
     ) {
@@ -96,6 +101,7 @@ final class Exercise {
         self.notes = notes
         self.date = date
         self.isRepeating = isRepeating
+        self.seriesID = seriesID
         self.countsTowardMileage = countsTowardMileage
         self.workout = workout
     }

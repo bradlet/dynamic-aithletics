@@ -761,6 +761,76 @@ struct ExerciseRepeatTests {
     }
 }
 
+// MARK: - Exercise Series Membership Tests
+
+struct ExerciseSeriesMembershipTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = ModelContainerFactory.makePreviewContainer()
+        return ModelContext(container)
+    }
+
+    @Test func seriesIDDefaultsNil() {
+        let exercise = Exercise(
+            name: "Run", type: .run,
+            durationSeconds: 1800, distanceMiles: 3.0,
+            date: Date()
+        )
+        #expect(exercise.seriesID == nil)
+    }
+
+    @Test func seriesIDCanBeSet() {
+        let seriesID = UUID()
+        let exercise = Exercise(
+            name: "Run", type: .run,
+            durationSeconds: 1800, distanceMiles: 3.0,
+            date: Date(), seriesID: seriesID
+        )
+        #expect(exercise.seriesID == seriesID)
+    }
+
+    @Test func seriesIDPersistence() throws {
+        let context = try makeContext()
+        let seriesID = UUID()
+        let exercise = Exercise(
+            name: "Weekly Tempo", type: .tempoRun,
+            durationSeconds: 2400, distanceMiles: 5.0,
+            date: Date(), seriesID: seriesID
+        )
+        context.insert(exercise)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.seriesID == seriesID)
+    }
+
+    @Test func fetchBySeriesIDPredicate() throws {
+        let context = try makeContext()
+        let seriesID = UUID()
+        let member = Exercise(
+            name: "Series Run", type: .run,
+            durationSeconds: 1800, distanceMiles: 3.0,
+            date: Date(), seriesID: seriesID
+        )
+        let standalone = Exercise(
+            name: "One-off Run", type: .run,
+            durationSeconds: 1800, distanceMiles: 3.0,
+            date: Date()
+        )
+        context.insert(member)
+        context.insert(standalone)
+        try context.save()
+
+        let descriptor = FetchDescriptor<Exercise>(
+            predicate: #Predicate { $0.seriesID == seriesID }
+        )
+        let fetched = try context.fetch(descriptor)
+        #expect(fetched.count == 1)
+        #expect(fetched.first?.name == "Series Run")
+    }
+}
+
 // MARK: - Workout Felt Rating Tests
 
 struct WorkoutFeltRatingTests {
