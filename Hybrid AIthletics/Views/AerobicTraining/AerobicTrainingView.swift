@@ -51,40 +51,18 @@ struct AerobicTrainingView: View {
         selectedWeek.endOfWeek(firstWeekday: weekStartDay)
     }
 
-    /// Exercises scheduled within the currently displayed week, including virtual repeating exercises.
+    /// Exercises scheduled within the currently displayed week.
     private var weekExercises: [Exercise] {
         let start = weekStart
         let end = weekEnd
-
-        // Concrete exercises scheduled this week
-        let concrete = allExercises.filter { $0.date >= start && $0.date <= end }
-
-        // Only show virtual repeating exercises for current week and future
-        guard start >= Date().startOfWeek(firstWeekday: weekStartDay) else { return concrete }
-
-        // Repeating exercises from other weeks
-        let repeating = allExercises.filter { exercise in
-            exercise.isRepeating
-            && !(exercise.date >= start && exercise.date <= end)
-        }
-
-        // Include repeating exercises whose day-of-week has no matching concrete instance
-        let virtual = repeating.filter { template in
-            let targetDayIndex = template.date.weekdayIndex
-            let alreadyExists = concrete.contains { concreteExercise in
-                concreteExercise.date.weekdayIndex == targetDayIndex
-                && concreteExercise.name == template.name
-                && concreteExercise.type == template.type
-            }
-            return !alreadyExists
-        }
-
-        return concrete + virtual
+        return allExercises.filter { $0.date >= start && $0.date <= end }
     }
 
     /// Calendar display items for the monthly overview.
     private var monthCalendarItems: [any CalendarDisplayable] {
-        ExerciseVirtualExpansion.monthItems(allExercises: allExercises, month: selectedMonth)
+        let start = selectedMonth.startOfMonth
+        let end = selectedMonth.endOfMonth
+        return allExercises.filter { $0.date >= start && $0.date <= end }
     }
 
     /// Sum of planned exercise distances for the current week, excluding

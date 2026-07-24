@@ -40,8 +40,6 @@ struct ExerciseCardView: View {
     var hasRecordedWorkout: Bool = false
     /// Binding to the ID of the exercise currently showing its delete button (shared across all cards).
     @Binding var swipeDeleteActiveID: UUID?
-    /// Whether this card displays a virtual repeating instance (template shown on a different week).
-    var isVirtual: Bool = false
     @Environment(\.useMetricUnits) private var useMetricUnits
     @Environment(\.modelContext) private var modelContext
     @State private var showDeleteConfirmation = false
@@ -49,6 +47,11 @@ struct ExerciseCardView: View {
     /// Whether this card is currently in delete mode (red X visible).
     private var isInDeleteMode: Bool {
         swipeDeleteActiveID == exercise.id
+    }
+
+    /// Whether this exercise was bulk-created as part of a recurring series.
+    private var isSeriesMember: Bool {
+        exercise.seriesID != nil
     }
 
     var body: some View {
@@ -98,17 +101,22 @@ struct ExerciseCardView: View {
             }
         }
         .confirmationDialog(
-            isVirtual ? "Stop repeating \(exercise.name)?" : "Delete \(exercise.name)?",
+            "Delete \(exercise.name)?",
             isPresented: $showDeleteConfirmation,
             titleVisibility: .visible
         ) {
-            Button(isVirtual ? "Stop Repeating" : "Delete", role: .destructive) { deleteExerciseAndWorkouts() }
+            if isSeriesMember {
+                Button("Delete This Exercise", role: .destructive) { deleteExercise() }
+                Button("Delete This + Future", role: .destructive) { deleteThisAndFutureInSeries() }
+            } else {
+                Button("Delete", role: .destructive) { deleteExercise() }
+            }
             Button("Cancel", role: .cancel) {
                 withAnimation(.spring(response: 0.3)) { swipeDeleteActiveID = nil }
             }
         } message: {
-            if isVirtual {
-                Text("This exercise will no longer appear on future weeks. Past exercises and workout records will be preserved.")
+            if isSeriesMember {
+                Text("This exercise is part of a series. Deleting this and future occurrences preserves completed workouts.")
             } else {
                 Text("This will permanently delete the exercise and all associated workout records.")
             }
@@ -144,7 +152,7 @@ struct ExerciseCardView: View {
                 .foregroundStyle(.secondary)
             }
             Spacer()
-            if exercise.isRepeating {
+            if isSeriesMember {
                 Image(systemName: "repeat")
                     .foregroundStyle(.secondary)
                     .font(.caption2)
@@ -208,15 +216,20 @@ struct ExerciseCardView: View {
         .background(Color.red)
     }
 
-    /// Deletes this exercise (its nested workout record goes with it), or
-    /// stops recurrence for virtual repeating instances.
-    private func deleteExerciseAndWorkouts() {
+    /// Deletes this exercise (its nested workout record goes with it).
+    private func deleteExercise() {
         withAnimation {
-            if isVirtual {
-                exercise.isRepeating = false
-            } else {
-                modelContext.delete(exercise)
-            }
+            modelContext.delete(exercise)
+            swipeDeleteActiveID = nil
+        }
+    }
+
+    /// Deletes this exercise and every later member of its series.
+    /// Completed members are preserved by the planner.
+    private func deleteThisAndFutureInSeries() {
+        guard let seriesID = exercise.seriesID else { return }
+        withAnimation {
+            ExercisePlanner.deleteSeries(seriesID, scope: .from(exercise.date), in: modelContext)
             swipeDeleteActiveID = nil
         }
     }

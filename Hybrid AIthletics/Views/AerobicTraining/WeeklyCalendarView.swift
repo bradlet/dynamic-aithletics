@@ -5,7 +5,6 @@
 //  Renders 7 day swimlanes for the selected week, ordered by the caller
 //  (top day = the user's configured week start).
 //  Each lane shows exercises for that day and accepts drops for rescheduling.
-//  Supports virtual repeating exercises that are materialized on interaction.
 //
 
 import SwiftUI
@@ -26,7 +25,7 @@ struct ExerciseNavigationRequest: Equatable, Identifiable {
 struct WeeklyCalendarView: View {
     /// The 7 dates for the displayed week, in display order (first = week start).
     let days: [Date]
-    /// Exercises for the current week, including virtual repeating exercises (pre-filtered by parent).
+    /// Exercises for the current week (pre-filtered by parent).
     let exercises: [Exercise]
     /// Called when the user taps the schedule button on a specific day.
     let onAdd: (Date) -> Void
@@ -42,8 +41,6 @@ struct WeeklyCalendarView: View {
     @Environment(\.modelContext) private var modelContext
     /// Tracks which exercise card is currently showing the swipe-to-delete button.
     @State private var swipeDeleteActiveID: UUID?
-    /// Whether to show the alert for attempting to drag a repeating exercise.
-    @State private var showRepeatingDragAlert = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -57,14 +54,8 @@ struct WeeklyCalendarView: View {
                         },
                         onAdd: { onAdd(day) },
                         onQuickAdd: { onQuickAdd(day) },
-                        onRecord: { exercise in
-                            let target = materializeIfNeeded(exercise, for: day)
-                            onRecord(target)
-                        },
-                        onEdit: { exercise in
-                            let target = materializeIfNeeded(exercise, for: day)
-                            onEdit(target)
-                        },
+                        onRecord: onRecord,
+                        onEdit: onEdit,
                         onDrop: { exerciseID in
                             rescheduleExercise(id: exerciseID, to: day)
                         },
@@ -77,11 +68,6 @@ struct WeeklyCalendarView: View {
                 }
             }
         }
-        .alert("Cannot Move Repeating Exercise", isPresented: $showRepeatingDragAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Repeating exercises cannot be moved. Delete the exercise and create a new one on the desired day.")
-        }
         .simultaneousGesture(
             TapGesture().onEnded {
                 if swipeDeleteActiveID != nil {
@@ -93,35 +79,9 @@ struct WeeklyCalendarView: View {
         )
     }
 
-    /// Returns exercises scheduled for the given day, including virtual repeating exercises.
+    /// Returns exercises scheduled for the given day.
     private func exercisesForDay(_ day: Date) -> [Exercise] {
-        exercises.filter { exercise in
-            exercise.date.isSameDay(as: day)
-            || (exercise.isRepeating && exercise.date.weekdayIndex == day.weekdayIndex)
-        }
-    }
-
-    /// Returns true if the exercise is a virtual repeating instance (template from another week).
-    private func isVirtual(_ exercise: Exercise) -> Bool {
-        exercise.isRepeating && !days.contains(where: { exercise.date.isSameDay(as: $0) })
-    }
-
-    /// Materializes a virtual repeating exercise into a concrete instance for the given day. Returns the original if already concrete.
-    @discardableResult
-    private func materializeIfNeeded(_ exercise: Exercise, for day: Date) -> Exercise {
-        guard isVirtual(exercise) else { return exercise }
-        let concrete = Exercise(
-            name: exercise.name,
-            type: exercise.type,
-            durationSeconds: exercise.durationSeconds,
-            distanceMiles: exercise.distanceMiles,
-            notes: exercise.notes,
-            date: day,
-            isRepeating: false,
-            countsTowardMileage: exercise.countsTowardMileage
-        )
-        modelContext.insert(concrete)
-        return concrete
+        exercises.filter { $0.date.isSameDay(as: day) }
     }
 
     /// Checks whether this exercise has been recorded.
@@ -130,13 +90,8 @@ struct WeeklyCalendarView: View {
     }
 
     /// Moves an exercise to a new day by updating its date.
-    /// Blocks repeating exercises with an alert instead of rescheduling.
     private func rescheduleExercise(id: UUID, to day: Date) {
         guard let exercise = exercises.first(where: { $0.id == id }) else { return }
-        if exercise.isRepeating {
-            showRepeatingDragAlert = true
-            return
-        }
         withAnimation {
             exercise.date = day.startOfDay
         }
@@ -239,8 +194,7 @@ private struct DaySwimlane: View {
                 onRecord: { onRecord(exercise) },
                 onEdit: { onEdit(exercise) },
                 hasRecordedWorkout: hasWorkoutsRecorded(exercise),
-                swipeDeleteActiveID: $swipeDeleteActiveID,
-                isVirtual: exercise.isRepeating && !exercise.date.isSameDay(as: day)
+                swipeDeleteActiveID: $swipeDeleteActiveID
             )
         }
     }

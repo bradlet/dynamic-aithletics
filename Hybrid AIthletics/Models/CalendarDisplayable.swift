@@ -22,13 +22,3 @@ protocol CalendarDisplayable {
 extension Exercise: CalendarDisplayable {
     var displayDate: Date { date }
 }
-
-// MARK: - CalendarDot
-
-/// Lightweight value type for virtual repeating exercise indicators.
-/// Used in the month calendar when we need dots for repeating exercises
-/// without creating transient SwiftData model objects.
-struct CalendarDot: CalendarDisplayable {
-    let displayDate: Date
-    let type: ExerciseType
-}
