@@ -831,6 +831,233 @@ struct ExerciseSeriesMembershipTests {
     }
 }
 
+// MARK: - Series Generator Tests
+
+struct SeriesGeneratorTests {
+
+    /// Helper to create a date from components.
+    private func makeDate(year: Int, month: Int, day: Int) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return Calendar.current.date(from: components)!
+    }
+
+    /// Convenience spec with sensible defaults for run-shaped tests.
+    private func makeSpec(
+        startDate: Date,
+        cadence: SeriesCadence,
+        endDate: Date,
+        baseDistanceMiles: Double = 3.0,
+        baseDurationSeconds: Int = 1800,
+        progression: SeriesProgression? = nil
+    ) -> ExerciseSeriesSpec {
+        ExerciseSeriesSpec(
+            name: "Run", type: .run,
+            startDate: startDate, cadence: cadence, endDate: endDate,
+            baseDistanceMiles: baseDistanceMiles,
+            baseDurationSeconds: baseDurationSeconds,
+            progression: progression
+        )
+    }
+
+    @Test func oneOffYieldsSingleOccurrenceIgnoringEndDate() {
+        let start = makeDate(year: 2026, month: 4, day: 5)
+        // End date before start would empty any recurring cadence; oneOff ignores it.
+        let spec = makeSpec(startDate: start, cadence: .oneOff, endDate: makeDate(year: 2026, month: 1, day: 1))
+        let occurrences = SeriesGenerator.occurrences(for: spec)
+        #expect(occurrences.count == 1)
+        #expect(occurrences.first?.date == start)
+        #expect(occurrences.first?.distanceMiles == 3.0)
+        #expect(occurrences.first?.durationSeconds == 1800)
+    }
+
+    @Test func weeklyCountOverSixMonths() {
+        // Jan 5 → Jul 5 2026 is 181 days: occurrences at 7k for k = 0...25.
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 7, day: 5)
+        )
+        #expect(SeriesGenerator.occurrences(for: spec).count == 26)
+    }
+
+    @Test func weeklyOccurrencesAreSevenDaysApart() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 2, day: 5)
+        )
+        let dates = SeriesGenerator.occurrences(for: spec).map(\.date)
+        for (earlier, later) in zip(dates, dates.dropFirst()) {
+            let days = Calendar.current.dateComponents([.day], from: earlier, to: later).day
+            #expect(days == 7)
+        }
+    }
+
+    @Test func endDateLandingOnOccurrenceIsIncluded() {
+        // Jan 5 + 21 days = Jan 26: end date exactly on the 4th occurrence.
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 1, day: 26)
+        )
+        let occurrences = SeriesGenerator.occurrences(for: spec)
+        #expect(occurrences.count == 4)
+        #expect(occurrences.last?.date == makeDate(year: 2026, month: 1, day: 26))
+    }
+
+    @Test func endDateJustBeforeNextOccurrenceExcludesIt() {
+        // Jan 25 is one day before the Jan 26 occurrence.
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 1, day: 25)
+        )
+        #expect(SeriesGenerator.occurrences(for: spec).count == 3)
+    }
+
+    @Test func biweeklyOccurrencesAreFourteenDaysApart() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .biweekly,
+            endDate: makeDate(year: 2026, month: 3, day: 5)
+        )
+        let dates = SeriesGenerator.occurrences(for: spec).map(\.date)
+        #expect(dates.count == 5)
+        for (earlier, later) in zip(dates, dates.dropFirst()) {
+            let days = Calendar.current.dateComponents([.day], from: earlier, to: later).day
+            #expect(days == 14)
+        }
+    }
+
+    @Test func monthlyPreservesDayOfMonth() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 15),
+            cadence: .monthly,
+            endDate: makeDate(year: 2026, month: 6, day: 15)
+        )
+        let dates = SeriesGenerator.occurrences(for: spec).map(\.date)
+        #expect(dates.count == 6)
+        for date in dates {
+            #expect(Calendar.current.component(.day, from: date) == 15)
+        }
+    }
+
+    @Test func monthlyClampsFebruaryButRestoresMarch() {
+        // Jan 31 anchored monthly: Feb clamps to 28 (2026), Mar restores to 31.
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 31),
+            cadence: .monthly,
+            endDate: makeDate(year: 2026, month: 3, day: 31)
+        )
+        let dates = SeriesGenerator.occurrences(for: spec).map(\.date)
+        #expect(dates == [
+            makeDate(year: 2026, month: 1, day: 31),
+            makeDate(year: 2026, month: 2, day: 28),
+            makeDate(year: 2026, month: 3, day: 31)
+        ])
+    }
+
+    @Test func monthlyClampsToLeapDayInLeapYear() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2028, month: 1, day: 31),
+            cadence: .monthly,
+            endDate: makeDate(year: 2028, month: 2, day: 29)
+        )
+        let dates = SeriesGenerator.occurrences(for: spec).map(\.date)
+        #expect(dates.last == makeDate(year: 2028, month: 2, day: 29))
+    }
+
+    @Test func endDateBeforeStartYieldsEmpty() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 4, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 4, day: 4)
+        )
+        #expect(SeriesGenerator.occurrences(for: spec).isEmpty)
+    }
+
+    @Test func progressionEveryOccurrenceIsLinear() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 1, day: 26),
+            progression: SeriesProgression(everyN: 1, distanceDeltaMiles: 0.5, durationDeltaSeconds: 300)
+        )
+        let occurrences = SeriesGenerator.occurrences(for: spec)
+        #expect(occurrences.map(\.distanceMiles) == [3.0, 3.5, 4.0, 4.5])
+        #expect(occurrences.map(\.durationSeconds) == [1800, 2100, 2400, 2700])
+    }
+
+    @Test func progressionEveryOtherOccurrenceStepsInPairs() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 2, day: 2),
+            progression: SeriesProgression(everyN: 2, distanceDeltaMiles: 0.5, durationDeltaSeconds: 300)
+        )
+        let occurrences = SeriesGenerator.occurrences(for: spec)
+        #expect(occurrences.map(\.distanceMiles) == [3.0, 3.0, 3.5, 3.5, 4.0])
+    }
+
+    @Test func progressionEveryFourthStepsAtIndexFour() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 2, day: 9),
+            progression: SeriesProgression(everyN: 4, distanceDeltaMiles: 1.0, durationDeltaSeconds: 600)
+        )
+        let occurrences = SeriesGenerator.occurrences(for: spec)
+        #expect(occurrences.map(\.distanceMiles) == [3.0, 3.0, 3.0, 3.0, 4.0, 4.0])
+    }
+
+    @Test func nilProgressionKeepsBaseValues() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 2, day: 2)
+        )
+        let occurrences = SeriesGenerator.occurrences(for: spec)
+        #expect(occurrences.allSatisfy { $0.distanceMiles == 3.0 && $0.durationSeconds == 1800 })
+    }
+
+    @Test func negativeDeltaClampsAtZero() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 2, day: 2),
+            baseDistanceMiles: 1.0,
+            baseDurationSeconds: 600,
+            progression: SeriesProgression(everyN: 1, distanceDeltaMiles: -0.5, durationDeltaSeconds: -300)
+        )
+        let occurrences = SeriesGenerator.occurrences(for: spec)
+        #expect(occurrences.map(\.distanceMiles) == [1.0, 0.5, 0.0, 0.0, 0.0])
+        #expect(occurrences.map(\.durationSeconds) == [600, 300, 0, 0, 0])
+    }
+
+    @Test func zeroEveryNIsTreatedAsOne() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 1, day: 19),
+            progression: SeriesProgression(everyN: 0, distanceDeltaMiles: 0.5)
+        )
+        let occurrences = SeriesGenerator.occurrences(for: spec)
+        #expect(occurrences.map(\.distanceMiles) == [3.0, 3.5, 4.0])
+    }
+
+    @Test func occurrenceCountIsCapped() {
+        let spec = makeSpec(
+            startDate: makeDate(year: 2026, month: 1, day: 1),
+            cadence: .weekly,
+            endDate: makeDate(year: 2046, month: 1, day: 1)
+        )
+        #expect(SeriesGenerator.occurrences(for: spec).count == SeriesGenerator.maxOccurrences)
+    }
+}
+
 // MARK: - Workout Felt Rating Tests
 
 struct WorkoutFeltRatingTests {
