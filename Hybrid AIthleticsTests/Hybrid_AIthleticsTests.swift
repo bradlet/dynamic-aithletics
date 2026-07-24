@@ -1058,6 +1058,238 @@ struct SeriesGeneratorTests {
     }
 }
 
+// MARK: - Exercise Planner Tests
+
+struct ExercisePlannerTests {
+
+    private func makeDate(year: Int, month: Int, day: Int) -> Date {
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        return Calendar.current.date(from: components)!
+    }
+
+    private func makeContext() throws -> ModelContext {
+        let container = ModelContainerFactory.makePreviewContainer()
+        return ModelContext(container)
+    }
+
+    /// Weekly Jan 5 → Jan 26 2026 spec: 4 occurrences.
+    private func makeWeeklySpec(progression: SeriesProgression? = nil) -> ExerciseSeriesSpec {
+        ExerciseSeriesSpec(
+            name: "Series Run", type: .run,
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .weekly,
+            endDate: makeDate(year: 2026, month: 1, day: 26),
+            baseDistanceMiles: 3.0,
+            baseDurationSeconds: 1800,
+            progression: progression
+        )
+    }
+
+    @Test func createSeriesInsertsAllOccurrencesWithSharedID() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+
+        #expect(created.count == 4)
+        let seriesID = created.first?.seriesID
+        #expect(seriesID != nil)
+        #expect(created.allSatisfy { $0.seriesID == seriesID })
+        #expect(created.map(\.date) == created.map(\.date).sorted())
+
+        let fetched = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(fetched.count == 4)
+    }
+
+    @Test func createSeriesAppliesProgressionValues() throws {
+        let context = try makeContext()
+        let progression = SeriesProgression(everyN: 1, distanceDeltaMiles: 0.5, durationDeltaSeconds: 300)
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(progression: progression), in: context)
+        #expect(created.map(\.distanceMiles) == [3.0, 3.5, 4.0, 4.5])
+        #expect(created.map(\.durationSeconds) == [1800, 2100, 2400, 2700])
+    }
+
+    @Test func createOneOffInsertsSingleUntaggedExercise() throws {
+        let context = try makeContext()
+        let spec = ExerciseSeriesSpec(
+            name: "One-off", type: .run,
+            startDate: makeDate(year: 2026, month: 1, day: 5),
+            cadence: .oneOff,
+            endDate: makeDate(year: 2026, month: 1, day: 5),
+            baseDistanceMiles: 3.0,
+            baseDurationSeconds: 1800
+        )
+        let created = ExercisePlanner.createSeries(spec, in: context)
+        #expect(created.count == 1)
+        #expect(created.first?.seriesID == nil)
+    }
+
+    @Test func membersScopeFromIncludesBoundaryDay() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        let all = ExercisePlanner.members(of: seriesID, in: context)
+        #expect(all.count == 4)
+
+        // Scope from the 3rd occurrence's exact day: includes it and the 4th.
+        let scoped = ExercisePlanner.members(
+            of: seriesID,
+            scope: .from(makeDate(year: 2026, month: 1, day: 19)),
+            in: context
+        )
+        #expect(scoped.count == 2)
+        #expect(scoped.first?.date == makeDate(year: 2026, month: 1, day: 19))
+    }
+
+    @Test func updateSeriesSetsFieldsAcrossScope() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        ExercisePlanner.updateSeries(
+            seriesID, scope: .all,
+            mutations: SeriesMutations(name: "Tempo", distanceMiles: 5.0),
+            in: context
+        )
+        let members = ExercisePlanner.members(of: seriesID, in: context)
+        #expect(members.allSatisfy { $0.name == "Tempo" && $0.distanceMiles == 5.0 })
+    }
+
+    @Test func updateSeriesScaleDistanceDeloads() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        ExercisePlanner.updateSeries(
+            seriesID, scope: .all,
+            mutations: SeriesMutations(scaleDistance: 0.8),
+            in: context
+        )
+        let members = ExercisePlanner.members(of: seriesID, in: context)
+        #expect(members.allSatisfy { abs($0.distanceMiles - 2.4) < 0.0001 })
+    }
+
+    @Test func updateSeriesShiftDaysMovesDates() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        ExercisePlanner.updateSeries(
+            seriesID, scope: .all,
+            mutations: SeriesMutations(shiftDays: 2),
+            in: context
+        )
+        let members = ExercisePlanner.members(of: seriesID, in: context)
+        #expect(members.first?.date == makeDate(year: 2026, month: 1, day: 7))
+        #expect(members.last?.date == makeDate(year: 2026, month: 1, day: 28))
+    }
+
+    @Test func updateSeriesFromScopeLeavesEarlierMembersUntouched() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        ExercisePlanner.updateSeries(
+            seriesID,
+            scope: .from(makeDate(year: 2026, month: 1, day: 19)),
+            mutations: SeriesMutations(distanceMiles: 6.0),
+            in: context
+        )
+        let members = ExercisePlanner.members(of: seriesID, in: context)
+        #expect(members.map(\.distanceMiles) == [3.0, 3.0, 6.0, 6.0])
+    }
+
+    @Test func updateSeriesLeavesRecordedWorkoutUntouched() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        let recorded = Workout(durationSeconds: 1750, distanceMiles: 3.1)
+        created[0].workout = recorded
+
+        ExercisePlanner.updateSeries(
+            seriesID, scope: .all,
+            mutations: SeriesMutations(distanceMiles: 5.0),
+            in: context
+        )
+        #expect(created[0].distanceMiles == 5.0)
+        #expect(created[0].workout == recorded)
+    }
+
+    @Test func deleteSeriesPreservesCompletedByDefault() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        created[1].workout = Workout(durationSeconds: 1800, distanceMiles: 3.0)
+
+        ExercisePlanner.deleteSeries(seriesID, scope: .all, in: context)
+        try context.save()
+
+        let remaining = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(remaining.count == 1)
+        #expect(remaining.first?.isCompleted == true)
+    }
+
+    @Test func deleteSeriesIncludeCompletedRemovesEverything() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        created[1].workout = Workout(durationSeconds: 1800, distanceMiles: 3.0)
+
+        ExercisePlanner.deleteSeries(seriesID, scope: .all, includeCompleted: true, in: context)
+        try context.save()
+
+        let remaining = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(remaining.isEmpty)
+    }
+
+    @Test func deleteSeriesFromScopeTruncates() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        ExercisePlanner.deleteSeries(
+            seriesID,
+            scope: .from(makeDate(year: 2026, month: 1, day: 19)),
+            in: context
+        )
+        try context.save()
+
+        let remaining = ExercisePlanner.members(of: seriesID, in: context)
+        #expect(remaining.count == 2)
+        #expect(remaining.last?.date == makeDate(year: 2026, month: 1, day: 12))
+    }
+
+    @Test func detachClearsSeriesIDAndKeepsExercise() throws {
+        let context = try makeContext()
+        let created = ExercisePlanner.createSeries(makeWeeklySpec(), in: context)
+        try context.save()
+        let seriesID = try #require(created.first?.seriesID)
+
+        ExercisePlanner.detach(created[0])
+        try context.save()
+
+        #expect(created[0].seriesID == nil)
+        #expect(ExercisePlanner.members(of: seriesID, in: context).count == 3)
+        let all = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(all.count == 4)
+    }
+}
+
 // MARK: - Workout Felt Rating Tests
 
 struct WorkoutFeltRatingTests {
