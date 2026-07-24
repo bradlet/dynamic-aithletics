@@ -192,7 +192,6 @@ enum WorkoutCSV {
             distanceMiles: miles,
             notes: row.notes,
             date: row.date,
-            isRepeating: false,
             workout: Workout(
                 durationSeconds: row.durationSeconds,
                 distanceMiles: miles,

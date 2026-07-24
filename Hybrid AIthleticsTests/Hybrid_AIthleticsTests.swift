@@ -681,86 +681,6 @@ struct ExerciseDragItemTests {
     }
 }
 
-// MARK: - Exercise Repeat Tests
-
-struct ExerciseRepeatTests {
-
-    /// Helper to create a date from components.
-    private func makeDate(year: Int, month: Int, day: Int) -> Date {
-        var components = DateComponents()
-        components.year = year
-        components.month = month
-        components.day = day
-        return Calendar.current.date(from: components)!
-    }
-
-    private func makeContext() throws -> ModelContext {
-        let container = ModelContainerFactory.makePreviewContainer()
-        return ModelContext(container)
-    }
-
-    @Test func isRepeatingDefaultsFalse() {
-        let exercise = Exercise(
-            name: "Run", type: .run,
-            durationSeconds: 1800, distanceMiles: 3.0,
-            date: Date()
-        )
-        #expect(exercise.isRepeating == false)
-    }
-
-    @Test func isRepeatingCanBeSetTrue() {
-        let exercise = Exercise(
-            name: "Run", type: .run,
-            durationSeconds: 1800, distanceMiles: 3.0,
-            date: Date(), isRepeating: true
-        )
-        #expect(exercise.isRepeating == true)
-    }
-
-    @Test func repeatingExerciseMatchesDayOfWeek() {
-        // April 5, 2026 is a Sunday
-        let sunday = makeDate(year: 2026, month: 4, day: 5)
-        let exercise = Exercise(
-            name: "Sunday Run", type: .run,
-            durationSeconds: 1800, distanceMiles: 3.0,
-            date: sunday, isRepeating: true
-        )
-        #expect(exercise.date.weekdayIndex == 0)
-        #expect(exercise.isRepeating == true)
-    }
-
-    @Test func repeatingExercisePersistence() throws {
-        let context = try makeContext()
-        let exercise = Exercise(
-            name: "Weekly Tempo", type: .tempoRun,
-            durationSeconds: 2400, distanceMiles: 5.0,
-            date: Date(), isRepeating: true
-        )
-        context.insert(exercise)
-        try context.save()
-
-        let descriptor = FetchDescriptor<Exercise>()
-        let fetched = try context.fetch(descriptor)
-        #expect(fetched.count == 1)
-        #expect(fetched.first?.isRepeating == true)
-    }
-
-    @Test func nonRepeatingExercisePersistence() throws {
-        let context = try makeContext()
-        let exercise = Exercise(
-            name: "One-off Run", type: .run,
-            durationSeconds: 1800, distanceMiles: 3.0,
-            date: Date(), isRepeating: false
-        )
-        context.insert(exercise)
-        try context.save()
-
-        let descriptor = FetchDescriptor<Exercise>()
-        let fetched = try context.fetch(descriptor)
-        #expect(fetched.first?.isRepeating == false)
-    }
-}
-
 // MARK: - Exercise Series Membership Tests
 
 struct ExerciseSeriesMembershipTests {
@@ -1953,7 +1873,7 @@ struct WorkoutCSVTests {
         #expect(exercise.type == .easyRun)
         #expect(exercise.durationSeconds == 2400)
         #expect(abs(exercise.distanceMiles - 4.0) < 0.001)
-        #expect(exercise.isRepeating == false)
+        #expect(exercise.seriesID == nil)
         #expect(exercise.date == referenceDate)
         #expect(exercise.isCompleted == true)
 

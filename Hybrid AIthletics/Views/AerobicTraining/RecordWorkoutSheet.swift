@@ -134,7 +134,6 @@ struct RecordWorkoutSheet: View {
                 distanceMiles: distanceMiles,
                 notes: notes,
                 date: workoutDate,
-                isRepeating: false,
                 countsTowardMileage: countsTowardMileage,
                 workout: workout
             )

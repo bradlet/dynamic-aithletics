@@ -60,7 +60,6 @@ enum UITestFixtures {
                 distanceMiles: miles,
                 notes: "Seeded fixture \(number)",
                 date: day,
-                isRepeating: false,
                 workout: Workout(
                     durationSeconds: duration,
                     distanceMiles: workoutMiles,
@@ -72,27 +71,26 @@ enum UITestFixtures {
         }
 
         // Seed planned-only exercises for aerobic training UI tests.
-        // A repeating exercise (Tuesday runs)
-        let tuesday = calendar.date(byAdding: .day, value: 1, to: baseDate) ?? baseDate
-        let repeatingExercise = Exercise(
-            name: "Test Repeating Run",
+        // A weekly series created through the production bulk path (4 rows).
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: baseDate) ?? baseDate
+        let seriesSpec = ExerciseSeriesSpec(
+            name: "Test Series Run",
             type: .run,
-            durationSeconds: 1800,
-            distanceMiles: 3.0,
-            date: tuesday,
-            isRepeating: true
+            startDate: tomorrow,
+            cadence: .weekly,
+            endDate: calendar.date(byAdding: .weekOfYear, value: 3, to: tomorrow) ?? tomorrow,
+            baseDistanceMiles: 3.0,
+            baseDurationSeconds: 1800
         )
-        context.insert(repeatingExercise)
+        ExercisePlanner.createSeries(seriesSpec, in: context)
 
         // A concrete exercise tomorrow
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: baseDate) ?? baseDate
         let concreteExercise = Exercise(
             name: "Test Concrete Run",
             type: .longRun,
             durationSeconds: 3600,
             distanceMiles: 6.0,
-            date: tomorrow,
-            isRepeating: false
+            date: tomorrow
         )
         context.insert(concreteExercise)
 

@@ -30,8 +30,6 @@ final class Exercise {
     /// performed. Keeps the full timestamp so the History tab can display
     /// time-of-day. Day/week grouping flows through `Date+Week` helpers.
     var date: Date = Date()
-    /// Whether this exercise repeats on the same day every week.
-    var isRepeating: Bool = false
     /// Groups exercises that were bulk-created as one recurring series.
     /// `nil` means a standalone one-off exercise.
     var seriesID: UUID? = nil
@@ -77,7 +75,6 @@ final class Exercise {
     ///   - distanceMiles: Planned distance in miles.
     ///   - notes: Optional notes.
     ///   - date: The day this activity is planned and/or performed.
-    ///   - isRepeating: Whether this exercise repeats weekly on the same day.
     ///   - seriesID: Identifier shared by exercises bulk-created as one series.
     ///   - countsTowardMileage: Whether the distance counts toward mileage aggregates.
     ///   - workout: Recorded data, if the activity has been performed.
@@ -88,7 +85,6 @@ final class Exercise {
         distanceMiles: Double,
         notes: String = "",
         date: Date,
-        isRepeating: Bool = false,
         seriesID: UUID? = nil,
         countsTowardMileage: Bool = true,
         workout: Workout? = nil
@@ -100,7 +96,6 @@ final class Exercise {
         self.distanceMiles = distanceMiles
         self.notes = notes
         self.date = date
-        self.isRepeating = isRepeating
         self.seriesID = seriesID
         self.countsTowardMileage = countsTowardMileage
         self.workout = workout

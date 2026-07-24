@@ -59,7 +59,6 @@ enum HealthKitWorkoutMapper {
             distanceMiles: miles,
             notes: "",
             date: dto.startDate,
-            isRepeating: false,
             workout: Workout(
                 durationSeconds: seconds,
                 distanceMiles: miles,
