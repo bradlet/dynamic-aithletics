@@ -83,6 +83,9 @@ Views/
 - `Extensions/Date+Week.swift` — all calendar arithmetic
 - `Extensions/Double+Distance.swift` — distance, duration, and pace formatting (`Int.formattedPace(distanceMiles:metric:)` for min/mile and min/km)
 - `Models/ExerciseType.swift` — exercise type enum with icons and colors
+- `Models/ExerciseSeriesSpec.swift` — Codable spec for a recurring exercise series (cadence, inclusive end date, every-N-occurrences progression)
+- `Services/ExercisePlanner/SeriesGenerator.swift` — pure spec → dated occurrences expansion (monthly anchored to start date, 400-occurrence cap)
+- `Services/ExercisePlanner/ExercisePlanner.swift` — bulk CRUD for series-tagged exercises (`seriesID`); the single mutation surface intended for future AI-coach tool calls. Recurring plans are eager bulk inserts of concrete `Exercise` rows — there are no templates or virtual instances.
 - `Services/AICoach/AICoachService.swift` — protocol + `AICoachError` enum
 - `Services/AICoach/MLXAICoachService.swift` — production coach; swap model via `modelID` constant
 - `Services/AICoach/CoachTypeConversions.swift` — SwiftData → AICoachCore type bridge
