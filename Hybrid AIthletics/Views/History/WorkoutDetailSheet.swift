@@ -36,7 +36,8 @@ struct WorkoutDetailSheet: View {
     @State private var plannedDistance: Double?
     @State private var date: Date
     @State private var notes: String
-    @State private var feltRating: Int
+    @State private var feeling: Int?
+    @State private var perceivedExertion: Int?
     @State private var countsTowardMileage: Bool
     @State private var showDeleteConfirmation = false
     /// Tracks whether the distance fields have been converted from their raw
@@ -68,7 +69,10 @@ struct WorkoutDetailSheet: View {
         _plannedDistance = State(initialValue: exercise.distanceMiles > 0 ? exercise.distanceMiles : nil)
         _date = State(initialValue: exercise.date)
         _notes = State(initialValue: workout?.notes ?? "")
-        _feltRating = State(initialValue: workout?.feltRating ?? 0)
+        // `workout?.feeling` is Int?? — flatten so an absent workout and an
+        // unrated one both seed as nil.
+        _feeling = State(initialValue: workout?.feeling ?? nil)
+        _perceivedExertion = State(initialValue: workout?.perceivedExertion ?? nil)
         _countsTowardMileage = State(initialValue: exercise.countsTowardMileage)
     }
 
@@ -89,7 +93,8 @@ struct WorkoutDetailSheet: View {
                     distance: $distance,
                     date: $date,
                     notes: $notes,
-                    feltRating: $feltRating,
+                    feeling: $feeling,
+                    perceivedExertion: $perceivedExertion,
                     countsTowardMileage: $countsTowardMileage,
                     usesCompletedHeaders: true
                 ) {
@@ -200,7 +205,8 @@ struct WorkoutDetailSheet: View {
             plannedDistanceMiles: plannedDistanceMiles,
             date: date.startOfDay,
             notes: notes,
-            feltRating: feltRating,
+            feeling: feeling,
+            perceivedExertion: perceivedExertion,
             countsTowardMileage: countsTowardMileage
         )
         WorkoutEditor.apply(edits, to: exercise)
@@ -253,7 +259,10 @@ enum WorkoutEditor {
         var plannedDistanceMiles: Double
         var date: Date
         var notes: String
-        var feltRating: Int
+        /// Subjective 1-5 feeling; `nil` when unrated.
+        var feeling: Int?
+        /// Subjective 1-10 perceived exertion; `nil` when unrated.
+        var perceivedExertion: Int?
         /// Whether the exercise's distance counts toward mileage aggregates.
         var countsTowardMileage: Bool = true
     }
@@ -274,7 +283,8 @@ enum WorkoutEditor {
             durationSeconds: edits.durationSeconds,
             distanceMiles: edits.distanceMiles,
             notes: edits.notes,
-            feltRating: edits.feltRating,
+            feeling: edits.feeling,
+            perceivedExertion: edits.perceivedExertion,
             source: existing?.source ?? WorkoutSource.manual.rawValue,
             externalID: existing?.externalID
         )
@@ -300,7 +310,8 @@ enum WorkoutEditor {
             durationSeconds: 1800,
             distanceMiles: 4.0,
             notes: "Legs felt springy today.",
-            feltRating: 8
+            feeling: 4,
+            perceivedExertion: 7
         )
     )
     container.mainContext.insert(exercise)

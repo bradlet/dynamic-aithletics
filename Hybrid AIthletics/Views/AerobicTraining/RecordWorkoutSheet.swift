@@ -32,7 +32,8 @@ struct RecordWorkoutSheet: View {
     @State private var distance: Double?
     @State private var notes = ""
     @State private var workoutDate = Date()
-    @State private var feltRating = 0
+    @State private var feeling: Int?
+    @State private var perceivedExertion: Int?
     @State private var countsTowardMileage = true
     @State private var previousType: ExerciseType = .run
 
@@ -53,7 +54,8 @@ struct RecordWorkoutSheet: View {
                     distance: $distance,
                     date: $workoutDate,
                     notes: $notes,
-                    feltRating: $feltRating,
+                    feeling: $feeling,
+                    perceivedExertion: $perceivedExertion,
                     countsTowardMileage: $countsTowardMileage
                 )
             }
@@ -115,7 +117,8 @@ struct RecordWorkoutSheet: View {
             durationSeconds: durationSec,
             distanceMiles: distanceMiles,
             notes: notes,
-            feltRating: feltRating,
+            feeling: feeling,
+            perceivedExertion: perceivedExertion,
             source: WorkoutSource.manual.rawValue
         )
 

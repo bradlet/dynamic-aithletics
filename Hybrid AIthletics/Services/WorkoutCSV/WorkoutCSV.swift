@@ -53,7 +53,10 @@ struct WorkoutCSVRow: Equatable {
     /// Distance expressed in the unit chosen by the caller of `parse`/`encode`.
     var distance: Double
     var notes: String
-    var feltRating: Int
+    /// Subjective 1-5 feeling; `nil` when the column is blank.
+    var feeling: Int?
+    /// Subjective 1-10 perceived exertion; `nil` when the column is blank.
+    var perceivedExertion: Int?
 }
 
 /// Errors raised only for whole-file failures. Per-row problems are
@@ -83,7 +86,10 @@ enum WorkoutCSV {
 
     /// Fixed schema column names. Column order is authoritative; header names
     /// are written on export but ignored on import (the schema is fixed).
-    static let headerColumns = ["date", "name", "type", "duration", "distance", "notes", "felt_rating"]
+    static let headerColumns = [
+        "date", "name", "type", "duration", "distance", "notes",
+        "feeling", "perceived_exertion"
+    ]
 
     /// CSV header line (joined `headerColumns`).
     static let header = headerColumns.joined(separator: ",")
@@ -137,7 +143,8 @@ enum WorkoutCSV {
             formatDuration(workout?.durationSeconds ?? exercise.durationSeconds),
             formatDistance(distance),
             workout?.notes ?? exercise.notes,
-            String(workout?.feltRating ?? 0)
+            workout?.feeling.map(String.init) ?? "",
+            workout?.perceivedExertion.map(String.init) ?? ""
         ]
     }
 
@@ -196,7 +203,8 @@ enum WorkoutCSV {
                 durationSeconds: row.durationSeconds,
                 distanceMiles: miles,
                 notes: row.notes,
-                feltRating: row.feltRating,
+                feeling: row.feeling,
+                perceivedExertion: row.perceivedExertion,
                 source: WorkoutSource.csv.rawValue
             )
         )
@@ -404,7 +412,8 @@ enum WorkoutCSV {
     /// Decodes a tokenized row's fields into a `WorkoutCSVRow`.
     /// Returns `.skip` with a short human-readable reason on failure.
     /// Minimum 5 fields required (date, name, type, duration, distance).
-    /// Notes (field 6) defaults to "" and felt_rating (field 7) defaults to 0.
+    /// Notes (field 6) defaults to "", and both rating columns (fields 7 and
+    /// 8) default to `nil`.
     private static func decodeRow(_ fields: [String]) -> DecodeOutcome {
         guard fields.count >= 5 else {
             return .skip("expected at least 5 fields, got \(fields.count)")
@@ -416,7 +425,8 @@ enum WorkoutCSV {
         let durationString = fields[3]
         let distanceString = fields[4]
         let notes = fields.count > 5 ? fields[5] : ""
-        let ratingString = fields.count > 6 ? fields[6] : ""
+        let feelingString = fields.count > 6 ? fields[6] : ""
+        let exertionString = fields.count > 7 ? fields[7] : ""
 
         guard let date = parseDate(dateString) else {
             return .skip("invalid date '\(dateString)'")
@@ -428,14 +438,15 @@ enum WorkoutCSV {
             return .skip("invalid distance '\(distanceString)'")
         }
 
-        let rating: Int
-        let trimmedRating = ratingString.trimmingCharacters(in: .whitespaces)
-        if trimmedRating.isEmpty {
-            rating = 0
-        } else if let parsed = Int(trimmedRating) {
-            rating = parsed
-        } else {
-            return .skip("invalid felt_rating '\(ratingString)'")
+        let feeling: Int?
+        switch parseRating(feelingString, into: 1...5, column: "feeling") {
+        case .value(let value): feeling = value
+        case .invalid(let reason): return .skip(reason)
+        }
+        let exertion: Int?
+        switch parseRating(exertionString, into: 1...10, column: "perceived_exertion") {
+        case .value(let value): exertion = value
+        case .invalid(let reason): return .skip(reason)
         }
 
         let type = ExerciseType.fromCSV(typeString) ?? ExerciseType(rawValue: typeString) ?? .other
@@ -450,8 +461,44 @@ enum WorkoutCSV {
             durationSeconds: duration,
             distance: distance,
             notes: notes,
-            feltRating: rating
+            feeling: feeling,
+            perceivedExertion: exertion
         ))
+    }
+
+    /// Parses an optional rating column.
+    ///
+    /// Blank and `"0"` both mean "not recorded" — `0` was the sentinel the
+    /// legacy `felt_rating` column used, so old exports re-import cleanly.
+    /// Out-of-range numbers are clamped rather than rejected, matching the
+    /// importer's lenient posture elsewhere (unknown types become `.other`)
+    /// and keeping a re-import of an old 1–10 `felt_rating` column from
+    /// skipping most of its rows.
+    /// - Parameters:
+    ///   - raw: The raw column text.
+    ///   - bounds: Valid range for this rating.
+    ///   - column: Column name, used in the skip reason.
+    /// - Returns: `.value` with the clamped rating (or `nil` when unrecorded),
+    ///   or `.invalid` carrying a human-readable reason when the text is not
+    ///   a number.
+    private static func parseRating(
+        _ raw: String,
+        into bounds: ClosedRange<Int>,
+        column: String
+    ) -> RatingParse {
+        let trimmed = raw.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return .value(nil) }
+        guard let parsed = Int(trimmed) else {
+            return .invalid("invalid \(column) '\(raw)'")
+        }
+        guard parsed != 0 else { return .value(nil) }
+        return .value(min(max(parsed, bounds.lowerBound), bounds.upperBound))
+    }
+
+    /// Outcome of parsing one optional rating column.
+    private enum RatingParse {
+        case value(Int?)
+        case invalid(String)
     }
 
     /// UTC calendar used to extract date components from ISO8601 dates.

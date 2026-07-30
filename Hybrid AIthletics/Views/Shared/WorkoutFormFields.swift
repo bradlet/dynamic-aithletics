@@ -3,8 +3,9 @@
 //  Hybrid AIthletics
 //
 //  Reusable Form sections describing a workout (name/type, duration, distance,
-//  date, notes, felt rating). Shared by `RecordWorkoutSheet` (create) and
-//  `WorkoutDetailSheet` (edit) so the two flows stay layout-identical.
+//  date, notes, feeling, perceived exertion). Shared by `RecordWorkoutSheet`
+//  (create) and `WorkoutDetailSheet` (edit) so the two flows stay
+//  layout-identical.
 //
 
 import SwiftUI
@@ -32,7 +33,8 @@ struct WorkoutFormFields<PlannedSection: View>: View {
     @Binding var distance: Double?
     @Binding var date: Date
     @Binding var notes: String
-    @Binding var feltRating: Int
+    @Binding var feeling: Int?
+    @Binding var perceivedExertion: Int?
     @Binding var countsTowardMileage: Bool
     /// Retitles the duration/distance headers as "Completed …" when a
     /// planned section is shown alongside them.
@@ -48,7 +50,8 @@ struct WorkoutFormFields<PlannedSection: View>: View {
         plannedSection()
         dateSection
         notesSection
-        feltRatingSection
+        feelingSection
+        exertionSection
     }
 
     // MARK: - Sections
@@ -111,10 +114,18 @@ struct WorkoutFormFields<PlannedSection: View>: View {
         }
     }
 
-    /// Subjective 1–10 effort rating that feeds the AI coach's load assessment.
-    private var feltRatingSection: some View {
+    /// Subjective 1–5 feeling. Optional — the dial starts on "Not set".
+    private var feelingSection: some View {
         Section("How did it feel?") {
-            FeltRatingPicker(value: $feltRating)
+            FeelingDial(selection: $feeling)
+        }
+    }
+
+    /// Subjective 1–10 perceived exertion. Independent of `feeling`; together
+    /// they feed the AI coach's training-load assessment.
+    private var exertionSection: some View {
+        Section("How hard was it?") {
+            ExertionDial(selection: $perceivedExertion)
         }
     }
 }
@@ -131,7 +142,8 @@ extension WorkoutFormFields where PlannedSection == EmptyView {
         distance: Binding<Double?>,
         date: Binding<Date>,
         notes: Binding<String>,
-        feltRating: Binding<Int>,
+        feeling: Binding<Int?>,
+        perceivedExertion: Binding<Int?>,
         countsTowardMileage: Binding<Bool>
     ) {
         self.init(
@@ -143,7 +155,8 @@ extension WorkoutFormFields where PlannedSection == EmptyView {
             distance: distance,
             date: date,
             notes: notes,
-            feltRating: feltRating,
+            feeling: feeling,
+            perceivedExertion: perceivedExertion,
             countsTowardMileage: countsTowardMileage,
             usesCompletedHeaders: false,
             plannedSection: { EmptyView() }

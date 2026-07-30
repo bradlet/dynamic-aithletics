@@ -64,7 +64,11 @@ enum UITestFixtures {
                     durationSeconds: duration,
                     distanceMiles: workoutMiles,
                     notes: "Seeded fixture \(number)",
-                    feltRating: 5 + (index % 5)
+                    // Every 5th workout is left unrated so the History
+                    // chart's null-gap rendering and the dials' "Not set"
+                    // state are both exercised under UI test.
+                    feeling: index % 5 == 4 ? nil : 1 + (index % 5),
+                    perceivedExertion: index % 5 == 4 ? nil : 1 + (index % 10)
                 )
             )
             context.insert(exercise)

@@ -4,7 +4,7 @@
 //
 //  Page 1 of the History tab's Performance Hub. Displays mileage stat
 //  cards (all-time, this year, this month, this week) plus the current
-//  week's average felt rating.
+//  week's average feeling.
 //
 
 import SwiftUI
@@ -55,16 +55,16 @@ struct SummaryStatsView: View {
         )
     }
 
-    /// Floor of the current week's average felt rating. `0` when no
-    /// workouts in the week have a recorded rating — maps to the
-    /// `face.dashed` placeholder via `FeltRatingVisuals`.
-    private var avgFeltRatingFloored: Int {
-        guard let avg = WorkoutAggregations.currentWeekAverageFeltRating(
+    /// Floor of the current week's average feeling, or `nil` when nothing in
+    /// the week is rated — which `FeelingVisuals` renders as the neutral
+    /// placeholder face rather than a real rating.
+    private var avgFeelingFloored: Int? {
+        guard let avg = WorkoutAggregations.currentWeekAverageFeeling(
             exercises: exercises,
             anchor: Date(),
             firstWeekday: weekStartDay
         ) else {
-            return 0
+            return nil
         }
         return Int(avg.rounded(.down))
     }
@@ -91,8 +91,8 @@ struct SummaryStatsView: View {
                     )
                     IconStatCard(
                         title: "Feeling like",
-                        systemImage: FeltRatingVisuals.symbolName(for: avgFeltRatingFloored),
-                        tint: FeltRatingVisuals.tint(for: avgFeltRatingFloored)
+                        systemImage: FeelingVisuals.symbolName(for: avgFeelingFloored),
+                        tint: FeelingVisuals.tint(for: avgFeelingFloored)
                     )
                 }
             }

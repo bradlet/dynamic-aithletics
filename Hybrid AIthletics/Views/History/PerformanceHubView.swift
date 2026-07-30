@@ -37,7 +37,7 @@ struct PerformanceHubView: View {
                     .padding(.horizontal)
                     .tag(1)
 
-                WeeklyChartView(exercises: exercises, configuration: .feltRating)
+                WeeklyChartView(exercises: exercises, configuration: .feeling)
                     .padding(.horizontal)
                     .tag(2)
             }

@@ -89,12 +89,12 @@ enum WorkoutAggregations {
             }
     }
 
-    // MARK: - Felt-rating projections
+    // MARK: - Feeling projections
 
-    /// Averages recorded `feltRating` per week, excluding exercises whose
-    /// workout has `feltRating == 0` (unrecorded). Empty weeks and weeks with
-    /// only unrated workouts both yield `0` per product spec.
-    static func weeklyAverageFeltRating(
+    /// Averages the recorded 1–5 `feeling` per week, ignoring exercises whose
+    /// workout has no feeling recorded. Empty weeks and weeks with only
+    /// unrated workouts both yield `0` for now.
+    static func weeklyAverageFeeling(
         exercises: [Exercise],
         weekCount: Int,
         anchor: Date,
@@ -102,7 +102,9 @@ enum WorkoutAggregations {
     ) -> [WeeklyMetricPoint] {
         weeklyBuckets(exercises: exercises, weekCount: weekCount, anchor: anchor, firstWeekday: firstWeekday)
             .map { bucket in
-                let ratings = bucket.exercises.compactMap { $0.workout?.feltRating }.filter { $0 > 0 }
+                // `workout?.feeling` is Int?? — compactMap strips only one
+                // level, so unwrap the workout first.
+                let ratings = bucket.exercises.compactMap(\.workout).compactMap(\.feeling)
                 let average: Double
                 if ratings.isEmpty {
                     average = 0
@@ -133,11 +135,11 @@ enum WorkoutAggregations {
             .reduce(0.0) { $0 + ($1.workout?.distanceMiles ?? 0) }
     }
 
-    /// Average recorded `feltRating` in the week containing `anchor` (week
-    /// starting on `firstWeekday`), excluding workouts with `feltRating == 0`.
-    /// Returns `nil` when no workouts in the week have a recorded rating
-    /// (caller displays "—").
-    static func currentWeekAverageFeltRating(
+    /// Average recorded 1–5 `feeling` in the week containing `anchor` (week
+    /// starting on `firstWeekday`), ignoring workouts with no feeling
+    /// recorded. Returns `nil` when nothing in the week is rated (the caller
+    /// shows a neutral placeholder).
+    static func currentWeekAverageFeeling(
         exercises: [Exercise],
         anchor: Date,
         firstWeekday: Int = 1
@@ -147,8 +149,8 @@ enum WorkoutAggregations {
         let weekStart = calendar.dateInterval(of: .weekOfYear, for: anchor)?.start
         let ratings = exercises
             .filter { calendar.dateInterval(of: .weekOfYear, for: $0.date)?.start == weekStart }
-            .compactMap { $0.workout?.feltRating }
-            .filter { $0 > 0 }
+            .compactMap(\.workout)
+            .compactMap(\.feeling)
         guard !ratings.isEmpty else { return nil }
         let sum = ratings.reduce(0, +)
         return Double(sum) / Double(ratings.count)

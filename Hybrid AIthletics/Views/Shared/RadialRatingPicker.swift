@@ -44,12 +44,14 @@ struct RadialRatingPicker<ItemContent: View>: View {
     /// Radius of the underlying circle. Large relative to the visible band so
     /// the arc reads as a shallow curve rather than a wheel.
     private static var radius: CGFloat { 260 }
-    /// Height of the visible band the arc is clipped to.
-    private static var arcHeight: CGFloat { 104 }
-    /// Distance from the band's top edge to the arc's apex.
-    private static var topInset: CGFloat { 16 }
+    /// Height of the visible band the arc is clipped to. Sized to the drop
+    /// of the furthest legible slot so the card has no dead space under it.
+    private static var arcHeight: CGFloat { 96 }
+    /// Distance from the band's top edge to the arc's apex. Leaves room for
+    /// the 12 o'clock caret above the selected slot's glyph.
+    private static var topInset: CGFloat { 34 }
     /// Detents at which a slot has fully faded out.
-    private static var visibleSpan: Double { 3.2 }
+    private static var visibleSpan: Double { 3.6 }
 
     // MARK: - State
 
@@ -180,8 +182,8 @@ struct RadialRatingPicker<ItemContent: View>: View {
         LinearGradient(
             stops: [
                 .init(color: .clear, location: 0),
-                .init(color: .black, location: 0.18),
-                .init(color: .black, location: 0.82),
+                .init(color: .black, location: 0.12),
+                .init(color: .black, location: 0.88),
                 .init(color: .clear, location: 1)
             ],
             startPoint: .leading,
@@ -314,7 +316,7 @@ struct FeelingDial: View {
         RadialRatingPicker(
             selection: $selection,
             range: FeelingVisuals.range,
-            degreesPerItem: 17,
+            degreesPerItem: 14,
             displayName: FeelingVisuals.displayName,
             accessibilityTitle: "How did it feel",
             identifier: "feelingPicker"

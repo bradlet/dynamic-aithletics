@@ -401,7 +401,7 @@ struct ExerciseModelTests {
         )
         #expect(exercise.isCompleted == false)
 
-        exercise.workout = Workout(durationSeconds: 1500, distanceMiles: 3.1, feltRating: 7)
+        exercise.workout = Workout(durationSeconds: 1500, distanceMiles: 3.1, perceivedExertion: 7)
         #expect(exercise.isCompleted == true)
     }
 
@@ -439,7 +439,7 @@ struct ExerciseModelTests {
                 durationSeconds: 3550,
                 distanceMiles: 8.2,
                 notes: "negative split",
-                feltRating: 9,
+                perceivedExertion: 9,
                 source: WorkoutSource.appleHealth.rawValue,
                 externalID: "hk-uuid-123"
             )
@@ -453,7 +453,7 @@ struct ExerciseModelTests {
         #expect(workout.durationSeconds == 3550)
         #expect(workout.distanceMiles == 8.2)
         #expect(workout.notes == "negative split")
-        #expect(workout.feltRating == 9)
+        #expect(workout.perceivedExertion == 9)
         #expect(workout.source == WorkoutSource.appleHealth.rawValue)
         #expect(workout.externalID == "hk-uuid-123")
         #expect(fetched.first?.isCompleted == true)
@@ -465,11 +465,11 @@ struct ExerciseModelTests {
         let planned2 = Exercise(name: "Planned B", type: .easyRun, durationSeconds: 2400, distanceMiles: 4.0, date: Date())
         let completed1 = Exercise(
             name: "Done A", type: .tempoRun, durationSeconds: 2400, distanceMiles: 5.0, date: Date(),
-            workout: Workout(durationSeconds: 2400, distanceMiles: 5.0, feltRating: 7)
+            workout: Workout(durationSeconds: 2400, distanceMiles: 5.0, perceivedExertion: 7)
         )
         let completed2 = Exercise(
             name: "Done B", type: .longRun, durationSeconds: 3600, distanceMiles: 8.0, date: Date(),
-            workout: Workout(durationSeconds: 3600, distanceMiles: 8.0, feltRating: 8)
+            workout: Workout(durationSeconds: 3600, distanceMiles: 8.0, perceivedExertion: 8)
         )
         for e in [planned1, completed1, planned2, completed2] { context.insert(e) }
         try context.save()
@@ -568,7 +568,7 @@ struct WorkoutModelTests {
         #expect(workout.durationSeconds == 1500)
         #expect(workout.distanceMiles == 3.1)
         #expect(workout.notes == "") // planning notes NOT copied
-        #expect(workout.feltRating == 0)
+        #expect(workout.perceivedExertion == nil)
         #expect(workout.source == WorkoutSource.manual.rawValue)
         #expect(workout.externalID == nil)
     }
@@ -578,7 +578,7 @@ struct WorkoutModelTests {
         #expect(workout.durationSeconds == 0)
         #expect(workout.distanceMiles == 0.0)
         #expect(workout.notes == "")
-        #expect(workout.feltRating == 0)
+        #expect(workout.perceivedExertion == nil)
         #expect(workout.source == WorkoutSource.manual.rawValue)
         #expect(workout.externalID == nil)
     }
@@ -591,7 +591,7 @@ struct WorkoutModelTests {
             durationSeconds: 1800,
             distanceMiles: 3.0,
             notes: "Felt great",
-            feltRating: 8,
+            perceivedExertion: 8,
             source: WorkoutSource.csv.rawValue,
             externalID: "abc"
         )
@@ -1212,32 +1212,49 @@ struct ExercisePlannerTests {
 
 // MARK: - Workout Felt Rating Tests
 
-struct WorkoutFeltRatingTests {
+struct WorkoutRatingTests {
 
     private func makeContext() throws -> ModelContext {
         let container = ModelContainerFactory.makePreviewContainer()
         return ModelContext(container)
     }
 
-    @Test func feltRatingDefaultsToZero() {
+    @Test func ratingsDefaultToNil() {
         let workout = Workout(
             durationSeconds: 1800,
             distanceMiles: 3.0
         )
-        #expect(workout.feltRating == 0)
+        #expect(workout.feeling == nil)
+        #expect(workout.perceivedExertion == nil)
     }
 
-    @Test func feltRatingCanBeSetExplicitly() {
+    @Test func ratingsCanBeSetExplicitly() {
         let workout = Workout(
             durationSeconds: 2400,
             distanceMiles: 5.0,
-            feltRating: 8
+            feeling: 4,
+            perceivedExertion: 8
         )
-        #expect(workout.feltRating == 8)
+        #expect(workout.feeling == 4)
+        #expect(workout.perceivedExertion == 8)
     }
 
-    @Test func feltRatingPersistsThroughSwiftData() throws {
-        // The rating lives inside the nested workout; it persists as part of
+    @Test func ratingsAreIndependent() {
+        // A hard session the athlete felt strong through, and the reverse —
+        // both must be representable.
+        let good = Workout(feeling: 5, perceivedExertion: 9)
+        let overreaching = Workout(feeling: 1, perceivedExertion: 9)
+        #expect(good.perceivedExertion == overreaching.perceivedExertion)
+        #expect(good.feeling != overreaching.feeling)
+    }
+
+    @Test func oneRatingCanBeSetWithoutTheOther() {
+        #expect(Workout(feeling: 3).perceivedExertion == nil)
+        #expect(Workout(perceivedExertion: 6).feeling == nil)
+    }
+
+    @Test func ratingsPersistThroughSwiftData() throws {
+        // The ratings live inside the nested workout; they persist as part of
         // the owning Exercise.
         let context = try makeContext()
         let exercise = Exercise(
@@ -1246,13 +1263,37 @@ struct WorkoutFeltRatingTests {
             durationSeconds: 2700,
             distanceMiles: 4.0,
             date: Date(),
-            workout: Workout(durationSeconds: 2700, distanceMiles: 4.0, feltRating: 9)
+            workout: Workout(
+                durationSeconds: 2700,
+                distanceMiles: 4.0,
+                feeling: 2,
+                perceivedExertion: 9
+            )
         )
         context.insert(exercise)
         try context.save()
 
         let fetched = try context.fetch(FetchDescriptor<Exercise>())
-        #expect(fetched.first?.workout?.feltRating == 9)
+        #expect(fetched.first?.workout?.feeling == 2)
+        #expect(fetched.first?.workout?.perceivedExertion == 9)
+    }
+
+    @Test func unratedWorkoutPersistsAsNil() throws {
+        let context = try makeContext()
+        let exercise = Exercise(
+            name: "Easy",
+            type: .easyRun,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date(),
+            workout: Workout(durationSeconds: 1800, distanceMiles: 3.0)
+        )
+        context.insert(exercise)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Exercise>())
+        #expect(fetched.first?.workout?.feeling == nil)
+        #expect(fetched.first?.workout?.perceivedExertion == nil)
     }
 
     @Test func draftFromExerciseStartsUnrated() {
@@ -1264,8 +1305,23 @@ struct WorkoutFeltRatingTests {
             date: Date()
         )
         let draft = Workout(draftFrom: exercise)
-        #expect(draft.feltRating == 0)
+        #expect(draft.feeling == nil)
+        #expect(draft.perceivedExertion == nil)
         #expect(draft.notes == "")
+    }
+
+    /// `Workout` is stored as an inline Codable blob, and both new ratings are
+    /// Optional — so synthesized decoding uses `decodeIfPresent` and a blob
+    /// written before the split comes back unrated with everything else
+    /// intact. This is what makes shipping without a migration safe.
+    @Test func legacyFeltRatingBlobDecodesToUnrated() throws {
+        let legacy = #"{"durationSeconds":1800,"distanceMiles":3.0,"notes":"old entry","feltRating":8,"source":"Manual"}"#
+        let decoded = try JSONDecoder().decode(Workout.self, from: Data(legacy.utf8))
+        #expect(decoded.feeling == nil)
+        #expect(decoded.perceivedExertion == nil)
+        #expect(decoded.durationSeconds == 1800)
+        #expect(decoded.notes == "old entry")
+        #expect(decoded.source == WorkoutSource.manual.rawValue)
     }
 }
 
@@ -1287,7 +1343,7 @@ struct CoachTypeConversionTests {
                 durationSeconds: 2400,
                 distanceMiles: 5.0,
                 notes: "felt great",
-                feltRating: 7
+                perceivedExertion: 7
             )
         )
         let coachWorkout = CoachWorkout(from: exercise)
@@ -1394,7 +1450,7 @@ struct WorkoutCSVTests {
         durationSeconds: Int = 1800,
         distanceMiles: Double = 3.1,
         notes: String = "",
-        feltRating: Int = 7,
+        perceivedExertion: Int = 7,
         date: Date? = nil
     ) -> Exercise {
         Exercise(
@@ -1408,7 +1464,7 @@ struct WorkoutCSVTests {
                 durationSeconds: durationSeconds,
                 distanceMiles: distanceMiles,
                 notes: notes,
-                feltRating: feltRating
+                perceivedExertion: perceivedExertion
             )
         )
     }
@@ -1490,7 +1546,7 @@ struct WorkoutCSVTests {
             durationSeconds: 2400,
             distanceMiles: 6.25,
             notes: "Felt strong",
-            feltRating: 9
+            perceivedExertion: 9
         )
         let csv = WorkoutCSV.encode(exercises: [original], unit: .miles)
         let result = try WorkoutCSV.parse(csv)
@@ -1503,7 +1559,7 @@ struct WorkoutCSVTests {
         #expect(row.durationSeconds == 2400)
         #expect(abs(row.distance - 6.25) < 0.01)
         #expect(row.notes == "Felt strong")
-        #expect(row.feltRating == 9)
+        #expect(row.perceivedExertion == 9)
         // Parsed dates are normalized to local midnight (CSV dates are calendar
         // days), so compare against start-of-day rather than the exact reference.
         let expectedDay = Calendar.current.startOfDay(for: referenceDate)
@@ -1705,9 +1761,9 @@ struct WorkoutCSVTests {
         let tomorrow = cal.date(byAdding: .day, value: 1, to: today)!
 
         // Create exercises in non-chronological order.
-        let e1 = makeExercise(name: "Tomorrow", durationSeconds: 1800, distanceMiles: 3.0, feltRating: 5, date: tomorrow)
-        let e2 = makeExercise(name: "Yesterday", durationSeconds: 1800, distanceMiles: 3.0, feltRating: 5, date: yesterday)
-        let e3 = makeExercise(name: "Today", durationSeconds: 1800, distanceMiles: 3.0, feltRating: 5, date: today)
+        let e1 = makeExercise(name: "Tomorrow", durationSeconds: 1800, distanceMiles: 3.0, perceivedExertion: 5, date: tomorrow)
+        let e2 = makeExercise(name: "Yesterday", durationSeconds: 1800, distanceMiles: 3.0, perceivedExertion: 5, date: yesterday)
+        let e3 = makeExercise(name: "Today", durationSeconds: 1800, distanceMiles: 3.0, perceivedExertion: 5, date: today)
 
         let csv = WorkoutCSV.encode(exercises: [e1, e2, e3], unit: .miles)
         let lines = csv.split(separator: "\n", omittingEmptySubsequences: true)
@@ -1761,14 +1817,92 @@ struct WorkoutCSVTests {
 
     // MARK: Optional Fields
 
-    @Test func parseEmptyFeltRatingDefaultsToZero() throws {
+    @Test func parseBlankFeelingIsNil() throws {
         let csv = """
         \(WorkoutCSV.header)
-        2026-04-09T07:30:00Z,Run,run,1800,3.00,,
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,,
         """
         let result = try WorkoutCSV.parse(csv)
         #expect(result.rows.count == 1)
-        #expect(result.rows[0].feltRating == 0)
+        #expect(result.rows[0].feeling == nil)
+        #expect(result.rows[0].perceivedExertion == nil)
+    }
+
+    @Test func parseReadsBothRatingColumns() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,4,8
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].feeling == 4)
+        #expect(result.rows[0].perceivedExertion == 8)
+    }
+
+    /// `0` was the legacy `felt_rating` sentinel for "unrated", so old
+    /// exports must re-import as unrated rather than as a literal zero.
+    @Test func parseZeroRatingIsNil() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,0,0
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].feeling == nil)
+        #expect(result.rows[0].perceivedExertion == nil)
+    }
+
+    @Test func parseClampsOutOfRangeRatings() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,9,42
+        2026-04-10T07:30:00Z,Run,run,1800,3.00,,-2,-7
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].feeling == 5)
+        #expect(result.rows[0].perceivedExertion == 10)
+        #expect(result.rows[1].feeling == 1)
+        #expect(result.rows[1].perceivedExertion == 1)
+    }
+
+    @Test func parseNonNumericFeelingSkipsRowWithReason() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,great,8
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.isEmpty)
+        #expect(result.skipped.count == 1)
+        #expect(result.skipped[0].reason.contains("feeling"))
+    }
+
+    @Test func parseNonNumericExertionSkipsRowWithReason() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,4,hard
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows.isEmpty)
+        #expect(result.skipped[0].reason.contains("perceived_exertion"))
+    }
+
+    @Test func parseSevenFieldRowLeavesExertionNil() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,4
+        """
+        let result = try WorkoutCSV.parse(csv)
+        #expect(result.rows[0].feeling == 4)
+        #expect(result.rows[0].perceivedExertion == nil)
+    }
+
+    @Test func toExerciseCarriesBothRatings() throws {
+        let csv = """
+        \(WorkoutCSV.header)
+        2026-04-09T07:30:00Z,Run,run,1800,3.00,,2,9
+        """
+        let result = try WorkoutCSV.parse(csv)
+        let exercise = WorkoutCSV.toExercise(result.rows[0], unit: .miles)
+        #expect(exercise.workout?.feeling == 2)
+        #expect(exercise.workout?.perceivedExertion == 9)
     }
 
     @Test func parseEmptyNotesDefaultsToEmptyString() throws {
@@ -1789,7 +1923,7 @@ struct WorkoutCSVTests {
         let result = try WorkoutCSV.parse(csv)
         #expect(result.rows.count == 1)
         #expect(result.rows[0].notes == "")
-        #expect(result.rows[0].feltRating == 0)
+        #expect(result.rows[0].perceivedExertion == nil)
     }
 
     @Test func parseRowWithSixFields() throws {
@@ -1800,7 +1934,7 @@ struct WorkoutCSVTests {
         let result = try WorkoutCSV.parse(csv)
         #expect(result.rows.count == 1)
         #expect(result.rows[0].notes == "good effort")
-        #expect(result.rows[0].feltRating == 0)
+        #expect(result.rows[0].perceivedExertion == nil)
     }
 
     // MARK: Type Parsing
@@ -1880,7 +2014,7 @@ struct WorkoutCSVTests {
             durationSeconds: 2400,
             distance: 4.0,
             notes: "good",
-            feltRating: 6
+            perceivedExertion: 6
         )
         let exercise = WorkoutCSV.toExercise(row, unit: .miles)
         #expect(exercise.name == "Test Run")
@@ -1895,7 +2029,7 @@ struct WorkoutCSVTests {
         #expect(workout.durationSeconds == 2400)
         #expect(abs(workout.distanceMiles - 4.0) < 0.001)
         #expect(workout.notes == "good")
-        #expect(workout.feltRating == 6)
+        #expect(workout.perceivedExertion == 6)
         #expect(workout.source == WorkoutSource.csv.rawValue)
         #expect(workout.externalID == nil)
     }
@@ -1914,7 +2048,7 @@ struct WorkoutCSVTests {
             durationSeconds: 1800,
             distance: 3.0,
             notes: "",
-            feltRating: 5
+            perceivedExertion: 5
         )
         context.insert(WorkoutCSV.toExercise(row, unit: .miles))
         try context.save()
@@ -2294,6 +2428,14 @@ struct HealthKitImportTests {
         #expect(exercise.workout?.workoutSource == .appleHealth)
     }
 
+    @Test func importedWorkoutIsUnrated() {
+        // Health carries no subjective ratings — both stay nil until the
+        // athlete rates the workout in the app.
+        let exercise = HealthKitWorkoutMapper.toExercise(makeDTO())
+        #expect(exercise.workout?.feeling == nil)
+        #expect(exercise.workout?.perceivedExertion == nil)
+    }
+
     @Test func toExercisePreservesExternalID() {
         let exercise = HealthKitWorkoutMapper.toExercise(makeDTO(id: "hk-uuid-xyz"))
         #expect(exercise.workout?.externalID == "hk-uuid-xyz")
@@ -2488,7 +2630,7 @@ struct WorkoutDetailEditTests {
                 durationSeconds: 1800,
                 distanceMiles: 3.0,
                 notes: "original notes",
-                feltRating: 4
+                perceivedExertion: 4
             )
         )
         context.insert(exercise)
@@ -2503,7 +2645,7 @@ struct WorkoutDetailEditTests {
             plannedDistanceMiles: 5.0,
             date: newDate,
             notes: "edited notes",
-            feltRating: 9
+            perceivedExertion: 9
         )
         WorkoutEditor.apply(edits, to: exercise)
 
@@ -2515,7 +2657,7 @@ struct WorkoutDetailEditTests {
         #expect(exercise.workout?.durationSeconds == 2700)
         #expect(exercise.workout?.distanceMiles == 6.2)
         #expect(exercise.workout?.notes == "edited notes")
-        #expect(exercise.workout?.feltRating == 9)
+        #expect(exercise.workout?.perceivedExertion == 9)
         // Planned target metrics rewritten on the exercise (unified editor).
         #expect(exercise.durationSeconds == 2400)
         #expect(exercise.distanceMiles == 5.0)
@@ -2529,7 +2671,7 @@ struct WorkoutDetailEditTests {
             durationSeconds: 1800,
             distanceMiles: 3.0,
             date: Date(timeIntervalSince1970: 1_700_000_000),
-            workout: Workout(durationSeconds: 1750, distanceMiles: 3.4, notes: "n", feltRating: 5)
+            workout: Workout(durationSeconds: 1750, distanceMiles: 3.4, notes: "n", perceivedExertion: 5)
         )
         context.insert(exercise)
 
@@ -2543,7 +2685,7 @@ struct WorkoutDetailEditTests {
             plannedDistanceMiles: 6.0,
             date: exercise.date,
             notes: "n",
-            feltRating: 5
+            perceivedExertion: 5
         )
         WorkoutEditor.apply(edits, to: exercise)
 
@@ -2552,7 +2694,7 @@ struct WorkoutDetailEditTests {
         #expect(exercise.workout?.durationSeconds == 1750)
         #expect(exercise.workout?.distanceMiles == 3.4)
         #expect(exercise.workout?.notes == "n")
-        #expect(exercise.workout?.feltRating == 5)
+        #expect(exercise.workout?.perceivedExertion == 5)
     }
 
     @Test func applyWritesCountsTowardMileage() throws {
@@ -2577,7 +2719,7 @@ struct WorkoutDetailEditTests {
             plannedDistanceMiles: 1.5,
             date: exercise.date,
             notes: "",
-            feltRating: 0,
+            perceivedExertion: nil,
             countsTowardMileage: false
         )
         WorkoutEditor.apply(edits, to: exercise)
@@ -2589,6 +2731,113 @@ struct WorkoutDetailEditTests {
         #expect(exercise.countsTowardMileage == true)
     }
 
+    @Test func applyWritesBothRatings() throws {
+        let context = makeContext()
+        let exercise = Exercise(
+            name: "Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date(),
+            workout: Workout(durationSeconds: 1800, distanceMiles: 3.0)
+        )
+        context.insert(exercise)
+
+        WorkoutEditor.apply(
+            WorkoutEditor.EditedValues(
+                name: "Run",
+                type: .run,
+                durationSeconds: 1800,
+                distanceMiles: 3.0,
+                plannedDurationSeconds: 1800,
+                plannedDistanceMiles: 3.0,
+                date: exercise.date,
+                notes: "",
+                feeling: 2,
+                perceivedExertion: 9
+            ),
+            to: exercise
+        )
+
+        #expect(exercise.workout?.feeling == 2)
+        #expect(exercise.workout?.perceivedExertion == 9)
+    }
+
+    @Test func applyClearsRatingsWhenNil() throws {
+        let context = makeContext()
+        let exercise = Exercise(
+            name: "Run",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date(),
+            workout: Workout(
+                durationSeconds: 1800,
+                distanceMiles: 3.0,
+                feeling: 5,
+                perceivedExertion: 3
+            )
+        )
+        context.insert(exercise)
+
+        WorkoutEditor.apply(
+            WorkoutEditor.EditedValues(
+                name: "Run",
+                type: .run,
+                durationSeconds: 1800,
+                distanceMiles: 3.0,
+                plannedDurationSeconds: 1800,
+                plannedDistanceMiles: 3.0,
+                date: exercise.date,
+                notes: "",
+                feeling: nil,
+                perceivedExertion: nil
+            ),
+            to: exercise
+        )
+
+        #expect(exercise.workout?.feeling == nil)
+        #expect(exercise.workout?.perceivedExertion == nil)
+    }
+
+    @Test func applyPreservesProvenanceAcrossRatingEdit() throws {
+        let context = makeContext()
+        let exercise = Exercise(
+            name: "Imported",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: Date(),
+            workout: Workout(
+                durationSeconds: 1800,
+                distanceMiles: 3.0,
+                source: WorkoutSource.appleHealth.rawValue,
+                externalID: "hk-rating-edit"
+            )
+        )
+        context.insert(exercise)
+
+        WorkoutEditor.apply(
+            WorkoutEditor.EditedValues(
+                name: "Imported",
+                type: .run,
+                durationSeconds: 1800,
+                distanceMiles: 3.0,
+                plannedDurationSeconds: 1800,
+                plannedDistanceMiles: 3.0,
+                date: exercise.date,
+                notes: "",
+                feeling: 4,
+                perceivedExertion: 6
+            ),
+            to: exercise
+        )
+
+        #expect(exercise.workout?.feeling == 4)
+        #expect(exercise.workout?.source == WorkoutSource.appleHealth.rawValue)
+        #expect(exercise.workout?.externalID == "hk-rating-edit")
+    }
+
     @Test func removeRecordingClearsWorkoutAndKeepsPlan() throws {
         let context = makeContext()
         let exercise = Exercise(
@@ -2597,7 +2846,7 @@ struct WorkoutDetailEditTests {
             durationSeconds: 1800,
             distanceMiles: 3.0,
             date: Date(timeIntervalSince1970: 1_700_000_000),
-            workout: Workout(durationSeconds: 2000, distanceMiles: 4.0, feltRating: 7)
+            workout: Workout(durationSeconds: 2000, distanceMiles: 4.0, perceivedExertion: 7)
         )
         context.insert(exercise)
         let originalID = exercise.id
@@ -2643,7 +2892,7 @@ struct WorkoutDetailEditTests {
             plannedDistanceMiles: 3.0,
             date: Date(),
             notes: "",
-            feltRating: 6
+            perceivedExertion: 6
         )
         WorkoutEditor.apply(edits, to: exercise)
 
@@ -2679,7 +2928,7 @@ struct WorkoutDetailEditTests {
             plannedDistanceMiles: 3.0,
             date: Date(),
             notes: "edited",
-            feltRating: 7
+            perceivedExertion: 7
         )
         WorkoutEditor.apply(edits, to: exercise)
 
@@ -2760,7 +3009,7 @@ struct WorkoutDetailEditTests {
             plannedDistanceMiles: kmInput / 1.60934,
             date: exercise.date,
             notes: "",
-            feltRating: 0
+            perceivedExertion: nil
         )
         WorkoutEditor.apply(edits, to: exercise)
 
@@ -3191,8 +3440,8 @@ struct WorkoutAggregationsTests {
 
     /// Constructs a completed `Exercise` (no ModelContext) for pure-logic
     /// aggregation tests. The placement date lives on the exercise; the
-    /// recorded miles/feltRating live in the nested workout.
-    private func makeExercise(date: Date, miles: Double, felt: Int = 0, counts: Bool = true) -> Exercise {
+    /// recorded miles/feeling live in the nested workout.
+    private func makeExercise(date: Date, miles: Double, feeling: Int? = nil, counts: Bool = true) -> Exercise {
         Exercise(
             name: "test",
             type: .run,
@@ -3203,7 +3452,7 @@ struct WorkoutAggregationsTests {
             workout: Workout(
                 durationSeconds: 1800,
                 distanceMiles: miles,
-                feltRating: felt
+                feeling: feeling
             )
         )
     }
@@ -3297,38 +3546,38 @@ struct WorkoutAggregationsTests {
         #expect(points.allSatisfy { $0.value == 0 })
     }
 
-    @Test func weeklyAverageFeltRatingIncludesOptedOutExercises() {
-        // Opting out of mileage only affects distance totals; effort ratings
+    @Test func weeklyAverageFeelingIncludesOptedOutExercises() {
+        // Opting out of mileage only affects distance totals; feelings
         // still contribute to the weekly average.
         let workouts = [
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, felt: 6),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 2.0, felt: 8, counts: false)
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, feeling: 3),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 2.0, feeling: 4, counts: false)
         ]
-        let points = WorkoutAggregations.weeklyAverageFeltRating(
+        let points = WorkoutAggregations.weeklyAverageFeeling(
             exercises: workouts,
             weekCount: 4,
             anchor: anchorWednesday
         )
-        #expect(points.last?.value == 7.0)
+        #expect(points.last?.value == 3.5)
     }
 
-    @Test func weeklyAverageFeltRatingExcludesZeroRatings() {
-        // Three workouts in the current week rated 6, 8, 0 → avg = 7.0 (not 4.67).
+    @Test func weeklyAverageFeelingExcludesUnratedWorkouts() {
+        // Three workouts in the current week rated 3, 4, unrated → avg = 3.5.
         let workouts = [
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, felt: 6),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, felt: 8),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, felt: 0)
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, feeling: 3),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, feeling: 4),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, feeling: nil)
         ]
-        let points = WorkoutAggregations.weeklyAverageFeltRating(
+        let points = WorkoutAggregations.weeklyAverageFeeling(
             exercises: workouts,
             weekCount: 4,
             anchor: anchorWednesday
         )
-        #expect(points.last?.value == 7.0)
+        #expect(points.last?.value == 3.5)
     }
 
-    @Test func weeklyAverageFeltRatingEmptyWeekIsZero() {
-        let points = WorkoutAggregations.weeklyAverageFeltRating(
+    @Test func weeklyAverageFeelingEmptyWeekIsZero() {
+        let points = WorkoutAggregations.weeklyAverageFeeling(
             exercises: [],
             weekCount: 4,
             anchor: anchorWednesday
@@ -3337,13 +3586,13 @@ struct WorkoutAggregationsTests {
         #expect(points.allSatisfy { $0.value == 0 })
     }
 
-    @Test func weeklyAverageFeltRatingWeekWithOnlyUnratedIsZero() {
-        // Two workouts in the current week, both feltRating = 0 — must not NaN or crash.
+    @Test func weeklyAverageFeelingWeekWithOnlyUnratedIsZero() {
+        // Two workouts in the current week, both unrated — must not NaN or crash.
         let workouts = [
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, felt: 0),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, felt: 0)
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, feeling: nil),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, feeling: nil)
         ]
-        let points = WorkoutAggregations.weeklyAverageFeltRating(
+        let points = WorkoutAggregations.weeklyAverageFeeling(
             exercises: workouts,
             weekCount: 4,
             anchor: anchorWednesday
@@ -3404,30 +3653,30 @@ struct WorkoutAggregationsTests {
         #expect(total == 5.0)
     }
 
-    @Test func currentWeekAverageFeltRatingReturnsNilWhenNoRated() {
+    @Test func currentWeekAverageFeelingReturnsNilWhenNoRated() {
         let workouts = [
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, felt: 0),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, felt: 0)
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, feeling: nil),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, feeling: nil)
         ]
-        let avg = WorkoutAggregations.currentWeekAverageFeltRating(
+        let avg = WorkoutAggregations.currentWeekAverageFeeling(
             exercises: workouts,
             anchor: anchorWednesday
         )
         #expect(avg == nil)
     }
 
-    @Test func currentWeekAverageFeltRatingAveragesOnlyRated() {
-        // 5, 7, 0 → 6.0, not 4.0.
+    @Test func currentWeekAverageFeelingAveragesOnlyRated() {
+        // 3, 4, unrated → 3.5, not 2.33.
         let workouts = [
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, felt: 5),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, felt: 7),
-            makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, felt: 0)
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, feeling: 3),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, feeling: 4),
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, feeling: nil)
         ]
-        let avg = WorkoutAggregations.currentWeekAverageFeltRating(
+        let avg = WorkoutAggregations.currentWeekAverageFeeling(
             exercises: workouts,
             anchor: anchorWednesday
         )
-        #expect(avg == 6.0)
+        #expect(avg == 3.5)
     }
 
     @Test func weeklyBucketsOrderingIsChronological() {
@@ -3495,14 +3744,14 @@ struct WorkoutAggregationsTests {
         #expect(mondayStart == 0)
     }
 
-    @Test func currentWeekAverageFeltRatingMondayStartExcludesSunday() {
-        let workouts = [makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 5.0, felt: 8)]
-        let sundayStart = WorkoutAggregations.currentWeekAverageFeltRating(
+    @Test func currentWeekAverageFeelingMondayStartExcludesSunday() {
+        let workouts = [makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 5.0, feeling: 4)]
+        let sundayStart = WorkoutAggregations.currentWeekAverageFeeling(
             exercises: workouts,
             anchor: anchorWednesday
         )
-        #expect(sundayStart == 8.0)
-        let mondayStart = WorkoutAggregations.currentWeekAverageFeltRating(
+        #expect(sundayStart == 4.0)
+        let mondayStart = WorkoutAggregations.currentWeekAverageFeeling(
             exercises: workouts,
             anchor: anchorWednesday,
             firstWeekday: 2
@@ -3510,17 +3759,17 @@ struct WorkoutAggregationsTests {
         #expect(mondayStart == nil)
     }
 
-    @Test func weeklyAverageFeltRatingHonorsFirstWeekday() {
+    @Test func weeklyAverageFeelingHonorsFirstWeekday() {
         // Sunday-rated workout lands in the previous Monday-start bucket.
-        let workouts = [makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 5.0, felt: 6)]
-        let points = WorkoutAggregations.weeklyAverageFeltRating(
+        let workouts = [makeExercise(date: makeDate(year: 2026, month: 4, day: 5), miles: 5.0, feeling: 3)]
+        let points = WorkoutAggregations.weeklyAverageFeeling(
             exercises: workouts,
             weekCount: 4,
             anchor: anchorWednesday,
             firstWeekday: 2
         )
         #expect(points.last?.value == 0)
-        #expect(points[points.count - 2].value == 6.0)
+        #expect(points[points.count - 2].value == 3.0)
     }
 }
 
@@ -3581,7 +3830,7 @@ struct ExerciseRescheduleTests {
             durationSeconds: 1800,
             distanceMiles: 3.0,
             date: weekStart,
-            workout: Workout(durationSeconds: 1800, distanceMiles: 3.0, feltRating: 6)
+            workout: Workout(durationSeconds: 1800, distanceMiles: 3.0, perceivedExertion: 6)
         )
         context.insert(exercise)
         try context.save()
@@ -3641,7 +3890,7 @@ struct ExerciseCascadeDeleteTests {
             durationSeconds: 2400,
             distanceMiles: 5.0,
             date: Date(),
-            workout: Workout(durationSeconds: 2400, distanceMiles: 5.0, feltRating: 7)
+            workout: Workout(durationSeconds: 2400, distanceMiles: 5.0, perceivedExertion: 7)
         )
         context.insert(exercise)
         try context.save()
@@ -3686,7 +3935,7 @@ struct ExerciseCascadeDeleteTests {
             durationSeconds: 3600,
             distanceMiles: 8.0,
             date: Date(),
-            workout: Workout(durationSeconds: 3600, distanceMiles: 8.0, feltRating: 8)
+            workout: Workout(durationSeconds: 3600, distanceMiles: 8.0, perceivedExertion: 8)
         )
         context.insert(exercise)
         try context.save()
@@ -3714,7 +3963,8 @@ struct WorkoutCSVRowsTests {
         durationSeconds: Int = 1800,
         distanceMiles: Double = 3.0,
         notes: String = "",
-        feltRating: Int = 7,
+        feeling: Int? = 4,
+        perceivedExertion: Int? = 7,
         date: Date = Date(timeIntervalSince1970: 1_700_000_000)
     ) -> Exercise {
         Exercise(
@@ -3728,7 +3978,8 @@ struct WorkoutCSVRowsTests {
                 durationSeconds: durationSeconds,
                 distanceMiles: distanceMiles,
                 notes: notes,
-                feltRating: feltRating
+                feeling: feeling,
+                perceivedExertion: perceivedExertion
             )
         )
     }
@@ -3749,12 +4000,24 @@ struct WorkoutCSVRowsTests {
         let rows = WorkoutCSV.rows(exercises: [exercise], unit: .miles)
         #expect(rows.count == 2)
         #expect(rows[0] == WorkoutCSV.headerColumns)
-        // Column order: date, name, type, duration, distance, notes, felt_rating
-        #expect(rows[1].count == 7)
+        // date, name, type, duration, distance, notes, feeling, perceived_exertion
+        #expect(rows[1].count == 8)
         #expect(rows[1][1] == "Easy Run")
         #expect(rows[1][2] == ExerciseType.easyRun.rawValue)
         #expect(rows[1][4] == "3.00")
-        #expect(rows[1][6] == "7")
+        #expect(rows[1][6] == "4")
+        #expect(rows[1][7] == "7")
+    }
+
+    @Test func headerEndsWithFeelingThenPerceivedExertion() {
+        #expect(WorkoutCSV.headerColumns.suffix(2) == ["feeling", "perceived_exertion"])
+    }
+
+    @Test func unratedWorkoutEmitsBlankRatingColumns() {
+        let exercise = makeExercise(feeling: nil, perceivedExertion: nil)
+        let rows = WorkoutCSV.rows(exercises: [exercise], unit: .miles)
+        #expect(rows[1][6] == "")
+        #expect(rows[1][7] == "")
     }
 
     @Test func distanceConvertedToKilometersWhenRequested() {
@@ -3840,7 +4103,7 @@ struct GoogleSheetsSyncCoordinatorTests {
             durationSeconds: 1800,
             distanceMiles: 3.0,
             date: Date(),
-            workout: Workout(durationSeconds: 1800, distanceMiles: 3.0, feltRating: 6)
+            workout: Workout(durationSeconds: 1800, distanceMiles: 3.0, perceivedExertion: 6)
         ))
         try? context.save()
     }

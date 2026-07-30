@@ -39,7 +39,7 @@ struct CSVImportHelpView: View {
 
     private var columnOrderSection: some View {
         Section {
-            Text("date, name, type, duration, distance, notes, felt_rating")
+            Text("date, name, type, duration, distance, notes, feeling, perceived_exertion")
                 .font(.system(.caption, design: .monospaced))
                 .foregroundStyle(.primary)
             Text("The first row of your CSV must be a header. Column order is fixed and must match the order above.")
@@ -126,29 +126,31 @@ struct CSVImportHelpView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("**notes** \u{2014} free text, leave blank if none")
                     .font(.caption)
-                Text("**felt_rating** \u{2014} 0\u{2013}10 integer, leave blank for unrated")
+                Text("**feeling** \u{2014} 1\u{2013}5 integer (1 = Very Weak, 5 = Very Strong), leave blank for unrated")
+                    .font(.caption)
+                Text("**perceived_exertion** \u{2014} 1\u{2013}10 integer (1 = Very Light, 10 = Maximum Effort), leave blank for unrated")
                     .font(.caption)
             }
         } header: {
             Text("Optional Fields")
         } footer: {
-            Text("Both notes and felt_rating can be left empty. You can also omit them entirely by having only 5 or 6 columns per row.")
+            Text("All three can be left empty, and a rating of 0 is read as unrated. You can also omit them entirely by having only 5, 6, or 7 columns per row.")
         }
     }
 
     private var exampleSection: some View {
         Section {
             Text("""
-            date,name,type,duration,distance,notes,felt_rating
-            8/4/2025,Easy Run,easy,40m,4,,
-            2025-09-14,5k,race,22m,3.5,,
-            2/21/2026,,long,2h 2m 30s,14,,
+            date,name,type,duration,distance,notes,feeling,perceived_exertion
+            8/4/2025,Easy Run,easy,40m,4,,4,5
+            2025-09-14,5k,race,22m,3.5,,1,10
+            2/21/2026,,long,2h 2m 30s,14,,,
             """)
             .font(.system(.caption2, design: .monospaced))
         } header: {
             Text("Example")
         } footer: {
-            Text("The third row has no name \u{2014} it will be imported as \"Long Run\" based on the type.")
+            Text("The third row has no name \u{2014} it will be imported as \"Long Run\" based on the type \u{2014} and no ratings.")
         }
     }
 

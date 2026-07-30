@@ -3,7 +3,7 @@
 //  Hybrid AIthletics
 //
 //  Pages 2 and 3 of the Performance Hub. A parameterized line chart
-//  that displays a weekly metric (mileage or average felt rating) over
+//  that displays a weekly metric (mileage or average feeling) over
 //  a selectable rolling window (1M / 3M / 6M). A single view is reused
 //  for both charts because they differ only in data source, y-scale,
 //  and axis label — captured in `WeeklyChartConfiguration`.
@@ -62,8 +62,8 @@ enum PerformanceTimeWindow: String, CaseIterable, Identifiable {
 }
 
 /// Per-chart configuration that slots into the shared `WeeklyChartView`
-/// body. Captures the small differences between the mileage and felt-
-/// rating variants (data source, y-scale, axis label).
+/// body. Captures the small differences between the mileage and feeling
+/// variants (data source and y-scale).
 struct WeeklyChartConfiguration {
     /// Title shown above the chart.
     let title: String
@@ -79,15 +79,15 @@ struct WeeklyChartConfiguration {
         projection: WorkoutAggregations.weeklyMileage
     )
 
-    static let feltRating = WeeklyChartConfiguration(
+    static let feeling = WeeklyChartConfiguration(
         title: "How it's been feeling",
         fixedYScale: 0...10,
-        projection: WorkoutAggregations.weeklyAverageFeltRating
+        projection: WorkoutAggregations.weeklyAverageFeeling
     )
 }
 
 /// Parameterized line chart for a weekly metric. Shows the Performance
-/// Hub's mileage and felt-rating charts via `WeeklyChartConfiguration`.
+/// Hub's mileage and feeling charts via `WeeklyChartConfiguration`.
 struct WeeklyChartView: View {
     let exercises: [Exercise]
     let configuration: WeeklyChartConfiguration
@@ -230,8 +230,8 @@ struct WeeklyChartView: View {
         .modelContainer(ModelContainerFactory.makePreviewContainer())
 }
 
-#Preview("Felt Rating") {
-    WeeklyChartView(exercises: [], configuration: .feltRating)
+#Preview("Feeling") {
+    WeeklyChartView(exercises: [], configuration: .feeling)
         .padding()
         .modelContainer(ModelContainerFactory.makePreviewContainer())
 }

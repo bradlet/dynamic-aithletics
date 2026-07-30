@@ -63,7 +63,10 @@ enum HealthKitWorkoutMapper {
                 durationSeconds: seconds,
                 distanceMiles: miles,
                 notes: "",
-                feltRating: 0,
+                // Health has no subjective ratings; both stay unrecorded
+                // until the athlete rates the workout in the app.
+                feeling: nil,
+                perceivedExertion: nil,
                 source: WorkoutSource.appleHealth.rawValue,
                 externalID: dto.id
             )
