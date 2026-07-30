@@ -55,6 +55,8 @@ cd Evals && swift run CoachEval inspect --scenario high-rpe --prompt-mode chat
 - Header doc comments on all public/internal functions
 - `ModelContainerFactory.makePreviewContainer()` for test and preview contexts
 - Cached `DateFormatter` instances (static lets) — never allocate in computed properties
+- **The strength board never changes the selected day in response to a move.** Dragging a card onto a day chip and the card's "Move to Day" context menu both leave `selectedDay` alone; the chip counts are the feedback. Don't "helpfully" follow the exercise.
+- **Plan editing goes through `StrengthPlanFields`/`StrengthPlanDraft`.** Any surface that sets `plannedSets`/`plannedReps` (add-from-library today) reuses that section so the add and edit flows can't drift apart.
 - **Sheets sync `syncNow()` vs `performSync()` must stay split.** The debounce `Task` calls `performSync()` directly. Calling `syncNow()` from inside the debounce task would `.cancel()` the task on itself, propagating cancellation to the in-flight `URLSession` and surfacing as `CancellationError("cancelled")`. `StubGoogleSheetsAPI.overwriteSheet` calls `Task.checkCancellation()` to catch regressions of this pattern.
 
 ## File Layout
@@ -94,3 +96,6 @@ Views/
 - `Views/Shared/WorkoutFormFields.swift` — reusable workout form sections shared by `RecordWorkoutSheet` (create) and `WorkoutDetailSheet` (edit)
 - `Views/History/WorkoutDetailSheet.swift` — edit + delete popup for a recorded workout; contains the `WorkoutEditor` helper enum that owns the mutation path (unit-tested)
 - `Views/History/WorkoutListView.swift` — discrete 10-per-page pagination, tappable rows, calendar-driven navigation/highlight, `WorkoutListPagination` helper for testable page math
+- `Views/Strength/StrengthBoardPlanner.swift` — pure lane/order mutations for the weekly kanban board (unit-tested)
+- `Views/Strength/StrengthPlanFields.swift` — `StrengthPlanDraft` (plan form state + `apply(to:)`) and the shared sets × reps form section used by both the add-from-library and edit-plan flows
+- `Views/Strength/ExerciseLibrarySheet.swift` — library browser: muscle-group filter chips + search + sectioned list, plus the `ExerciseLibraryFilter` helper enum owning the filter/grouping math (unit-tested)
