@@ -64,8 +64,8 @@ struct StrengthTrainingView: View {
                 }
             }
             .sheet(isPresented: $showLibrary) {
-                ExerciseLibrarySheet(provider: .withUserLibrary(container: modelContext.container)) { entry in
-                    addFromLibrary(entry)
+                ExerciseLibrarySheet(provider: .withUserLibrary(container: modelContext.container)) { entry, plan in
+                    addFromLibrary(entry, plan: plan)
                 }
             }
             .sheet(item: $recordingExercise) { exercise in
@@ -125,14 +125,17 @@ struct StrengthTrainingView: View {
 
     // MARK: - Board Mutations
 
-    /// Adds a library entry to the end of the selected day's active plan.
-    private func addFromLibrary(_ entry: LibraryExercise) {
+    /// Adds a library entry to the end of the selected day's active plan,
+    /// carrying the sets × reps plan drafted in the library sheet.
+    private func addFromLibrary(_ entry: LibraryExercise, plan: StrengthPlanDraft) {
         let exercise = StrengthExercise(
             name: entry.name,
             libraryExerciseID: entry.id,
             muscleGroup: entry.muscleGroup,
             weekdayIndex: selectedDay,
-            sortOrder: StrengthBoardPlanner.nextSortOrder(allExercises, day: selectedDay, offloaded: false)
+            sortOrder: StrengthBoardPlanner.nextSortOrder(allExercises, day: selectedDay, offloaded: false),
+            plannedSets: plan.plannedSets,
+            plannedReps: plan.plannedReps
         )
         withAnimation { modelContext.insert(exercise) }
     }

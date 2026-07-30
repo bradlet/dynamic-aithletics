@@ -2,9 +2,10 @@
 //  StrengthLibraryUITests.swift
 //  Hybrid AIthleticsUITests
 //
-//  Functional UI tests for the user-created exercise library flow: creating
-//  a custom exercise through the library sheet's '+' form and removing it
-//  again with swipe-to-delete.
+//  Functional UI tests for the strength library flows: creating a custom
+//  exercise through the library sheet's '+' form and removing it again with
+//  swipe-to-delete, filtering the library by muscle group, and adding an
+//  exercise with its planned sets × reps in one pass.
 //
 //  Launches the app with `-uiTestSeed` for a deterministic in-memory store,
 //  so the user library always starts empty.
@@ -86,6 +87,45 @@ final class StrengthLibraryUITests: XCTestCase {
         XCTAssertFalse(
             app.staticTexts["UITest Custom Move"].waitForExistence(timeout: 2),
             "Deleted exercise should no longer appear in the library"
+        )
+    }
+
+    /// Filtering by muscle group and adding the exercise with a plan in one
+    /// pass: the drafted sets × reps must land on the new board card without a
+    /// follow-up trip through the plan editor.
+    @MainActor
+    func testFilterByMuscleGroupAndAddWithPlan() {
+        let app = launchOnStrengthTab()
+
+        let libraryButton = app.buttons["strength.libraryButton"]
+        XCTAssertTrue(libraryButton.waitForExistence(timeout: 5), "Library button should exist")
+        libraryButton.tap()
+
+        // Narrow the catalog to one muscle group with the filter chips.
+        let chestChip = app.buttons["exerciseLibrary.filter.Chest"]
+        XCTAssertTrue(chestChip.waitForExistence(timeout: 5), "Chest filter chip should exist")
+        chestChip.tap()
+        XCTAssertFalse(
+            app.staticTexts["Barbell Row"].exists,
+            "Filtering to Chest should hide other muscle groups"
+        )
+
+        let benchRow = app.staticTexts["Barbell Bench Press"]
+        XCTAssertTrue(benchRow.waitForExistence(timeout: 5), "Chest section should list bench press")
+        benchRow.tap()
+
+        // Adjust the plan right in the add flow: 3×8 default -> 4×7.
+        let setsStepper = app.steppers["planFields.setsStepper"]
+        XCTAssertTrue(setsStepper.waitForExistence(timeout: 5), "Add flow should offer a sets stepper")
+        setsStepper.buttons.element(boundBy: 1).tap()
+        app.steppers["planFields.repsStepper"].buttons.element(boundBy: 0).tap()
+
+        app.buttons["exerciseLibrary.add"].tap()
+
+        // The card lands already carrying the plan badge.
+        XCTAssertTrue(
+            app.staticTexts["4×7"].waitForExistence(timeout: 5),
+            "New card should show the plan drafted while adding"
         )
     }
 

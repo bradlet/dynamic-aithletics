@@ -6,7 +6,7 @@
 //  the `ExerciseLibraryProvider` abstraction (bundled JSON today, mergeable
 //  with a server-based catalog later). Searchable, filterable by muscle group
 //  via the chip row at the top, and grouped by muscle group; tapping an entry
-//  shows details with an Add button.
+//  shows details with a sets × reps plan and an Add button.
 //
 
 import SwiftUI
@@ -69,8 +69,9 @@ enum ExerciseLibraryFilter {
 struct ExerciseLibrarySheet: View {
     /// Source of library entries. Defaults to the app's composite provider.
     var provider: any ExerciseLibraryProvider = .default
-    /// Called with the chosen entry; the caller creates the board exercise.
-    let onSelect: (LibraryExercise) -> Void
+    /// Called with the chosen entry and its drafted plan; the caller creates
+    /// the board exercise.
+    let onSelect: (LibraryExercise, StrengthPlanDraft) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
@@ -195,8 +196,8 @@ struct ExerciseLibrarySheet: View {
                 Section {
                     ForEach(section.entries) { entry in
                         NavigationLink {
-                            LibraryExerciseDetailView(entry: entry) {
-                                onSelect(entry)
+                            LibraryExerciseDetailView(entry: entry) { plan in
+                                onSelect(entry, plan)
                                 dismiss()
                             }
                         } label: {
@@ -269,11 +270,14 @@ struct ExerciseLibrarySheet: View {
 
 // MARK: - Detail
 
-/// Detail view for one library entry with an Add button.
+/// Detail view for one library entry with a sets × reps plan and an Add
+/// button, so a new exercise lands on the board already planned.
 struct LibraryExerciseDetailView: View {
     let entry: LibraryExercise
-    /// Called when the user adds this exercise to their board.
-    let onAdd: () -> Void
+    /// Called with the drafted plan when the user adds this exercise.
+    let onAdd: (StrengthPlanDraft) -> Void
+
+    @State private var plan = StrengthPlanDraft()
 
     var body: some View {
         List {
@@ -291,9 +295,10 @@ struct LibraryExerciseDetailView: View {
                 LabeledContent("Equipment", value: entry.equipment)
                 LabeledContent("Difficulty", value: entry.difficulty)
             }
+            StrengthPlanFields(draft: $plan)
             Section {
                 Button {
-                    onAdd()
+                    onAdd(plan)
                 } label: {
                     Label("Add to This Day", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
@@ -307,5 +312,5 @@ struct LibraryExerciseDetailView: View {
 }
 
 #Preview {
-    ExerciseLibrarySheet(onSelect: { _ in })
+    ExerciseLibrarySheet(onSelect: { _, _ in })
 }
