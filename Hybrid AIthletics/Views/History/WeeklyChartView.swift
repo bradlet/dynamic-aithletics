@@ -69,6 +69,10 @@ struct WeeklyChartConfiguration {
     let title: String
     /// Fixed y-axis domain, or `nil` to auto-scale from the data.
     let fixedYScale: ClosedRange<Double>?
+    /// Spacing between y-axis ticks, or `nil` for automatic placement. Short
+    /// fixed domains pin a stride so Charts labels every step of the scale
+    /// (including its maximum) instead of every other one.
+    let yAxisStride: Double?
     /// Projects recorded exercises into weekly points. The last parameter
     /// is the first weekday of the aggregation week (1=Sunday ... 7=Saturday).
     let projection: (_ exercises: [Exercise], _ weekCount: Int, _ anchor: Date, _ firstWeekday: Int) -> [WeeklyMetricPoint]
@@ -76,12 +80,16 @@ struct WeeklyChartConfiguration {
     static let mileage = WeeklyChartConfiguration(
         title: "Weekly Mileage",
         fixedYScale: nil,
+        yAxisStride: nil,
         projection: WorkoutAggregations.weeklyMileage
     )
 
+    /// Feeling runs 1–5, but the domain starts at 0 so a "Very Weak" week
+    /// isn't glued to the frame's bottom edge.
     static let feeling = WeeklyChartConfiguration(
         title: "How it's been feeling",
-        fixedYScale: 0...10,
+        fixedYScale: 0...5,
+        yAxisStride: 1,
         projection: WorkoutAggregations.weeklyAverageFeeling
     )
 }
@@ -154,6 +162,12 @@ struct WeeklyChartView: View {
         return 0...ceiling
     }
 
+    /// Y-axis tick placement for this chart.
+    private var yAxisValues: AxisMarkValues {
+        guard let stride = configuration.yAxisStride else { return .automatic }
+        return .stride(by: stride)
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             Text(configuration.title)
@@ -191,7 +205,7 @@ struct WeeklyChartView: View {
             .chartYScale(domain: yScaleDomain)
             .chartLegend(.hidden)
             .chartYAxis {
-                AxisMarks(position: .leading) { value in
+                AxisMarks(position: .leading, values: yAxisValues) { value in
                     AxisGridLine()
                     AxisValueLabel {
                         if let d = value.as(Double.self) {

@@ -92,8 +92,11 @@ enum WorkoutAggregations {
     // MARK: - Feeling projections
 
     /// Averages the recorded 1–5 `feeling` per week, ignoring exercises whose
-    /// workout has no feeling recorded. Empty weeks and weeks with only
-    /// unrated workouts both yield `0` for now.
+    /// workout has no feeling recorded.
+    ///
+    /// Empty weeks and weeks with only unrated workouts both yield a `nil`
+    /// value: there is no such thing as a feeling of zero, so the chart must
+    /// break its line at those weeks rather than plot a floor value.
     static func weeklyAverageFeeling(
         exercises: [Exercise],
         weekCount: Int,
@@ -105,14 +108,14 @@ enum WorkoutAggregations {
                 // `workout?.feeling` is Int?? — compactMap strips only one
                 // level, so unwrap the workout first.
                 let ratings = bucket.exercises.compactMap(\.workout).compactMap(\.feeling)
-                let average: Double
-                if ratings.isEmpty {
-                    average = 0
-                } else {
-                    let sum = ratings.reduce(0, +)
-                    average = Double(sum) / Double(ratings.count)
+                guard !ratings.isEmpty else {
+                    return WeeklyMetricPoint(weekStart: bucket.weekStart, value: nil)
                 }
-                return WeeklyMetricPoint(weekStart: bucket.weekStart, value: average)
+                let sum = ratings.reduce(0, +)
+                return WeeklyMetricPoint(
+                    weekStart: bucket.weekStart,
+                    value: Double(sum) / Double(ratings.count)
+                )
             }
     }
 

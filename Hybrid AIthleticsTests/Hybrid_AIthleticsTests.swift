@@ -3576,18 +3576,19 @@ struct WorkoutAggregationsTests {
         #expect(points.last?.value == 3.5)
     }
 
-    @Test func weeklyAverageFeelingEmptyWeekIsZero() {
+    @Test func weeklyAverageFeelingEmptyWeekIsNil() {
         let points = WorkoutAggregations.weeklyAverageFeeling(
             exercises: [],
             weekCount: 4,
             anchor: anchorWednesday
         )
         #expect(points.count == 4)
-        #expect(points.allSatisfy { $0.value == 0 })
+        #expect(points.allSatisfy { $0.value == nil })
     }
 
-    @Test func weeklyAverageFeelingWeekWithOnlyUnratedIsZero() {
-        // Two workouts in the current week, both unrated — must not NaN or crash.
+    @Test func weeklyAverageFeelingWeekWithOnlyUnratedIsNil() {
+        // Two workouts in the current week, both unrated — must not NaN or
+        // collapse to a false zero.
         let workouts = [
             makeExercise(date: makeDate(year: 2026, month: 4, day: 7), miles: 3.0, feeling: nil),
             makeExercise(date: makeDate(year: 2026, month: 4, day: 8), miles: 3.0, feeling: nil)
@@ -3597,7 +3598,59 @@ struct WorkoutAggregationsTests {
             weekCount: 4,
             anchor: anchorWednesday
         )
-        #expect(points.last?.value == 0)
+        #expect(points.last?.value == nil)
+    }
+
+    /// Mileage keeps its zero semantics — an empty week genuinely *is* zero
+    /// miles, so the mileage line must not gain gaps.
+    @Test func weeklyMileageEmptyWeekIsStillZeroNotNil() {
+        let points = WorkoutAggregations.weeklyMileage(
+            exercises: [],
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.count == 4)
+        #expect(points.allSatisfy { $0.value == 0 })
+    }
+
+    /// Only the feeling drives this projection: a week whose workouts have an
+    /// exertion but no feeling is still a gap.
+    @Test func weeklyAverageFeelingIgnoresPerceivedExertion() {
+        let exercise = Exercise(
+            name: "rated effort only",
+            type: .run,
+            durationSeconds: 1800,
+            distanceMiles: 3.0,
+            date: makeDate(year: 2026, month: 4, day: 7),
+            workout: Workout(
+                durationSeconds: 1800,
+                distanceMiles: 3.0,
+                feeling: nil,
+                perceivedExertion: 9
+            )
+        )
+        let points = WorkoutAggregations.weeklyAverageFeeling(
+            exercises: [exercise],
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(points.last?.value == nil)
+    }
+
+    /// The gap in the middle of a window must survive into the chart's
+    /// segmentation as an actual break.
+    @Test func weeklyAverageFeelingGapSplitsChartSegments() {
+        let workouts = [
+            makeExercise(date: makeDate(year: 2026, month: 3, day: 23), miles: 3.0, feeling: 4),
+            // Nothing rated the following week.
+            makeExercise(date: makeDate(year: 2026, month: 4, day: 6), miles: 3.0, feeling: 2)
+        ]
+        let points = WorkoutAggregations.weeklyAverageFeeling(
+            exercises: workouts,
+            weekCount: 4,
+            anchor: anchorWednesday
+        )
+        #expect(WeeklyChartSeries.segments(points).count == 2)
     }
 
     @Test func currentWeekMileageSumsWorkoutsInAnchorWeek() {
@@ -3768,7 +3821,7 @@ struct WorkoutAggregationsTests {
             anchor: anchorWednesday,
             firstWeekday: 2
         )
-        #expect(points.last?.value == 0)
+        #expect(points.last?.value == nil)
         #expect(points[points.count - 2].value == 3.0)
     }
 }
