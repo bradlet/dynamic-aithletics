@@ -4665,3 +4665,80 @@ struct ExerciseLibraryFilterTests {
         #expect(ExerciseLibraryFilter.availableGroups([]).isEmpty)
     }
 }
+
+// MARK: - StrengthPlanDraft Tests
+
+struct StrengthPlanDraftTests {
+
+    @Test func defaultDraftIsPlannedOnCommonStructure() {
+        let draft = StrengthPlanDraft()
+        #expect(draft.isPlanned)
+        #expect(draft.sets == 3)
+        #expect(draft.reps == 8)
+        #expect(draft.plannedSets == 3)
+        #expect(draft.plannedReps == 8)
+        #expect(draft.summary == "3×8")
+    }
+
+    @Test func explicitValuesArePlanned() {
+        let draft = StrengthPlanDraft(sets: 5, reps: 5)
+        #expect(draft.isPlanned)
+        #expect(draft.plannedSets == 5)
+        #expect(draft.plannedReps == 5)
+        #expect(draft.summary == "5×5")
+    }
+
+    @Test func seedingFromStoredPlan() {
+        let draft = StrengthPlanDraft(plannedSets: 4, plannedReps: 12)
+        #expect(draft.isPlanned)
+        #expect(draft.sets == 4)
+        #expect(draft.reps == 12)
+    }
+
+    @Test func seedingFromMissingPlanStartsSwitchedOffOnDefaults() {
+        let draft = StrengthPlanDraft(plannedSets: nil, plannedReps: nil)
+        #expect(draft.isPlanned == false)
+        #expect(draft.sets == StrengthPlanDraft.defaultSets)
+        #expect(draft.reps == StrengthPlanDraft.defaultReps)
+        #expect(draft.plannedSets == nil)
+        #expect(draft.plannedReps == nil)
+        #expect(draft.summary == nil)
+    }
+
+    @Test func partialStoredPlanReadsAsNoPlan() {
+        #expect(StrengthPlanDraft(plannedSets: 3, plannedReps: nil).isPlanned == false)
+        #expect(StrengthPlanDraft(plannedSets: nil, plannedReps: 8).isPlanned == false)
+    }
+
+    @Test func switchingOffKeepsStepperValuesButClearsPlan() {
+        var draft = StrengthPlanDraft(sets: 4, reps: 12)
+        draft.isPlanned = false
+        #expect(draft.sets == 4)
+        #expect(draft.reps == 12)
+        #expect(draft.plannedSets == nil)
+        #expect(draft.plannedReps == nil)
+    }
+
+    @Test func applyWritesPlanOntoExercise() {
+        let exercise = StrengthExercise(name: "Back Squat")
+        StrengthPlanDraft(sets: 5, reps: 3).apply(to: exercise)
+        #expect(exercise.plannedSets == 5)
+        #expect(exercise.plannedReps == 3)
+        #expect(exercise.plannedSummary == "5×3")
+    }
+
+    @Test func applyClearsPlanWhenSwitchedOff() {
+        let exercise = StrengthExercise(name: "Back Squat", plannedSets: 3, plannedReps: 8)
+        var draft = StrengthPlanDraft(plannedSets: 3, plannedReps: 8)
+        draft.isPlanned = false
+        draft.apply(to: exercise)
+        #expect(exercise.plannedSets == nil)
+        #expect(exercise.plannedReps == nil)
+        #expect(exercise.plannedSummary == nil)
+    }
+
+    @Test func stepperRangesMatchTheEditor() {
+        #expect(StrengthPlanDraft.setsRange == 1...20)
+        #expect(StrengthPlanDraft.repsRange == 1...100)
+    }
+}

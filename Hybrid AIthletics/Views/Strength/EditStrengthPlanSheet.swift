@@ -6,6 +6,9 @@
 //  of 8 reps). This is plan-only data the user keeps in mind through the
 //  week — it never touches the recorded `StrengthWorkout` history.
 //
+//  The fields come from `StrengthPlanFields`, shared with the add-from-library
+//  flow so both surfaces stay identical.
+//
 
 import SwiftUI
 import SwiftData
@@ -17,41 +20,25 @@ struct EditStrengthPlanSheet: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var sets: Int
-    @State private var reps: Int
+    @State private var draft: StrengthPlanDraft
 
-    /// Creates the sheet, seeding the steppers from the existing plan or a
-    /// common 3×8 default.
+    /// Creates the sheet, seeding the draft from the existing plan (or a
+    /// switched-off 3×8 when the exercise has no plan yet).
     /// - Parameter exercise: The exercise whose plan is being edited.
     init(exercise: StrengthExercise) {
         self.exercise = exercise
-        _sets = State(initialValue: exercise.plannedSets ?? 3)
-        _reps = State(initialValue: exercise.plannedReps ?? 8)
+        _draft = State(
+            initialValue: StrengthPlanDraft(
+                plannedSets: exercise.plannedSets,
+                plannedReps: exercise.plannedReps
+            )
+        )
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    Stepper("Sets: \(sets)", value: $sets, in: 1...20)
-                        .accessibilityIdentifier("editPlan.setsStepper")
-                    Stepper("Reps: \(reps)", value: $reps, in: 1...100)
-                        .accessibilityIdentifier("editPlan.repsStepper")
-                } header: {
-                    Text("Planned Sets × Reps")
-                } footer: {
-                    Text("A reminder of your set structure for the week. Not stored with recorded weights.")
-                }
-                if exercise.plannedSummary != nil {
-                    Section {
-                        Button("Clear Plan", role: .destructive) {
-                            exercise.plannedSets = nil
-                            exercise.plannedReps = nil
-                            dismiss()
-                        }
-                        .accessibilityIdentifier("editPlan.clear")
-                    }
-                }
+                StrengthPlanFields(draft: $draft)
             }
             .navigationTitle(exercise.name)
             .navigationBarTitleDisplayMode(.inline)
@@ -61,8 +48,7 @@ struct EditStrengthPlanSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        exercise.plannedSets = sets
-                        exercise.plannedReps = reps
+                        draft.apply(to: exercise)
                         dismiss()
                     }
                     .accessibilityIdentifier("editPlan.save")
