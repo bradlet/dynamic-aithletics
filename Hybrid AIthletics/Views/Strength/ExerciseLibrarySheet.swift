@@ -4,11 +4,66 @@
 //
 //  Browsable strength exercise library. Entries load asynchronously through
 //  the `ExerciseLibraryProvider` abstraction (bundled JSON today, mergeable
-//  with a server-based catalog later). Searchable and grouped by muscle
-//  group; tapping an entry shows details with an Add button.
+//  with a server-based catalog later). Searchable, filterable by muscle group
+//  via the chip row at the top, and grouped by muscle group; tapping an entry
+//  shows details with an Add button.
 //
 
 import SwiftUI
+
+// MARK: - Filtering
+
+/// Pure filtering/grouping helpers for the exercise library list. Kept out of
+/// the view so the search + muscle-group filter math is unit-testable (same
+/// pattern as `StrengthBoardPlanner`).
+enum ExerciseLibraryFilter {
+
+    /// Whether an entry survives the current search text and group filter.
+    /// - Parameters:
+    ///   - entry: The library entry to test.
+    ///   - searchText: Free-text search; empty matches everything. Matched
+    ///     against name, muscle group, and equipment.
+    ///   - group: Primary muscle group to restrict to, or `nil` for all.
+    static func matches(_ entry: LibraryExercise, searchText: String, group: MuscleGroup?) -> Bool {
+        if let group, entry.muscleGroup != group { return false }
+        guard !searchText.isEmpty else { return true }
+        return entry.name.localizedCaseInsensitiveContains(searchText)
+            || entry.muscleGroup.rawValue.localizedCaseInsensitiveContains(searchText)
+            || entry.equipment.localizedCaseInsensitiveContains(searchText)
+    }
+
+    /// Filters entries and groups the survivors by primary muscle group,
+    /// dropping empty groups. Groups follow `MuscleGroup.allCases` order;
+    /// entries within a group are sorted by name.
+    /// - Parameters:
+    ///   - entries: All library entries.
+    ///   - searchText: Free-text search; empty matches everything.
+    ///   - group: Primary muscle group to restrict to, or `nil` for all.
+    static func grouped(
+        _ entries: [LibraryExercise],
+        searchText: String,
+        group: MuscleGroup?
+    ) -> [(group: MuscleGroup, entries: [LibraryExercise])] {
+        let filtered = entries.filter { matches($0, searchText: searchText, group: group) }
+        return MuscleGroup.allCases.compactMap { candidate in
+            let members = filtered
+                .filter { $0.muscleGroup == candidate }
+                .sorted { $0.name < $1.name }
+            return members.isEmpty ? nil : (candidate, members)
+        }
+    }
+
+    /// The muscle groups actually represented in the library, in
+    /// `MuscleGroup.allCases` order. Drives the filter chip row, so chips stay
+    /// stable while the user types in the search field.
+    /// - Parameter entries: All library entries.
+    static func availableGroups(_ entries: [LibraryExercise]) -> [MuscleGroup] {
+        let present = Set(entries.map(\.muscleGroup))
+        return MuscleGroup.allCases.filter { present.contains($0) }
+    }
+}
+
+// MARK: - Sheet
 
 /// Sheet presenting the exercise library for adding an exercise to a day.
 struct ExerciseLibrarySheet: View {
@@ -21,22 +76,19 @@ struct ExerciseLibrarySheet: View {
     @Environment(\.modelContext) private var modelContext
     @State private var exercises: [LibraryExercise] = []
     @State private var searchText: String = ""
+    @State private var selectedGroup: MuscleGroup?
     @State private var loadFailed = false
     @State private var showCreateForm = false
 
-    /// Entries matching the current search, grouped by primary muscle group.
+    /// Entries matching the current search and group filter, grouped by
+    /// primary muscle group.
     private var groupedExercises: [(group: MuscleGroup, entries: [LibraryExercise])] {
-        let filtered = searchText.isEmpty ? exercises : exercises.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
-            || $0.muscleGroup.rawValue.localizedCaseInsensitiveContains(searchText)
-            || $0.equipment.localizedCaseInsensitiveContains(searchText)
-        }
-        return MuscleGroup.allCases.compactMap { group in
-            let entries = filtered
-                .filter { $0.muscleGroup == group }
-                .sorted { $0.name < $1.name }
-            return entries.isEmpty ? nil : (group, entries)
-        }
+        ExerciseLibraryFilter.grouped(exercises, searchText: searchText, group: selectedGroup)
+    }
+
+    /// Muscle groups represented in the loaded library.
+    private var availableGroups: [MuscleGroup] {
+        ExerciseLibraryFilter.availableGroups(exercises)
     }
 
     var body: some View {
@@ -51,7 +103,11 @@ struct ExerciseLibrarySheet: View {
                 } else if exercises.isEmpty {
                     ProgressView("Loading library…")
                 } else {
-                    libraryList
+                    VStack(spacing: 0) {
+                        filterChips
+                        Divider()
+                        libraryList
+                    }
                 }
             }
             .navigationTitle("Exercise Library")
@@ -86,6 +142,52 @@ struct ExerciseLibrarySheet: View {
         }
     }
 
+    // MARK: - Muscle Group Filter
+
+    /// Horizontally scrolling muscle-group chips pinned above the list, so a
+    /// group can be targeted without scrolling the whole catalog.
+    private var filterChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                filterChip(nil, label: "All")
+                ForEach(availableGroups) { group in
+                    filterChip(group, label: group.rawValue)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .accessibilityIdentifier("exerciseLibrary.filterChips")
+    }
+
+    /// One filter chip. Tapping the selected group chip clears the filter.
+    /// - Parameters:
+    ///   - group: The group the chip selects, or `nil` for the "All" chip.
+    ///   - label: Chip text.
+    private func filterChip(_ group: MuscleGroup?, label: String) -> some View {
+        let isSelected = selectedGroup == group
+        let accent = group?.color ?? .blue
+        return Button {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                selectedGroup = isSelected ? nil : group
+            }
+        } label: {
+            Text(label)
+                .font(.caption.bold())
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(
+                    Capsule().fill(isSelected ? accent : accent.opacity(0.12))
+                )
+                .foregroundStyle(isSelected ? .white : accent)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("exerciseLibrary.filter.\(group?.rawValue ?? "All")")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    // MARK: - List
+
     /// The searchable, muscle-group-sectioned list of library entries.
     private var libraryList: some View {
         List {
@@ -117,6 +219,15 @@ struct ExerciseLibrarySheet: View {
             }
         }
         .searchable(text: $searchText, prompt: "Search exercises")
+        .overlay {
+            if groupedExercises.isEmpty {
+                ContentUnavailableView(
+                    "No Exercises",
+                    systemImage: "magnifyingglass",
+                    description: Text("No exercises match the current search and filter.")
+                )
+            }
+        }
         .accessibilityIdentifier("exerciseLibrary.list")
     }
 

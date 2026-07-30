@@ -4556,3 +4556,112 @@ struct PlanPerformanceTests {
         }
     }
 }
+
+// MARK: - ExerciseLibraryFilter Tests
+
+struct ExerciseLibraryFilterTests {
+
+    /// Builds a library entry with only the fields the filter reads.
+    private func entry(
+        _ name: String,
+        group: MuscleGroup,
+        equipment: String = "Barbell"
+    ) -> LibraryExercise {
+        LibraryExercise(
+            id: name.lowercased().replacingOccurrences(of: " ", with: "-"),
+            name: name,
+            details: "A movement.",
+            muscleGroup: group,
+            equipment: equipment,
+            difficulty: "Intermediate"
+        )
+    }
+
+    private var catalog: [LibraryExercise] {
+        [
+            entry("Bench Press", group: .chest),
+            entry("Cable Fly", group: .chest, equipment: "Cable"),
+            entry("Barbell Row", group: .back),
+            entry("Hammer Curl", group: .biceps, equipment: "Dumbbells"),
+        ]
+    }
+
+    // MARK: matches
+
+    @Test func emptySearchAndNoGroupMatchesEverything() {
+        for candidate in catalog {
+            #expect(ExerciseLibraryFilter.matches(candidate, searchText: "", group: nil))
+        }
+    }
+
+    @Test func searchMatchesNameCaseInsensitively() {
+        let bench = entry("Bench Press", group: .chest)
+        #expect(ExerciseLibraryFilter.matches(bench, searchText: "bench", group: nil))
+        #expect(ExerciseLibraryFilter.matches(bench, searchText: "PRESS", group: nil))
+        #expect(ExerciseLibraryFilter.matches(bench, searchText: "squat", group: nil) == false)
+    }
+
+    @Test func searchMatchesMuscleGroupAndEquipment() {
+        let curl = entry("Hammer Curl", group: .biceps, equipment: "Dumbbells")
+        #expect(ExerciseLibraryFilter.matches(curl, searchText: "biceps", group: nil))
+        #expect(ExerciseLibraryFilter.matches(curl, searchText: "dumbbell", group: nil))
+    }
+
+    @Test func groupFilterRestrictsToPrimaryMuscleGroup() {
+        let bench = entry("Bench Press", group: .chest)
+        #expect(ExerciseLibraryFilter.matches(bench, searchText: "", group: .chest))
+        #expect(ExerciseLibraryFilter.matches(bench, searchText: "", group: .back) == false)
+    }
+
+    @Test func searchAndGroupFilterCombineAsAnd() {
+        let bench = entry("Bench Press", group: .chest)
+        #expect(ExerciseLibraryFilter.matches(bench, searchText: "bench", group: .chest))
+        #expect(ExerciseLibraryFilter.matches(bench, searchText: "bench", group: .back) == false)
+        #expect(ExerciseLibraryFilter.matches(bench, searchText: "row", group: .chest) == false)
+    }
+
+    // MARK: grouped
+
+    @Test func groupedFollowsMuscleGroupCaseOrderAndSortsByName() {
+        let sections = ExerciseLibraryFilter.grouped(catalog, searchText: "", group: nil)
+        #expect(sections.map(\.group) == [.chest, .back, .biceps])
+        #expect(sections[0].entries.map(\.name) == ["Bench Press", "Cable Fly"])
+    }
+
+    @Test func groupedDropsEmptyGroups() {
+        let sections = ExerciseLibraryFilter.grouped(catalog, searchText: "", group: nil)
+        #expect(sections.contains { $0.group == .quads } == false)
+        #expect(sections.allSatisfy { !$0.entries.isEmpty })
+    }
+
+    @Test func groupedWithGroupFilterReturnsOnlyThatSection() {
+        let sections = ExerciseLibraryFilter.grouped(catalog, searchText: "", group: .chest)
+        #expect(sections.count == 1)
+        #expect(sections[0].group == .chest)
+        #expect(sections[0].entries.count == 2)
+    }
+
+    @Test func groupedAppliesSearchWithinGroupFilter() {
+        let sections = ExerciseLibraryFilter.grouped(catalog, searchText: "fly", group: .chest)
+        #expect(sections.count == 1)
+        #expect(sections[0].entries.map(\.name) == ["Cable Fly"])
+    }
+
+    @Test func groupedReturnsNothingWhenFilterAndSearchDisagree() {
+        #expect(ExerciseLibraryFilter.grouped(catalog, searchText: "row", group: .chest).isEmpty)
+    }
+
+    @Test func groupedOnEmptyCatalog() {
+        #expect(ExerciseLibraryFilter.grouped([], searchText: "", group: nil).isEmpty)
+    }
+
+    // MARK: availableGroups
+
+    @Test func availableGroupsAreDeduplicatedAndOrdered() {
+        #expect(ExerciseLibraryFilter.availableGroups(catalog) == [.chest, .back, .biceps])
+    }
+
+    @Test func availableGroupsOnEmptyCatalog() {
+        #expect(ExerciseLibraryFilter.availableGroups([]).isEmpty)
+    }
+}
