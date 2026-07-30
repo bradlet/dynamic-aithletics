@@ -2769,6 +2769,85 @@ struct WorkoutDetailEditTests {
     }
 }
 
+// MARK: - Weekly Chart Series Tests
+
+struct WeeklyChartSeriesTests {
+
+    /// Builds points on consecutive Sundays so segmentation is driven purely
+    /// by which values are present.
+    private func makePoints(_ values: [Double?]) -> [WeeklyMetricPoint] {
+        let base = Date(timeIntervalSince1970: 1_800_000_000)
+        return values.enumerated().map { index, value in
+            WeeklyMetricPoint(
+                weekStart: base.addingTimeInterval(Double(index) * 604_800),
+                value: value
+            )
+        }
+    }
+
+    @Test func emptyInputProducesNoSegments() {
+        #expect(WeeklyChartSeries.segments([]).isEmpty)
+    }
+
+    @Test func allValuesPresentProducesSingleSegment() {
+        let segments = WeeklyChartSeries.segments(makePoints([1, 2, 3, 4]))
+        #expect(segments.count == 1)
+        #expect(segments[0].points.count == 4)
+        #expect(segments[0].isSingleton == false)
+    }
+
+    /// Mileage always yields non-nil values, so its rendering must be
+    /// unaffected by segmentation.
+    @Test func allZeroValuesStillProduceOneSegment() {
+        let segments = WeeklyChartSeries.segments(makePoints([0, 0, 0]))
+        #expect(segments.count == 1)
+        #expect(segments[0].points.count == 3)
+    }
+
+    @Test func nilInMiddleSplitsIntoTwoSegments() {
+        let segments = WeeklyChartSeries.segments(makePoints([1, 2, nil, 4, 5]))
+        #expect(segments.count == 2)
+        #expect(segments[0].points.count == 2)
+        #expect(segments[1].points.count == 2)
+    }
+
+    @Test func leadingAndTrailingNilsAreDropped() {
+        let segments = WeeklyChartSeries.segments(makePoints([nil, 1, 2, nil]))
+        #expect(segments.count == 1)
+        #expect(segments[0].points.count == 2)
+        #expect(segments[0].points.map(\.value) == [1, 2])
+    }
+
+    @Test func isolatedValueBecomesSingletonSegment() {
+        let segments = WeeklyChartSeries.segments(makePoints([nil, 3, nil]))
+        #expect(segments.count == 1)
+        #expect(segments[0].isSingleton)
+        #expect(segments[0].points.first?.value == 3)
+    }
+
+    @Test func allNilProducesNoSegments() {
+        #expect(WeeklyChartSeries.segments(makePoints([nil, nil, nil])).isEmpty)
+    }
+
+    @Test func consecutiveNilsDoNotProduceEmptySegments() {
+        let segments = WeeklyChartSeries.segments(makePoints([1, nil, nil, 4]))
+        #expect(segments.count == 2)
+        #expect(segments.allSatisfy { !$0.points.isEmpty })
+    }
+
+    @Test func segmentIDsAreSequentialFromZero() {
+        let segments = WeeklyChartSeries.segments(makePoints([1, nil, 3, nil, 5]))
+        #expect(segments.map(\.id) == [0, 1, 2])
+    }
+
+    @Test func segmentsPreserveChronologicalOrder() {
+        let points = makePoints([1, 2, nil, 4])
+        let segments = WeeklyChartSeries.segments(points)
+        #expect(segments[0].points.first?.weekStart == points[0].weekStart)
+        #expect(segments[1].points.first?.weekStart == points[3].weekStart)
+    }
+}
+
 // MARK: - WorkoutAggregations Tests
 
 struct WorkoutAggregationsTests {

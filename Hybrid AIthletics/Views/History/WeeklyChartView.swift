@@ -67,27 +67,22 @@ enum PerformanceTimeWindow: String, CaseIterable, Identifiable {
 struct WeeklyChartConfiguration {
     /// Title shown above the chart.
     let title: String
-    /// Whether the y-axis is clamped to `0...10` (felt rating).
-    let fixedYScaleZeroToTen: Bool
+    /// Fixed y-axis domain, or `nil` to auto-scale from the data.
+    let fixedYScale: ClosedRange<Double>?
     /// Projects recorded exercises into weekly points. The last parameter
     /// is the first weekday of the aggregation week (1=Sunday ... 7=Saturday).
     let projection: (_ exercises: [Exercise], _ weekCount: Int, _ anchor: Date, _ firstWeekday: Int) -> [WeeklyMetricPoint]
-    /// Whether the y value represents a distance in miles. When `true`
-    /// the chart applies metric conversion and shows a unit axis label.
-    let isDistance: Bool
 
     static let mileage = WeeklyChartConfiguration(
         title: "Weekly Mileage",
-        fixedYScaleZeroToTen: false,
-        projection: WorkoutAggregations.weeklyMileage,
-        isDistance: true
+        fixedYScale: nil,
+        projection: WorkoutAggregations.weeklyMileage
     )
 
     static let feltRating = WeeklyChartConfiguration(
         title: "How it's been feeling",
-        fixedYScaleZeroToTen: true,
-        projection: WorkoutAggregations.weeklyAverageFeltRating,
-        isDistance: false
+        fixedYScale: 0...10,
+        projection: WorkoutAggregations.weeklyAverageFeltRating
     )
 }
 
@@ -101,15 +96,30 @@ struct WeeklyChartView: View {
     @Environment(\.weekStartDay) private var weekStartDay
     @State private var selectedWindow: PerformanceTimeWindow = .oneMonth
 
-    /// Derived chart points for the current window. For distance charts
-    /// we materialize a converted copy when metric is on so `LineMark`
-    /// positions and the axis label stay aligned.
+    /// Derived chart points for the current window, one per week including
+    /// weeks with no data (whose `value` is `nil`).
     private var points: [WeeklyMetricPoint] {
-        let raw = configuration.projection(exercises, selectedWindow.weekCount, Date(), weekStartDay)
-        guard configuration.isDistance, useMetricUnits else { return raw }
-        return raw.map {
-            WeeklyMetricPoint(weekStart: $0.weekStart, value: $0.value)
+        configuration.projection(exercises, selectedWindow.weekCount, Date(), weekStartDay)
+    }
+
+    /// Contiguous runs of weeks that carry a value. Weeks without one are
+    /// dropped, and each run becomes its own Charts series so the line
+    /// breaks at the gap instead of drawing a chord across it.
+    private var segments: [WeeklyChartSegment] {
+        WeeklyChartSeries.segments(points)
+    }
+
+    /// Pinned x-domain spanning the whole selected window. Required because
+    /// the marks no longer include valueless weeks — without this, a 6-month
+    /// window whose only data is in the last 3 weeks would silently render
+    /// as a 3-week chart.
+    private var xDomain: ClosedRange<Date> {
+        let dates = points.map(\.weekStart)
+        guard let first = dates.first, let last = dates.last, first <= last else {
+            let now = Date()
+            return now...now.addingTimeInterval(1)
         }
+        return first...last
     }
 
     /// Subset of `points` dates used for x-axis tick marks and labels.
@@ -131,14 +141,14 @@ struct WeeklyChartView: View {
         }
     }
 
-    /// Y-scale domain for the chart. Felt rating is clamped to the
-    /// rating scale; mileage auto-scales to the max value with a zero
-    /// baseline so short/flat weeks are still visible.
+    /// Y-scale domain for the chart. Rating charts clamp to their fixed
+    /// scale; mileage auto-scales to the max value with a zero baseline so
+    /// short/flat weeks are still visible.
     private var yScaleDomain: ClosedRange<Double> {
-        if configuration.fixedYScaleZeroToTen {
-            return 0...10
+        if let fixed = configuration.fixedYScale {
+            return fixed
         }
-        let maxValue = points.map(\.value).max() ?? 0
+        let maxValue = points.compactMap(\.value).max() ?? 0
         // Minimum ceiling of 1 so an all-zero week still renders a baseline.
         let ceiling = max(maxValue * 1.1, 1)
         return 0...ceiling
@@ -150,15 +160,36 @@ struct WeeklyChartView: View {
                 .font(.subheadline.weight(.semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Chart(points) { point in
-                LineMark(
-                    x: .value("Week", point.weekStart),
-                    y: .value("Value", point.value)
-                )
-                .interpolationMethod(.monotone)
-                .symbol(Circle().strokeBorder(lineWidth: 1.5))
+            Chart {
+                ForEach(segments) { segment in
+                    ForEach(segment.points) { point in
+                        LineMark(
+                            x: .value("Week", point.weekStart),
+                            y: .value("Value", point.value ?? 0),
+                            series: .value("Segment", segment.id)
+                        )
+                        .interpolationMethod(.monotone)
+                        .foregroundStyle(Color.accentColor)
+                        .symbol(Circle().strokeBorder(lineWidth: 1.5))
+                    }
+                }
+                // A one-week run has a zero-length path and so draws nothing.
+                // Give it an explicit dot; where the line's own symbol does
+                // render the two coincide exactly.
+                ForEach(segments.filter(\.isSingleton)) { segment in
+                    if let point = segment.points.first, let value = point.value {
+                        PointMark(
+                            x: .value("Week", point.weekStart),
+                            y: .value("Value", value)
+                        )
+                        .foregroundStyle(Color.accentColor)
+                        .symbol(Circle().strokeBorder(lineWidth: 1.5))
+                    }
+                }
             }
+            .chartXScale(domain: xDomain)
             .chartYScale(domain: yScaleDomain)
+            .chartLegend(.hidden)
             .chartYAxis {
                 AxisMarks(position: .leading) { value in
                     AxisGridLine()

@@ -19,9 +19,10 @@ import Foundation
 struct WeeklyMetricPoint: Identifiable, Equatable {
     /// Midnight at the start of this week (first weekday per configuration).
     let weekStart: Date
-    /// Metric value for this week: total miles or average felt rating.
-    /// Empty buckets always carry `0` per product spec.
-    let value: Double
+    /// Metric value for this week, or `nil` when the week has no data — the
+    /// chart breaks its line there rather than plotting a false zero. Mileage
+    /// never produces `nil`: an empty week genuinely *is* zero miles.
+    let value: Double?
 
     var id: Date { weekStart }
 }
