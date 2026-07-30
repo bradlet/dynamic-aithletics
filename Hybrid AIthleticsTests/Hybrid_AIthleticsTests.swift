@@ -2769,6 +2769,330 @@ struct WorkoutDetailEditTests {
     }
 }
 
+// MARK: - Radial Dial Geometry Tests
+
+struct RadialDialGeometryTests {
+
+    /// Matches the feeling dial: 6 slots (unset + 1...5) at a 17° pitch.
+    private let feelingSlots = 6
+    private let radius: CGFloat = 260
+    private let pitch: Double = 17
+
+    // MARK: Slot ↔ value mapping
+
+    @Test func slotIndexMapsNilToZero() {
+        #expect(RadialDialGeometry.slotIndex(for: nil, lowerBound: 1) == 0)
+    }
+
+    @Test func slotIndexMapsLowerBoundToOne() {
+        #expect(RadialDialGeometry.slotIndex(for: 1, lowerBound: 1) == 1)
+    }
+
+    @Test func valueAtSlotZeroIsNil() {
+        #expect(RadialDialGeometry.value(atSlotIndex: 0, lowerBound: 1, itemCount: feelingSlots) == nil)
+    }
+
+    @Test func valueOutOfRangeSlotIsNil() {
+        #expect(RadialDialGeometry.value(atSlotIndex: 6, lowerBound: 1, itemCount: feelingSlots) == nil)
+        #expect(RadialDialGeometry.value(atSlotIndex: -1, lowerBound: 1, itemCount: feelingSlots) == nil)
+    }
+
+    @Test func valueRoundTripsThroughSlotIndexOnFeelingScale() {
+        for value in 1...5 {
+            let index = RadialDialGeometry.slotIndex(for: value, lowerBound: 1)
+            #expect(RadialDialGeometry.value(atSlotIndex: index, lowerBound: 1, itemCount: feelingSlots) == value)
+        }
+    }
+
+    @Test func valueRoundTripsThroughSlotIndexOnExertionScale() {
+        for value in 1...10 {
+            let index = RadialDialGeometry.slotIndex(for: value, lowerBound: 1)
+            #expect(RadialDialGeometry.value(atSlotIndex: index, lowerBound: 1, itemCount: 11) == value)
+        }
+    }
+
+    // MARK: Drag → position
+
+    @Test func pointsPerItemScalesWithRadiusAndPitch() {
+        let narrow = RadialDialGeometry.pointsPerItem(radius: radius, degreesPerItem: 13)
+        let wide = RadialDialGeometry.pointsPerItem(radius: radius, degreesPerItem: 26)
+        #expect(abs(Double(wide) - Double(narrow) * 2) < 0.0001)
+
+        let bigger = RadialDialGeometry.pointsPerItem(radius: radius * 2, degreesPerItem: 13)
+        #expect(abs(Double(bigger) - Double(narrow) * 2) < 0.0001)
+    }
+
+    @Test func oneArcLengthOfDragEqualsOneDetent() {
+        let perItem = RadialDialGeometry.pointsPerItem(radius: radius, degreesPerItem: pitch)
+        let result = RadialDialGeometry.position(
+            basePosition: 2,
+            translation: -perItem,
+            radius: radius,
+            degreesPerItem: pitch,
+            itemCount: feelingSlots
+        )
+        #expect(abs(result - 3) < 0.000_000_001)
+    }
+
+    @Test func draggingLeftAdvancesPosition() {
+        let result = RadialDialGeometry.position(
+            basePosition: 2,
+            translation: -20,
+            radius: radius,
+            degreesPerItem: pitch,
+            itemCount: feelingSlots
+        )
+        #expect(result > 2)
+    }
+
+    @Test func draggingRightRetreatsPosition() {
+        let result = RadialDialGeometry.position(
+            basePosition: 3,
+            translation: 20,
+            radius: radius,
+            degreesPerItem: pitch,
+            itemCount: feelingSlots
+        )
+        #expect(result < 3)
+    }
+
+    @Test func positionIsExactInsideBounds() {
+        let perItem = Double(RadialDialGeometry.pointsPerItem(radius: radius, degreesPerItem: pitch))
+        let result = RadialDialGeometry.position(
+            basePosition: 1,
+            translation: CGFloat(-perItem * 1.5),
+            radius: radius,
+            degreesPerItem: pitch,
+            itemCount: feelingSlots
+        )
+        #expect(abs(result - 2.5) < 0.000_000_001)
+    }
+
+    @Test func positionRubberBandsPastUpperBound() {
+        let perItem = Double(RadialDialGeometry.pointsPerItem(radius: radius, degreesPerItem: pitch))
+        // Raw position would be 8 on a dial whose last slot is 5.
+        let result = RadialDialGeometry.position(
+            basePosition: 5,
+            translation: CGFloat(-perItem * 3),
+            radius: radius,
+            degreesPerItem: pitch,
+            itemCount: feelingSlots
+        )
+        #expect(result > 5)
+        #expect(result < 8)
+    }
+
+    @Test func positionRubberBandsPastLowerBound() {
+        let perItem = Double(RadialDialGeometry.pointsPerItem(radius: radius, degreesPerItem: pitch))
+        let result = RadialDialGeometry.position(
+            basePosition: 0,
+            translation: CGFloat(perItem * 3),
+            radius: radius,
+            degreesPerItem: pitch,
+            itemCount: feelingSlots
+        )
+        #expect(result < 0)
+        #expect(result > -3)
+    }
+
+    @Test func positionIsZeroForEmptyDial() {
+        let result = RadialDialGeometry.position(
+            basePosition: 3,
+            translation: -50,
+            radius: radius,
+            degreesPerItem: pitch,
+            itemCount: 0
+        )
+        #expect(result == 0)
+    }
+
+    @Test func positionHoldsBaseForDegeneratePitch() {
+        let result = RadialDialGeometry.position(
+            basePosition: 3,
+            translation: -50,
+            radius: radius,
+            degreesPerItem: 0,
+            itemCount: feelingSlots
+        )
+        #expect(result == 3)
+    }
+
+    // MARK: Snapping
+
+    @Test func snappedIndexRoundsToNearest() {
+        #expect(RadialDialGeometry.snappedIndex(position: 2.4, itemCount: feelingSlots) == 2)
+        #expect(RadialDialGeometry.snappedIndex(position: 2.6, itemCount: feelingSlots) == 3)
+    }
+
+    @Test func snappedIndexClampsToBounds() {
+        #expect(RadialDialGeometry.snappedIndex(position: -3, itemCount: feelingSlots) == 0)
+        #expect(RadialDialGeometry.snappedIndex(position: 99, itemCount: feelingSlots) == feelingSlots - 1)
+    }
+
+    @Test func snappedIndexIsZeroForEmptyDial() {
+        #expect(RadialDialGeometry.snappedIndex(position: 4, itemCount: 0) == 0)
+    }
+
+    // MARK: Placement
+
+    @Test func angleDegreesIsZeroAtSelection() {
+        #expect(RadialDialGeometry.angleDegrees(itemOffset: 0, degreesPerItem: pitch) == 0)
+    }
+
+    @Test func angleDegreesIsSymmetricAboutSelection() {
+        let right = RadialDialGeometry.angleDegrees(itemOffset: 2, degreesPerItem: pitch)
+        let left = RadialDialGeometry.angleDegrees(itemOffset: -2, degreesPerItem: pitch)
+        #expect(right == -left)
+        #expect(right > 0)
+    }
+
+    @Test func itemPointIsHorizontallyCenteredAtSelection() {
+        let size = CGSize(width: 300, height: 104)
+        let point = RadialDialGeometry.itemPoint(
+            itemOffset: 0, degreesPerItem: pitch, radius: radius, size: size, topInset: 16
+        )
+        #expect(abs(point.x - 150) < 0.0001)
+        #expect(abs(point.y - 16) < 0.0001)  // sits at the arc's apex
+    }
+
+    @Test func itemPointMovesRightForPositiveOffset() {
+        let size = CGSize(width: 300, height: 104)
+        let point = RadialDialGeometry.itemPoint(
+            itemOffset: 1, degreesPerItem: pitch, radius: radius, size: size, topInset: 16
+        )
+        #expect(point.x > 150)
+    }
+
+    @Test func itemPointDropsBelowApexOffAxis() {
+        let size = CGSize(width: 300, height: 104)
+        let apex = RadialDialGeometry.itemPoint(
+            itemOffset: 0, degreesPerItem: pitch, radius: radius, size: size, topInset: 16
+        )
+        let offAxis = RadialDialGeometry.itemPoint(
+            itemOffset: 2, degreesPerItem: pitch, radius: radius, size: size, topInset: 16
+        )
+        #expect(offAxis.y > apex.y)
+    }
+
+    // MARK: Depth cues
+
+    @Test func scaleIsMaximalAtSelection() {
+        #expect(RadialDialGeometry.scale(itemOffset: 0) == 1.0)
+        #expect(RadialDialGeometry.scale(itemOffset: 1) < 1.0)
+    }
+
+    @Test func scaleNeverDropsBelowFloor() {
+        #expect(RadialDialGeometry.scale(itemOffset: 100, floor: 0.62) == 0.62)
+        #expect(RadialDialGeometry.scale(itemOffset: -100, floor: 0.62) == 0.62)
+    }
+
+    @Test func opacityIsOneAtSelection() {
+        #expect(RadialDialGeometry.opacity(itemOffset: 0, visibleSpan: 3.2) == 1.0)
+    }
+
+    @Test func opacityIsZeroBeyondVisibleSpan() {
+        #expect(RadialDialGeometry.opacity(itemOffset: 3.2, visibleSpan: 3.2) == 0)
+        #expect(RadialDialGeometry.opacity(itemOffset: -5, visibleSpan: 3.2) == 0)
+    }
+
+    @Test func opacityIsOpaqueForDegenerateSpan() {
+        #expect(RadialDialGeometry.opacity(itemOffset: 4, visibleSpan: 0) == 1)
+    }
+
+    // MARK: Stepping
+
+    @Test func steppedMovesOneDetent() {
+        #expect(RadialDialGeometry.stepped(index: 2, by: 1, itemCount: feelingSlots) == 3)
+        #expect(RadialDialGeometry.stepped(index: 2, by: -1, itemCount: feelingSlots) == 1)
+    }
+
+    @Test func steppedClampsAtBothEnds() {
+        #expect(RadialDialGeometry.stepped(index: 0, by: -1, itemCount: feelingSlots) == 0)
+        #expect(RadialDialGeometry.stepped(index: 5, by: 1, itemCount: feelingSlots) == 5)
+    }
+
+    @Test func steppedIsZeroForEmptyDial() {
+        #expect(RadialDialGeometry.stepped(index: 0, by: 1, itemCount: 0) == 0)
+    }
+}
+
+// MARK: - Rating Visuals Tests
+
+struct RatingVisualsTests {
+
+    // MARK: Feeling
+
+    @Test func feelingDisplayNamesCoverEveryLevel() {
+        #expect(FeelingVisuals.displayName(for: 1) == "Very Weak")
+        #expect(FeelingVisuals.displayName(for: 2) == "Weak")
+        #expect(FeelingVisuals.displayName(for: 3) == "Normal")
+        #expect(FeelingVisuals.displayName(for: 4) == "Strong")
+        #expect(FeelingVisuals.displayName(for: 5) == "Very Strong")
+    }
+
+    @Test func feelingDisplayNameIsNotSetForNilAndOutOfRange() {
+        #expect(FeelingVisuals.displayName(for: nil) == "Not set")
+        #expect(FeelingVisuals.displayName(for: 0) == "Not set")
+        #expect(FeelingVisuals.displayName(for: 6) == "Not set")
+    }
+
+    @Test func feelingSymbolsAreDistinctPerLevel() {
+        let symbols = (1...5).map { FeelingVisuals.symbolName(for: $0) }
+        #expect(Set(symbols).count == 5)
+    }
+
+    @Test func feelingSymbolIsNeutralSmileyWhenUnset() {
+        #expect(FeelingVisuals.symbolName(for: nil) == "smiley")
+        #expect(FeelingVisuals.symbolName(for: 9) == "smiley")
+    }
+
+    @Test func feelingTintIsSecondaryWhenUnset() {
+        #expect(FeelingVisuals.tint(for: nil) == Color.secondary)
+    }
+
+    @Test func feelingTintClampsOutOfRange() {
+        #expect(FeelingVisuals.tint(for: -3) == FeelingVisuals.tint(for: 1))
+        #expect(FeelingVisuals.tint(for: 99) == FeelingVisuals.tint(for: 5))
+    }
+
+    // MARK: Perceived exertion
+
+    @Test func exertionDisplayNameBuckets() {
+        #expect(ExertionVisuals.displayName(for: 1) == "Very Light")
+        #expect(ExertionVisuals.displayName(for: 2) == "Light")
+        #expect(ExertionVisuals.displayName(for: 3) == "Light")
+        #expect(ExertionVisuals.displayName(for: 4) == "Moderate")
+        #expect(ExertionVisuals.displayName(for: 5) == "Moderate")
+        #expect(ExertionVisuals.displayName(for: 6) == "High")
+        #expect(ExertionVisuals.displayName(for: 7) == "High")
+        #expect(ExertionVisuals.displayName(for: 8) == "Very Hard")
+        #expect(ExertionVisuals.displayName(for: 9) == "Very Hard")
+        #expect(ExertionVisuals.displayName(for: 10) == "Maximum Effort")
+    }
+
+    @Test func exertionDisplayNameIsNotSetForNilAndOutOfRange() {
+        #expect(ExertionVisuals.displayName(for: nil) == "Not set")
+        #expect(ExertionVisuals.displayName(for: 0) == "Not set")
+        #expect(ExertionVisuals.displayName(for: 11) == "Not set")
+    }
+
+    @Test func exertionTintIsSecondaryWhenUnset() {
+        #expect(ExertionVisuals.tint(for: nil) == Color.secondary)
+    }
+
+    @Test func exertionTintClampsOutOfRange() {
+        #expect(ExertionVisuals.tint(for: -3) == ExertionVisuals.tint(for: 1))
+        #expect(ExertionVisuals.tint(for: 99) == ExertionVisuals.tint(for: 10))
+    }
+
+    /// Feeling runs red (weak) → green (strong); exertion runs the other way,
+    /// so a low feeling and a high exertion both read "hot".
+    @Test func feelingAndExertionTintRampsRunOppositeDirections() {
+        #expect(FeelingVisuals.tint(for: 1) == ExertionVisuals.tint(for: 10))
+        #expect(FeelingVisuals.tint(for: 5) == ExertionVisuals.tint(for: 1))
+    }
+}
+
 // MARK: - Weekly Chart Series Tests
 
 struct WeeklyChartSeriesTests {
