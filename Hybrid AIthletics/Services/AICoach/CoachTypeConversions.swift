@@ -22,15 +22,19 @@ extension CoachWorkout {
 
     /// Creates a coaching workout from a completed `Exercise` (one whose
     /// `workout` is non-nil). Date and type come from the exercise; the
-    /// metrics and RPE come from the recorded `workout`. Falls back to the
+    /// metrics and ratings come from the recorded `workout`. Falls back to the
     /// planned metrics if `workout` is unexpectedly nil.
     init(from exercise: Exercise) {
+        // TODO: map `feeling` once `Workout` carries it. Until then the legacy
+        // 1–10 `feltRating` is passed through as perceived exertion (0 = unrated).
+        let legacyRating = exercise.workout?.feltRating ?? 0
         self.init(
             date: exercise.date,
             type: CoachExerciseType(from: exercise.type),
             distanceMiles: exercise.workout?.distanceMiles ?? exercise.distanceMiles,
             durationSeconds: exercise.workout?.durationSeconds ?? exercise.durationSeconds,
-            feltRating: exercise.workout?.feltRating ?? 0,
+            feeling: nil,
+            perceivedExertion: legacyRating == 0 ? nil : legacyRating,
             notes: exercise.workout?.notes ?? ""
         )
     }

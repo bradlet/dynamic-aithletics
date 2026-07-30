@@ -1295,8 +1295,22 @@ struct CoachTypeConversionTests {
         #expect(coachWorkout.type == .tempoRun)
         #expect(coachWorkout.distanceMiles == 5.0)
         #expect(coachWorkout.durationSeconds == 2400)
-        #expect(coachWorkout.feltRating == 7)
+        #expect(coachWorkout.perceivedExertion == 7)
         #expect(coachWorkout.notes == "felt great")
+    }
+
+    @Test func workoutConversionLeavesExertionNilWhenUnrated() {
+        let exercise = Exercise(
+            name: "Morning Run",
+            type: .easyRun,
+            durationSeconds: 2400,
+            distanceMiles: 5.0,
+            date: Date(),
+            workout: Workout(durationSeconds: 2400, distanceMiles: 5.0)
+        )
+        let coachWorkout = CoachWorkout(from: exercise)
+        #expect(coachWorkout.perceivedExertion == nil)
+        #expect(coachWorkout.feeling == nil)
     }
 
     @Test func exerciseConversionPreservesAllFields() {

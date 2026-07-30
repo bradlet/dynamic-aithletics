@@ -80,11 +80,21 @@ Compares four configs: `production` (flat), `production` (chat), `lowerRepPenalt
 
 | ID | Name | Description |
 |---|---|---|
-| `high-rpe` | High RPE Overtraining | 5 workouts at RPE 8-9, demanding upcoming plan. Expect volume reduction advice. |
-| `balanced` | Balanced Training | 4 workouts at RPE 5-7, reasonable plan. Expect minor tweaks. |
+| `high-rpe` | High RPE Overtraining | 5 workouts at RPE 8-9 feeling weak/very weak, demanding upcoming plan. Expect volume reduction advice. |
+| `balanced` | Balanced Training | 4 workouts at RPE 5-7 feeling normal to strong, reasonable plan. Expect minor tweaks. |
 | `empty` | Empty History | No recent workouts, 3 upcoming. Expect acknowledgment of no data. |
-| `single-hard` | Single Hard Workout | One long run at RPE 9 "legs felt like lead", intervals next day. Expect postpone intensity. |
-| `mixed` | Mixed Signals | Easy runs at low RPE + one interval at RPE 9. Expect nuanced advice. |
+| `single-hard` | Single Hard Workout | One long run at RPE 9 feeling very weak, "legs felt like lead", intervals next day. Expect postpone intensity. |
+| `mixed` | Mixed Signals | Easy runs at low RPE + one interval at RPE 9 feeling very weak. Expect nuanced advice. |
+
+Perceived exertion (1–10) and feeling (1–5) are independent optional signals on
+`CoachWorkout`. Each is serialized verbatim into the workout line and omitted when
+`nil` — every scenario except `single-hard` leaves at least one workout's `feeling`
+unrecorded so the omission path stays covered:
+
+```
+- 2026-07-26 Sun Interval Run, 4.0 mi, 35:00, RPE 9/10, felt very weak — "struggled on last interval"
+- 2026-07-29 Wed Easy Run, 4.0 mi, 35:00, RPE 8/10
+```
 
 ## Scoring Rubric
 

@@ -42,20 +42,25 @@ enum ScenarioLibrary {
     static let highRPE = EvalScenario(
         id: "high-rpe",
         name: "High RPE Overtraining",
-        description: "5 recent workouts at RPE 8-9 with high mileage. " +
+        description: "5 recent workouts at RPE 8-9 with high mileage, all feeling weak. " +
             "Upcoming plan has more intensity. Coach should recommend reducing volume.",
         request: CoachingRequest(
             recentWorkouts: [
                 CoachWorkout(date: daysAgo(6), type: .tempoRun, distanceMiles: 6.0,
-                             durationSeconds: 2700, feltRating: 8, notes: "felt sluggish"),
+                             durationSeconds: 2700, feeling: 2, perceivedExertion: 8,
+                             notes: "felt sluggish"),
                 CoachWorkout(date: daysAgo(5), type: .easyRun, distanceMiles: 5.0,
-                             durationSeconds: 2400, feltRating: 8, notes: "legs heavy"),
+                             durationSeconds: 2400, feeling: 2, perceivedExertion: 8,
+                             notes: "legs heavy"),
                 CoachWorkout(date: daysAgo(4), type: .intervalRun, distanceMiles: 4.0,
-                             durationSeconds: 2100, feltRating: 9, notes: "struggled on last interval"),
+                             durationSeconds: 2100, feeling: 1, perceivedExertion: 9,
+                             notes: "struggled on last interval"),
                 CoachWorkout(date: daysAgo(2), type: .longRun, distanceMiles: 12.0,
-                             durationSeconds: 5400, feltRating: 9, notes: "had to walk last mile"),
+                             durationSeconds: 5400, feeling: 1, perceivedExertion: 9,
+                             notes: "had to walk last mile"),
+                // Feeling left unrecorded — exercises the omission path.
                 CoachWorkout(date: daysAgo(1), type: .easyRun, distanceMiles: 4.0,
-                             durationSeconds: 2100, feltRating: 8),
+                             durationSeconds: 2100, perceivedExertion: 8),
             ],
             upcomingExercises: [
                 CoachExercise(scheduledDate: daysFromNow(1), type: .intervalRun,
@@ -76,18 +81,19 @@ enum ScenarioLibrary {
     static let balanced = EvalScenario(
         id: "balanced",
         name: "Balanced Training",
-        description: "4 workouts at moderate RPE (5-7), well-structured plan. " +
-            "Coach should suggest minor tweaks or maintain the current plan.",
+        description: "4 workouts at moderate RPE (5-7) feeling normal to strong, " +
+            "well-structured plan. Coach should suggest minor tweaks or maintain the plan.",
         request: CoachingRequest(
             recentWorkouts: [
                 CoachWorkout(date: daysAgo(6), type: .easyRun, distanceMiles: 4.0,
-                             durationSeconds: 2100, feltRating: 5),
+                             durationSeconds: 2100, feeling: 4, perceivedExertion: 5),
                 CoachWorkout(date: daysAgo(4), type: .tempoRun, distanceMiles: 5.0,
-                             durationSeconds: 2400, feltRating: 6),
+                             durationSeconds: 2400, feeling: 3, perceivedExertion: 6),
+                // Feeling left unrecorded — exercises the omission path.
                 CoachWorkout(date: daysAgo(2), type: .easyRun, distanceMiles: 4.0,
-                             durationSeconds: 2100, feltRating: 5),
+                             durationSeconds: 2100, perceivedExertion: 5),
                 CoachWorkout(date: daysAgo(1), type: .longRun, distanceMiles: 8.0,
-                             durationSeconds: 3600, feltRating: 7),
+                             durationSeconds: 3600, feeling: 3, perceivedExertion: 7),
             ],
             upcomingExercises: [
                 CoachExercise(scheduledDate: daysFromNow(1), type: .easyRun,
@@ -132,12 +138,13 @@ enum ScenarioLibrary {
     static let singleHard = EvalScenario(
         id: "single-hard",
         name: "Single Hard Workout",
-        description: "One long run at RPE 9 with notes about heavy legs. " +
+        description: "One long run at RPE 9 feeling very weak, with notes about heavy legs. " +
             "Interval session scheduled for tomorrow. Coach should recommend postponing intensity.",
         request: CoachingRequest(
             recentWorkouts: [
                 CoachWorkout(date: daysAgo(1), type: .longRun, distanceMiles: 10.0,
-                             durationSeconds: 4800, feltRating: 9, notes: "legs felt like lead"),
+                             durationSeconds: 4800, feeling: 1, perceivedExertion: 9,
+                             notes: "legs felt like lead"),
             ],
             upcomingExercises: [
                 CoachExercise(scheduledDate: daysFromNow(0), type: .intervalRun,
@@ -163,13 +170,15 @@ enum ScenarioLibrary {
         request: CoachingRequest(
             recentWorkouts: [
                 CoachWorkout(date: daysAgo(5), type: .easyRun, distanceMiles: 3.0,
-                             durationSeconds: 1800, feltRating: 4),
+                             durationSeconds: 1800, feeling: 4, perceivedExertion: 4),
+                // Feeling left unrecorded — exercises the omission path.
                 CoachWorkout(date: daysAgo(4), type: .easyRun, distanceMiles: 3.5,
-                             durationSeconds: 2000, feltRating: 4),
+                             durationSeconds: 2000, perceivedExertion: 4),
                 CoachWorkout(date: daysAgo(2), type: .intervalRun, distanceMiles: 5.0,
-                             durationSeconds: 2400, feltRating: 9, notes: "could not finish last rep"),
+                             durationSeconds: 2400, feeling: 1, perceivedExertion: 9,
+                             notes: "could not finish last rep"),
                 CoachWorkout(date: daysAgo(1), type: .easyRun, distanceMiles: 3.0,
-                             durationSeconds: 1800, feltRating: 5),
+                             durationSeconds: 1800, feeling: 3, perceivedExertion: 5),
             ],
             upcomingExercises: [
                 CoachExercise(scheduledDate: daysFromNow(1), type: .easyRun,

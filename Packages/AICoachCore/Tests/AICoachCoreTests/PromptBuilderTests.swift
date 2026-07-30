@@ -20,7 +20,8 @@ struct AICoachPromptBuilderTests {
         type: CoachExerciseType = .easyRun,
         distanceMiles: Double = 4.0,
         durationSeconds: Int = 2100,
-        feltRating: Int = 0,
+        feeling: Int? = nil,
+        perceivedExertion: Int? = nil,
         notes: String = ""
     ) -> CoachWorkout {
         CoachWorkout(
@@ -28,7 +29,8 @@ struct AICoachPromptBuilderTests {
             type: type,
             distanceMiles: distanceMiles,
             durationSeconds: durationSeconds,
-            feltRating: feltRating,
+            feeling: feeling,
+            perceivedExertion: perceivedExertion,
             notes: notes
         )
     }
@@ -48,8 +50,8 @@ struct AICoachPromptBuilderTests {
     }
 
     @Test func promptIncludesEveryRecentWorkout() {
-        let w1 = makeWorkout(date: Date(timeIntervalSince1970: 1_800_000_000), feltRating: 3)
-        let w2 = makeWorkout(date: Date(timeIntervalSince1970: 1_800_100_000), feltRating: 7)
+        let w1 = makeWorkout(date: Date(timeIntervalSince1970: 1_800_000_000), perceivedExertion: 3)
+        let w2 = makeWorkout(date: Date(timeIntervalSince1970: 1_800_100_000), perceivedExertion: 7)
         let request = CoachingRequest(
             recentWorkouts: [w1, w2],
             upcomingExercises: [],
@@ -62,12 +64,81 @@ struct AICoachPromptBuilderTests {
     }
 
     @Test func promptOmitsRPEOnWorkoutLineWhenUnrated() {
-        let unrated = makeWorkout(date: Date(), feltRating: 0)
-        let rated = makeWorkout(date: Date(), feltRating: 6)
+        let unrated = makeWorkout(date: Date(), perceivedExertion: nil)
+        let rated = makeWorkout(date: Date(), perceivedExertion: 6)
         let unratedLine = AICoachPromptBuilder.workoutLine(unrated, metric: false)
         let ratedLine = AICoachPromptBuilder.workoutLine(rated, metric: false)
         #expect(!unratedLine.contains("RPE"))
         #expect(ratedLine.contains("RPE 6/10"))
+    }
+
+    @Test func workoutLineOmitsFeelingWhenNil() {
+        let workout = makeWorkout(date: Date(), feeling: nil, perceivedExertion: 6)
+        let line = AICoachPromptBuilder.workoutLine(workout, metric: false)
+        #expect(!line.contains("felt"))
+    }
+
+    @Test func workoutLineIncludesFeelingWhenSet() {
+        let workout = makeWorkout(date: Date(), feeling: 2)
+        let line = AICoachPromptBuilder.workoutLine(workout, metric: false)
+        #expect(line.contains("felt weak"))
+    }
+
+    @Test func workoutLineOmitsBothRatingsWhenUnrated() {
+        let workout = makeWorkout(date: Date())
+        let line = AICoachPromptBuilder.workoutLine(workout, metric: false)
+        #expect(!line.contains("RPE"))
+        #expect(!line.contains("felt"))
+    }
+
+    @Test func workoutLineEmitsExertionBeforeFeeling() {
+        let date = ISO8601DateFormatter().date(from: "2026-07-28T12:00:00Z")!
+        let workout = makeWorkout(
+            date: date,
+            type: .run,
+            distanceMiles: 6.0,
+            durationSeconds: 3130,
+            feeling: 2,
+            perceivedExertion: 8
+        )
+        let line = AICoachPromptBuilder.workoutLine(workout, metric: false)
+        #expect(line == "- 2026-07-28 Tue Run, 6.0 mi, 52:10, RPE 8/10, felt weak")
+    }
+
+    /// Regression guard on the deleted felt-rating → RPE inversion, which used
+    /// to turn an 8 into `RPE 2/10` (and a 10 into an off-scale `RPE 0/10`).
+    @Test func workoutLineNoLongerInvertsExertion() {
+        let line = AICoachPromptBuilder.workoutLine(
+            makeWorkout(date: Date(), perceivedExertion: 8), metric: false
+        )
+        #expect(line.contains("RPE 8/10"))
+        #expect(!line.contains("RPE 2/10"))
+    }
+
+    @Test func maximumExertionStaysOnScale() {
+        let line = AICoachPromptBuilder.workoutLine(
+            makeWorkout(date: Date(), perceivedExertion: 10), metric: false
+        )
+        #expect(line.contains("RPE 10/10"))
+    }
+
+    @Test func feelingDescriptorCoversEveryLevel() {
+        #expect(AICoachPromptBuilder.feelingDescriptor(1) == "very weak")
+        #expect(AICoachPromptBuilder.feelingDescriptor(2) == "weak")
+        #expect(AICoachPromptBuilder.feelingDescriptor(3) == "normal")
+        #expect(AICoachPromptBuilder.feelingDescriptor(4) == "strong")
+        #expect(AICoachPromptBuilder.feelingDescriptor(5) == "very strong")
+    }
+
+    @Test func feelingDescriptorClampsOutOfRange() {
+        #expect(AICoachPromptBuilder.feelingDescriptor(0) == "very weak")
+        #expect(AICoachPromptBuilder.feelingDescriptor(-4) == "very weak")
+        #expect(AICoachPromptBuilder.feelingDescriptor(9) == "very strong")
+    }
+
+    @Test func systemPreambleMentionsBothSignals() {
+        #expect(AICoachPromptBuilder.systemPreamble.contains("RPE, 1–10"))
+        #expect(AICoachPromptBuilder.systemPreamble.contains("very weak → very strong"))
     }
 
     @Test func promptIncludesNotesWhenPresent() {
@@ -191,7 +262,7 @@ struct AICoachPromptBuilderTests {
     }
 
     @Test func buildPromptEqualsPreamblePlusUserContent() {
-        let w = makeWorkout(date: Date(), feltRating: 5)
+        let w = makeWorkout(date: Date(), feeling: 3, perceivedExertion: 5)
         let e = makeExercise(date: Date())
         let request = CoachingRequest(
             recentWorkouts: [w],
@@ -205,7 +276,7 @@ struct AICoachPromptBuilderTests {
     }
 
     @Test func userContentIncludesWorkoutData() {
-        let w = makeWorkout(date: Date(), feltRating: 8, notes: "felt great")
+        let w = makeWorkout(date: Date(), feeling: 4, perceivedExertion: 8, notes: "felt great")
         let request = CoachingRequest(
             recentWorkouts: [w],
             upcomingExercises: [],
@@ -213,6 +284,7 @@ struct AICoachPromptBuilderTests {
         )
         let content = AICoachPromptBuilder.buildUserContent(for: request)
         #expect(content.contains("RPE 8/10"))
+        #expect(content.contains("felt strong"))
         #expect(content.contains("\"felt great\""))
     }
 }

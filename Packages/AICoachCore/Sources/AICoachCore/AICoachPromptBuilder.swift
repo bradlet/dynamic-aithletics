@@ -9,8 +9,6 @@
 
 import Foundation
 
-let FR_RPE_MIDPOINT = 5
-
 /// Stateless helpers for building the prompt passed to the AI coach.
 public enum AICoachPromptBuilder {
 
@@ -35,7 +33,8 @@ public enum AICoachPromptBuilder {
 
     Rules:
     - ONLY reference workouts and sessions listed below.
-    - Weigh the athlete's perceived exertion (RPE, 1–10) when assessing load.
+    - Weigh the athlete's perceived exertion (RPE, 1–10) and how they felt \
+    (very weak → very strong) when assessing load. Either may be missing.
     - Respond with 3–5 bullet points. Each bullet is one specific suggestion.
     - Keep the total response under 200 words. Do not repeat yourself.
     """
@@ -94,26 +93,39 @@ public enum AICoachPromptBuilder {
     // MARK: - Line formatters
 
     /// Formats a single completed workout as one prompt line.
+    ///
+    /// Perceived exertion and feeling are independent signals recorded by the
+    /// athlete; each is emitted verbatim and omitted entirely when unrecorded.
     public static func workoutLine(_ workout: CoachWorkout, metric: Bool) -> String {
         let date = lineDateFormatter.string(from: workout.date)
         let distance = workout.distanceMiles.formattedDistance(metric: metric)
         let duration = workout.durationSeconds.formattedDuration
         var line = "- \(date) \(workout.type.rawValue), \(distance), \(duration)"
-        // "Felt rating" is the inverse of "Rate of perceive exertion" (RPE)
-        // FR 1 == RPE 10
-        // FR 5 == RPE 5
-        let frDiffFromMidpoint = abs(workout.feltRating - FR_RPE_MIDPOINT)
-        let rpe = workout.feltRating > FR_RPE_MIDPOINT
-            ? FR_RPE_MIDPOINT - frDiffFromMidpoint
-            : FR_RPE_MIDPOINT + frDiffFromMidpoint
-        if workout.feltRating > 0 {
-            line += ", RPE \(rpe)/10"
+        if let exertion = workout.perceivedExertion {
+            line += ", RPE \(exertion)/10"
+        }
+        if let feeling = workout.feeling {
+            line += ", felt \(feelingDescriptor(feeling))"
         }
         let trimmedNotes = workout.notes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmedNotes.isEmpty {
             line += " — \"\(trimmedNotes)\""
         }
         return line
+    }
+
+    /// Lower-cased plain-English descriptor for a 1–5 feeling level, clamped
+    /// into range. Deliberately duplicated from the app's `FeelingVisuals`
+    /// (different casing, and AICoachCore cannot import app code).
+    /// - Parameter feeling: Feeling level. Values outside `1...5` are clamped.
+    public static func feelingDescriptor(_ feeling: Int) -> String {
+        switch min(max(feeling, 1), 5) {
+        case 1:  return "very weak"
+        case 2:  return "weak"
+        case 3:  return "normal"
+        case 4:  return "strong"
+        default: return "very strong"
+        }
     }
 
     /// Formats a single planned exercise as one prompt line.

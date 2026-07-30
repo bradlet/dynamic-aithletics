@@ -19,8 +19,11 @@ public struct CoachWorkout: Sendable {
     public let distanceMiles: Double
     /// Actual duration in seconds.
     public let durationSeconds: Int
-    /// Subjective Rate of Perceived Exertion (1–10). `0` means unrated.
-    public let feltRating: Int
+    /// How the athlete felt, 1 (very weak) … 5 (very strong). `nil` when not recorded.
+    public let feeling: Int?
+    /// Rate of Perceived Exertion, 1 (very light) … 10 (maximum effort).
+    /// `nil` when not recorded.
+    public let perceivedExertion: Int?
     /// User notes about the completed workout.
     public let notes: String
 
@@ -29,14 +32,16 @@ public struct CoachWorkout: Sendable {
         type: CoachExerciseType,
         distanceMiles: Double,
         durationSeconds: Int,
-        feltRating: Int = 0,
+        feeling: Int? = nil,
+        perceivedExertion: Int? = nil,
         notes: String = ""
     ) {
         self.date = date
         self.type = type
         self.distanceMiles = distanceMiles
         self.durationSeconds = durationSeconds
-        self.feltRating = feltRating
+        self.feeling = feeling
+        self.perceivedExertion = perceivedExertion
         self.notes = notes
     }
 }
