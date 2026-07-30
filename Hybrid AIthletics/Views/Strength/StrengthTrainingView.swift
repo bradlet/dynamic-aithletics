@@ -114,10 +114,11 @@ struct StrengthTrainingView: View {
         .buttonStyle(.plain)
         .accessibilityIdentifier("strength.dayChip.\(dayIndex)")
         // Dragging a card onto a chip moves it to the end of that day's plan.
+        // The board deliberately stays on the day the user is viewing — the
+        // chip's count updating is the confirmation that the move landed.
         .dropDestination(for: StrengthExerciseDragItem.self) { items, _ in
             guard let item = items.first else { return false }
             handleDrop(id: item.exerciseID, day: dayIndex, offloaded: false, target: nil)
-            withAnimation { selectedDay = dayIndex }
             return true
         }
     }
@@ -145,10 +146,11 @@ struct StrengthTrainingView: View {
     }
 
     /// Context-menu move: appends the exercise to the target day's active plan.
+    /// Like a drag onto a day chip, this leaves the board on the current day
+    /// rather than following the exercise.
     private func moveToDay(_ exercise: StrengthExercise, day: Int) {
         withAnimation {
             StrengthBoardPlanner.move(exercise, toDay: day, offloaded: false, before: nil, in: allExercises)
-            selectedDay = day
         }
     }
 }

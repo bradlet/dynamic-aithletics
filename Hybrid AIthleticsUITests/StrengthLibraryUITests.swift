@@ -88,4 +88,46 @@ final class StrengthLibraryUITests: XCTestCase {
             "Deleted exercise should no longer appear in the library"
         )
     }
+
+    /// Moving an exercise to another day leaves the board on the day the user
+    /// is looking at rather than following the exercise.
+    @MainActor
+    func testMovingExerciseToAnotherDayKeepsCurrentDay() {
+        let app = launchOnStrengthTab()
+
+        // Seed one card on today's lane through the library.
+        app.buttons["strength.libraryButton"].tap()
+        let benchRow = app.staticTexts["Barbell Bench Press"]
+        XCTAssertTrue(benchRow.waitForExistence(timeout: 10), "Library should load bench press")
+        benchRow.tap()
+        let addButton = app.buttons["exerciseLibrary.add"]
+        XCTAssertTrue(addButton.waitForExistence(timeout: 5), "Detail view should offer Add")
+        addButton.tap()
+
+        let card = app.staticTexts["Barbell Bench Press"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5), "Card should appear on the current day")
+
+        // Drag the card onto another day's chip.
+        let todayIndex = Calendar.current.component(.weekday, from: Date()) - 1
+        let destinationIndex = (todayIndex + 2) % 7
+        let destinationChip = app.buttons["strength.dayChip.\(destinationIndex)"]
+        XCTAssertTrue(destinationChip.exists, "Destination chip should exist")
+        card.press(forDuration: 1.0, thenDragTo: destinationChip)
+
+        // The board stayed on the day we were viewing, so its plan reads empty
+        // again while the destination chip picks up the exercise.
+        XCTAssertTrue(
+            app.staticTexts["No exercises planned.\nTap + to add from the library."]
+                .waitForExistence(timeout: 5),
+            "The current day's plan should be empty again, meaning the board stayed put"
+        )
+        XCTAssertFalse(
+            app.staticTexts["Barbell Bench Press"].exists,
+            "The moved card should not be visible on the day we stayed on"
+        )
+        XCTAssertTrue(
+            destinationChip.staticTexts["1"].exists,
+            "The destination day's chip count should reflect the moved exercise"
+        )
+    }
 }
