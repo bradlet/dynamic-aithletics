@@ -3307,13 +3307,13 @@ struct RatingVisualsTests {
     // MARK: Perceived exertion
 
     @Test func exertionDisplayNameBuckets() {
-        #expect(ExertionVisuals.displayName(for: 1) == "Very Light")
-        #expect(ExertionVisuals.displayName(for: 2) == "Light")
-        #expect(ExertionVisuals.displayName(for: 3) == "Light")
+        #expect(ExertionVisuals.displayName(for: 1) == "Very Easy")
+        #expect(ExertionVisuals.displayName(for: 2) == "Easy")
+        #expect(ExertionVisuals.displayName(for: 3) == "Easy")
         #expect(ExertionVisuals.displayName(for: 4) == "Moderate")
         #expect(ExertionVisuals.displayName(for: 5) == "Moderate")
-        #expect(ExertionVisuals.displayName(for: 6) == "High")
-        #expect(ExertionVisuals.displayName(for: 7) == "High")
+        #expect(ExertionVisuals.displayName(for: 6) == "Hard")
+        #expect(ExertionVisuals.displayName(for: 7) == "Hard")
         #expect(ExertionVisuals.displayName(for: 8) == "Very Hard")
         #expect(ExertionVisuals.displayName(for: 9) == "Very Hard")
         #expect(ExertionVisuals.displayName(for: 10) == "Maximum Effort")

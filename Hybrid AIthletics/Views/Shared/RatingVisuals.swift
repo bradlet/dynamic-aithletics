@@ -79,15 +79,17 @@ enum ExertionVisuals {
     /// Valid values on the perceived-exertion scale.
     static let range = 1...10
 
-    /// Plain-English name for a perceived-exertion level.
+    /// Plain-English name for a perceived-exertion level. The scale reads
+    /// symmetrically about "Moderate": Very Easy → Easy → Moderate → Hard →
+    /// Very Hard, with an all-out tier at the top.
     /// - Parameter exertion: RPE level, or `nil` for unset.
     /// - Returns: A display name; `"Not set"` for `nil` or out-of-range input.
     static func displayName(for exertion: Int?) -> String {
         switch exertion {
-        case 1:     return "Very Light"
-        case 2, 3:  return "Light"
+        case 1:     return "Very Easy"
+        case 2, 3:  return "Easy"
         case 4, 5:  return "Moderate"
-        case 6, 7:  return "High"
+        case 6, 7:  return "Hard"
         case 8, 9:  return "Very Hard"
         case 10:    return "Maximum Effort"
         default:    return "Not set"
