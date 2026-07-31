@@ -251,6 +251,48 @@ final class HistoryUITests: XCTestCase {
         // Test Workout 2 should now occupy the first-page slot.
         XCTAssertTrue(app.staticTexts["Test Workout 2"].exists)
     }
+
+    // MARK: - Non-training rows
+
+    /// Fixtures opt every 4th workout out of training progress, so
+    /// "Test Workout 4" carries the badge and "Test Workout 1" does not.
+    @MainActor
+    func testNonTrainingRowIsLabelled() throws {
+        let app = launchAndOpenHistory()
+
+        let badgedRow = app.staticTexts["Not training"]
+        XCTAssertTrue(
+            badgedRow.waitForExistence(timeout: 5),
+            "an opted-out workout should show the Not training badge"
+        )
+    }
+
+    @MainActor
+    func testNonTrainingRowAnnouncesItselfToAccessibility() throws {
+        let app = launchAndOpenHistory()
+
+        // The row folds the badge into its own label (`children: .combine`),
+        // so assert on the combined label rather than the badge element.
+        let nonTraining = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS 'not counted as training'"))
+            .firstMatch
+        XCTAssertTrue(
+            nonTraining.waitForExistence(timeout: 5),
+            "opted-out rows should say so in their accessibility label"
+        )
+    }
+
+    @MainActor
+    func testTrainingRowHasNoNonTrainingLabel() throws {
+        let app = launchAndOpenHistory()
+
+        let firstRow = app.staticTexts["Test Workout 1"]
+        XCTAssertTrue(firstRow.waitForExistence(timeout: 5))
+        let counted = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label == 'Test Workout 1'"))
+            .firstMatch
+        XCTAssertTrue(counted.exists, "a counted workout keeps its plain label")
+    }
 }
 
 // MARK: - XCUIElement helper

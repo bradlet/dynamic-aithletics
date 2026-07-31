@@ -166,16 +166,9 @@ private struct DayCell: View {
                 .font(.caption)
                 .fontWeight(isToday ? .bold : .regular)
                 .foregroundStyle(isToday ? .blue : .primary)
-            // Colored dot if items exist on this day.
-            if let firstItem = items.first {
-                Circle()
-                    .fill(firstItem.type.color)
-                    .frame(width: 6, height: 6)
-            } else {
-                Circle()
-                    .fill(.clear)
-                    .frame(width: 6, height: 6)
-            }
+            // Activity dot: solid for training, hollow when the day's only
+            // activity was opted out of training progress.
+            activityDot
         }
         .frame(maxWidth: .infinity)
         .frame(height: 40)
@@ -192,6 +185,27 @@ private struct DayCell: View {
                     .frame(width: 2)
                     .padding(.vertical, 6)
             }
+        }
+    }
+
+    /// The day's activity indicator. A hollow ring marks a day whose only
+    /// activity was opted out of training progress; the empty case still
+    /// reserves the dot's space so day numbers stay aligned across the grid.
+    @ViewBuilder
+    private var activityDot: some View {
+        switch CalendarDayDot.style(for: items) {
+        case .none:
+            Circle()
+                .fill(.clear)
+                .frame(width: 6, height: 6)
+        case .solid(let type):
+            Circle()
+                .fill(type.color)
+                .frame(width: 6, height: 6)
+        case .hollow(let type):
+            Circle()
+                .strokeBorder(type.color, lineWidth: 1.5)
+                .frame(width: 7, height: 7)
         }
     }
 }

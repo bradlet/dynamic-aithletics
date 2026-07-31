@@ -3342,6 +3342,76 @@ struct RatingVisualsTests {
     }
 }
 
+// MARK: - Calendar Day Dot Tests
+
+struct CalendarDayDotTests {
+
+    /// Lightweight stand-in so the rule can be exercised without SwiftData.
+    private struct Item: CalendarDisplayable {
+        var displayDate: Date = Date()
+        var type: ExerciseType = .run
+        var countsTowardTraining: Bool = true
+    }
+
+    @Test func emptyDayHasNoDot() {
+        #expect(CalendarDayDot.style(for: []) == .none)
+    }
+
+    @Test func trainingDayIsSolid() {
+        let style = CalendarDayDot.style(for: [Item(type: .tempoRun)])
+        #expect(style == .solid(.tempoRun))
+    }
+
+    @Test func nonTrainingDayIsHollow() {
+        let style = CalendarDayDot.style(for: [Item(type: .walk, countsTowardTraining: false)])
+        #expect(style == .hollow(.walk))
+    }
+
+    /// A day holding a real run alongside an opted-out walk is still a
+    /// training day, whichever order they arrive in.
+    @Test func mixedDayIsSolid() {
+        let walk = Item(type: .walk, countsTowardTraining: false)
+        let run = Item(type: .run)
+        #expect(CalendarDayDot.style(for: [walk, run]) == .solid(.walk))
+        #expect(CalendarDayDot.style(for: [run, walk]) == .solid(.run))
+    }
+
+    @Test func dotTakesColorFromFirstItem() {
+        let style = CalendarDayDot.style(for: [Item(type: .swim), Item(type: .bike)])
+        #expect(style == .solid(.swim))
+    }
+
+    @Test func allNonTrainingDayIsHollow() {
+        let items = [
+            Item(type: .walk, countsTowardTraining: false),
+            Item(type: .hike, countsTowardTraining: false)
+        ]
+        #expect(CalendarDayDot.style(for: items) == .hollow(.walk))
+    }
+
+    /// Types that don't opt out default to counting, so conformances that
+    /// never set the flag keep their solid dot.
+    @Test func conformanceDefaultsToCountingAsTraining() {
+        struct Bare: CalendarDisplayable {
+            var displayDate: Date = Date()
+            var type: ExerciseType = .run
+        }
+        #expect(CalendarDayDot.style(for: [Bare()]) == .solid(.run))
+    }
+
+    @Test func exerciseReportsItsMileageOptOut() {
+        let counted = Exercise(
+            name: "Run", type: .run, durationSeconds: 1800, distanceMiles: 3.0, date: Date()
+        )
+        let skipped = Exercise(
+            name: "Walk", type: .walk, durationSeconds: 1800, distanceMiles: 1.0,
+            date: Date(), countsTowardMileage: false
+        )
+        #expect(counted.countsTowardTraining)
+        #expect(skipped.countsTowardTraining == false)
+    }
+}
+
 // MARK: - Weekly Chart Series Tests
 
 struct WeeklyChartSeriesTests {

@@ -15,10 +15,18 @@ protocol CalendarDisplayable {
     var displayDate: Date { get }
     /// The exercise type, used for dot coloring.
     var type: ExerciseType { get }
+    /// Whether this item counts toward training progress. Days holding only
+    /// non-counting activity draw a hollow dot. Defaults to `true`.
+    var countsTowardTraining: Bool { get }
+}
+
+extension CalendarDisplayable {
+    var countsTowardTraining: Bool { true }
 }
 
 // MARK: - Model Conformances
 
 extension Exercise: CalendarDisplayable {
     var displayDate: Date { date }
+    var countsTowardTraining: Bool { countsTowardMileage }
 }

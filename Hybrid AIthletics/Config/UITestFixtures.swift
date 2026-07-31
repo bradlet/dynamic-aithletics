@@ -53,13 +53,19 @@ enum UITestFixtures {
             case 2: miles - 1.0
             default: miles
             }
+            // Every 4th workout is opted out of training progress so the
+            // History list's dimmed "Not training" row and the calendar's
+            // hollow dot are both exercised under UI test. Index 3 is
+            // "Test Workout 4".
+            let countsTowardMileage = index % 4 != 3
             let exercise = Exercise(
                 name: "Test Workout \(number)",
-                type: .run,
+                type: countsTowardMileage ? .run : .walk,
                 durationSeconds: duration,
                 distanceMiles: miles,
                 notes: "Seeded fixture \(number)",
                 date: day,
+                countsTowardMileage: countsTowardMileage,
                 workout: Workout(
                     durationSeconds: duration,
                     distanceMiles: workoutMiles,

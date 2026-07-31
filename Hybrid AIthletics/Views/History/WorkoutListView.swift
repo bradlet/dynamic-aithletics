@@ -179,6 +179,10 @@ struct WorkoutListView: View {
 
 /// A single row displaying a recorded exercise's key details: name, date,
 /// and the recorded distance, duration, and derived pace.
+///
+/// Exercises opted out of training progress (`countsTowardMileage == false`)
+/// are dimmed and carry an explicit badge, so a walk never reads as a session
+/// that contributed to the athlete's load.
 private struct WorkoutRow: View {
     let exercise: Exercise
     let useMetricUnits: Bool
@@ -188,6 +192,9 @@ private struct WorkoutRow: View {
     /// (shouldn't happen — this list is filtered to completed exercises).
     private var distanceMiles: Double { exercise.workout?.distanceMiles ?? exercise.distanceMiles }
     private var durationSeconds: Int { exercise.workout?.durationSeconds ?? exercise.durationSeconds }
+
+    /// Whether this exercise was opted out of training progress.
+    private var isNonTraining: Bool { !exercise.countsTowardMileage }
 
     var body: some View {
         HStack {
@@ -201,6 +208,9 @@ private struct WorkoutRow: View {
                 Text(exercise.date, style: .date)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if isNonTraining {
+                    nonTrainingBadge
+                }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
@@ -218,6 +228,9 @@ private struct WorkoutRow: View {
                     .monospacedDigit()
             }
         }
+        // Dim the whole row rather than restyling each label, so the row
+        // still reads as a unit and the highlight treatment is unaffected.
+        .opacity(isNonTraining ? 0.55 : 1)
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
@@ -237,7 +250,24 @@ private struct WorkoutRow: View {
         .animation(.easeInOut(duration: 0.3), value: isHighlighted)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("workoutRow.\(exercise.id.uuidString)")
-        .accessibilityLabel(exercise.name)
+        // The badge is folded into the row's own label — `children: .combine`
+        // absorbs descendants, so it is not separately queryable.
+        .accessibilityLabel(
+            isNonTraining ? "\(exercise.name), not counted as training" : exercise.name
+        )
+    }
+
+    /// Chip marking a row that was opted out of training progress. Echoes the
+    /// hollow calendar dot with the same dashed-circle motif.
+    private var nonTrainingBadge: some View {
+        Label("Not training", systemImage: "circle.dashed")
+            .labelStyle(.titleAndIcon)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(Color.secondary.opacity(0.15)))
+            .padding(.top, 2)
     }
 }
 
