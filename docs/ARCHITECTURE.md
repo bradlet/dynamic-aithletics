@@ -29,9 +29,9 @@ The single persisted entity — a training activity that is planned, recorded, o
 ### Workout
 The recorded-instance data for an `Exercise`. **Not** a `@Model` — a plain `Codable` value `struct` stored inline on `Exercise.workout` (no second table).
 
-- Holds the recorded **actuals**: `durationSeconds`, `distanceMiles`, `notes`, plus `feltRating`, `source`, `externalID`
+- Holds the recorded **actuals**: `durationSeconds`, `distanceMiles`, `notes`, plus `feeling`, `perceivedExertion`, `source`, `externalID`
 - Has no date/name/type — those belong to the owning `Exercise`
-- `feltRating: Int` — subjective Rate of Perceived Exertion (1–10), `0` when unrated. Feeds the AI coach's training-load assessment
+- `feeling: Int?` (1–5) and `perceivedExertion: Int?` (1–10) — two **independent** subjective ratings, `nil` when unrated. Both feed the AI coach's training-load assessment; a high exertion felt strong is a good session, the same exertion felt weak is an overreaching flag
 - `Workout(draftFrom:)` pre-fills a recorded workout's actuals from an exercise's planned targets
 - `source` / `externalID` are import-pipeline provenance/dedup metadata
 
@@ -194,7 +194,7 @@ Unit tests cover:
 - **Drag items**: ExerciseDragItem codable round-trip
 - **Repeat**: isRepeating default value, init parameter, persistence, day-of-week matching
 - **AI Coach**: type conversion tests (SwiftData → AICoachCore), `StubAICoachService` response and streaming
-- **AICoachCore package tests** (separate target): prompt builder formatting (RPE inclusion, notes handling, unit respect, ordering, empty inputs), distance/duration formatting, generation config codable round-trip
+- **AICoachCore package tests** (separate target): prompt builder formatting (RPE and feeling inclusion/omission, notes handling, unit respect, ordering, empty inputs), distance/duration formatting, generation config codable round-trip
 - **Workout list pagination**: pure-math helpers in `WorkoutListPagination` (page index boundaries, total page counts, empty-state handling)
 - **Workout detail edit**: `WorkoutEditor.apply(_:to:)` rewrites the exercise's identity fields and rebuilds the nested `workout` from edited actuals, preserves import metadata (`source`, `externalID`), and `modelContext.delete(exercise)` scopes correctly
 

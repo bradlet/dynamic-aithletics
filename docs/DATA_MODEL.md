@@ -39,7 +39,8 @@ recorded.
                           │ durationSeconds: Int      │  actual
                           │ distanceMiles: Double     │  actual
                           │ notes: String             │  post-workout notes
-                          │ feltRating: Int (0–10)    │
+                          │ feeling: Int? (1–5)       │  nil = not recorded
+                          │ perceivedExertion: Int?   │  1–10, nil = not recorded
                           │ source: String            │
                           │ externalID: String?       │
                           └──────────────────────────┘
@@ -92,21 +93,27 @@ A Workout holds the **recorded-instance data** for an Exercise — the metrics t
 | `durationSeconds` | `Int` | `0` | **Actual** recorded duration in seconds. |
 | `distanceMiles` | `Double` | `0.0` | **Actual** recorded distance in miles. Same storage convention as Exercise. |
 | `notes` | `String` | `""` | Post-workout notes (e.g. "felt great", "knee pain at mile 2"). |
-| `feltRating` | `Int` | `0` | Subjective Rate of Perceived Exertion on a 1–10 scale recorded after the session (1 = brutal, 10 = amazing). A value of `0` means the user did not record a rating. Feeds the on-device AI Coach's training-load assessment — see [AI Coach Input](#ai-coach-input) below. |
+| `feeling` | `Int?` | `nil` | How the athlete felt, on a 1–5 scale (1 = Very Weak, 5 = Very Strong). `nil` means not recorded. Feeds the on-device AI Coach — see [AI Coach Input](#ai-coach-input) below. |
+| `perceivedExertion` | `Int?` | `nil` | Rate of Perceived Exertion, 1–10 (1 = Very Light, 10 = Maximum Effort). `nil` means not recorded. **Independent of `feeling`** — see below. |
 | `source` | `String` | `"Manual"` | Provenance — the raw value of a `WorkoutSource` (`"Manual"`, `"CSV"`, `"Apple Exercise App"`). Stored as String for forward-extensibility. Read type-safely via `workout.workoutSource`. |
 | `externalID` | `String?` | `nil` | Stable identifier from the external source (e.g. `HKWorkout.uuid.uuidString`). Used for deduplication on re-import. `nil` for manual and CSV entries. |
 
-**Editable surface:** When editing a recorded exercise from the History tab (`WorkoutDetailSheet`), the user can change name/type/date plus the recorded actuals (duration, distance, notes, felt rating). `source` and `externalID` are intentionally hidden — they are import-pipeline provenance/dedup metadata; mutating them would break dedup on re-import. The mutation logic is factored into a stateless `WorkoutEditor` helper (`Views/History/WorkoutDetailSheet.swift`): `WorkoutEditor.apply(_:to:)` writes the identity fields onto the `Exercise` and **rebuilds** its `workout` struct from the edited actuals while **preserving** `source` and `externalID`. It is unit-testable without a SwiftUI view.
+**Editable surface:** When editing a recorded exercise from the History tab (`WorkoutDetailSheet`), the user can change name/type/date plus the recorded actuals (duration, distance, notes, feeling, perceived exertion). `source` and `externalID` are intentionally hidden — they are import-pipeline provenance/dedup metadata; mutating them would break dedup on re-import. The mutation logic is factored into a stateless `WorkoutEditor` helper (`Views/History/WorkoutDetailSheet.swift`): `WorkoutEditor.apply(_:to:)` writes the identity fields onto the `Exercise` and **rebuilds** its `workout` struct from the edited actuals while **preserving** `source` and `externalID`. It is unit-testable without a SwiftUI view.
 
 **Initializer: `Workout(draftFrom:)`**
 
-Creates a recorded workout pre-filled with the actuals copied from a planned exercise's targets (`durationSeconds`, `distanceMiles`), starting unrated (`feltRating == 0`), with empty notes and a `manual` source. This is the entry point when a user taps "Record Workout" on a planned exercise; the recorded `workout` is then attached to that exercise. The user can edit every field before saving.
+Creates a recorded workout pre-filled with the actuals copied from a planned exercise's targets (`durationSeconds`, `distanceMiles`), starting unrated (both `feeling` and `perceivedExertion` are `nil`), with empty notes and a `manual` source. This is the entry point when a user taps "Record Workout" on a planned exercise; the recorded `workout` is then attached to that exercise. The user can edit every field before saving.
 
 #### AI Coach Input
 
-The `feltRating` field is the primary input that lets the on-device AI Coach distinguish between *planned* workload and *experienced* workload. Two athletes can run the same 5-mile tempo at the same pace and have very different felt ratings — the coach uses the RPE signal together with distance, duration, and session type to assess whether the athlete is absorbing their training or accumulating fatigue.
+`feeling` and `perceivedExertion` are what let the on-device AI Coach distinguish between *planned* workload and *experienced* workload. They are deliberately **two fields, not one**: how hard a session was and how the athlete felt through it are independent signals. Two athletes can run the same 5-mile tempo at the same pace and experience it very differently, and the same athlete can log an RPE 9 feeling strong (a good session) or feeling weak (an overreaching flag). Collapsing them loses exactly that distinction.
 
-When the coach serializes recent workouts into its prompt (see `Packages/AICoachCore/Sources/AICoachCore/AICoachPromptBuilder.swift`), a workout with `feltRating == 0` simply omits the RPE line — the model is explicitly told these sessions are unrated rather than assuming a default. The app builds the coach's "recent workouts" from completed exercises (`isCompleted`) and its "upcoming exercises" from planned-only ones; `CoachWorkout(from:)` reads the exercise's `date`/`type` plus the recorded `workout` metrics. See [docs/adrs/1-use-lightweight-onboard-llm.md](adrs/1-use-lightweight-onboard-llm.md) for the broader architectural decision.
+When the coach serializes recent workouts into its prompt (see `Packages/AICoachCore/Sources/AICoachCore/AICoachPromptBuilder.swift`), each rating is emitted verbatim and omitted entirely when `nil` — the model is told those sessions are unrated rather than assuming a default:
+
+```
+- 2026-07-28 Tue Long Run, 12.0 mi, 1:30:00, RPE 9/10, felt very weak — "had to walk last mile"
+- 2026-07-29 Wed Easy Run, 4.0 mi, 35:00, RPE 8/10
+``` The app builds the coach's "recent workouts" from completed exercises (`isCompleted`) and its "upcoming exercises" from planned-only ones; `CoachWorkout(from:)` reads the exercise's `date`/`type` plus the recorded `workout` metrics. See [docs/adrs/1-use-lightweight-onboard-llm.md](adrs/1-use-lightweight-onboard-llm.md) for the broader architectural decision.
 
 ---
 

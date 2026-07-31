@@ -22,7 +22,7 @@ We don't withhold any features from the free app. Upgrade one time only to suppo
 
 ### AI Coach
 - **On-device running coach** powered by Google's Gemma 3 4B running locally via [MLX-Swift](https://github.com/ml-explore/mlx-swift-examples)
-- Reviews the last four weeks of recorded workouts — including a new **"How did it feel?" (1–10 RPE)** rating — and the next two weeks of scheduled exercises
+- Reviews the last four weeks of recorded workouts — including two optional radial-dial ratings, **"How did it feel?" (1–5, Very Weak → Very Strong)** and **"How hard was it?" (RPE 1–10)** — and the next two weeks of scheduled exercises
 - Suggests concrete adaptations: workout type, duration, distance, intensity, additions, or removals
 - **Fully offline** after initial model download, no API calls, no subscription — aligned with the one-time-payment business model
 - Model weights (~2 GB) are downloaded from Hugging Face on first use and cached locally for offline access

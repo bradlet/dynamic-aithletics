@@ -112,7 +112,8 @@ SELECT ZNAME                                                      AS name,
        datetime(ZDATE + 978307200, 'unixepoch', 'localtime')      AS date,
        ZDISTANCEMILES                                             AS planned_mi,
        json_extract(CAST(ZWORKOUTDATA AS TEXT), '$.distanceMiles') AS actual_mi,
-       json_extract(CAST(ZWORKOUTDATA AS TEXT), '$.feltRating')    AS rpe,
+       json_extract(CAST(ZWORKOUTDATA AS TEXT), '$.feeling')       AS feeling,
+       json_extract(CAST(ZWORKOUTDATA AS TEXT), '$.perceivedExertion') AS rpe,
        json_extract(CAST(ZWORKOUTDATA AS TEXT), '$.source')        AS source,
        (ZWORKOUTDATA IS NOT NULL)                                  AS completed
 FROM ZEXERCISE
